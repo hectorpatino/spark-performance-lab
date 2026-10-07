@@ -5,33 +5,57 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% if page.slug == "index" %}{{ site.title }}{% else %}{{ page.title }} · {{ site.title }}{% endif %}</title>
 <meta name="description" content="{{ page.description | default: site.description | escape }}">
+<script>try{var t=localStorage.getItem('spl-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
 <link rel="stylesheet" href="{{ '/assets/style.css' | relative_url }}">
+{%- for css in page.extra_css %}
+<link rel="stylesheet" href="{{ css | relative_url }}">
+{%- endfor %}
 </head>
-<body>
+<body data-slug="{{ page.slug }}" data-base="{{ '/' | relative_url }}">
 <a class="skip" href="#contenido">Saltar al contenido</a>
 <header class="topbar">
   <a class="wordmark" href="{{ '/' | relative_url }}">{{ site.title }}</a>
-  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="sidebar">Menú</button>
+  <div class="topbar-actions">
+    <button class="icon-btn search-open" type="button" aria-label="Buscar">Buscar</button>
+    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="sidebar">Menú</button>
+  </div>
 </header>
 <div class="shell">
   <aside class="sidebar" id="sidebar">
     <a class="wordmark" href="{{ '/' | relative_url }}">{{ site.title }}</a>
     <p class="tagline">Diagnóstico de rendimiento en Databricks y Apache Spark</p>
+    <button class="search-field search-open" type="button"><span>Buscar en el manual</span><kbd>/</kbd></button>
     {% include nav.html %}
+    <div class="side-foot">
+      <button class="theme-btn" type="button" aria-label="Cambiar tema">Tema: automático</button>
+      <p class="progress-note" hidden></p>
+    </div>
   </aside>
   <main class="main" id="contenido">
     <article class="doc">
 {{ content }}
+      {% unless page.slug == "index" %}
+      <div class="read-row"><button class="read-btn" type="button" aria-pressed="false">Marcar como leída</button></div>
+      {% endunless %}
       {% include pager.html %}
       {% include footer.html %}
     </article>
     <nav class="onpage" aria-label="En esta página" hidden></nav>
   </main>
 </div>
+<div class="search-dlg" role="dialog" aria-modal="true" aria-label="Buscar" hidden>
+  <div class="search-box">
+    <div class="search-head"><input type="search" id="search-q" placeholder="Busca: spill, AQE, system.query.history…" autocomplete="off" aria-label="Texto a buscar"><button type="button" class="search-close">Cerrar</button></div>
+    <ul class="search-res" id="search-res" aria-live="polite"></ul>
+  </div>
+</div>
 <script src="{{ '/assets/app.js' | relative_url }}"></script>
+{%- for js in page.extra_js %}
+<script src="{{ js | relative_url }}"></script>
+{%- endfor %}
 <script src="{{ '/assets/site.js' | relative_url }}"></script>
 </body>
 </html>

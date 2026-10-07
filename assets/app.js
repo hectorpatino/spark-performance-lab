@@ -23,6 +23,7 @@
     axis(svg,L,R,y0,y1,xmax,xs){for(let i=0;i<=4;i++){const v=xmax*i/4,x=xs(v);svg.appendChild(el('line',{x1:x,x2:x,y1:y0,y2:y1,style:'stroke:#E5E5E5;stroke-width:1'}));svg.appendChild(el('text',{x,y:y1+12,'text-anchor':i===4?'end':'middle',style:'fill:#666;font-size:9.5px'},UI.clock(v)));}}
   };
   function viewToggle(groupId,onChange){const g=document.getElementById(groupId); if(!g) return; g.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{g.querySelectorAll('[data-view]').forEach(x=>x.setAttribute('aria-pressed',x===b)); onChange(b.dataset.view);}));}
+  window.SPL={el,q,niceMax:(v)=>niceMax(v),tickMax:(v)=>tickMax(v),UI,viewToggle};
   function niceMax(v){const p=Math.pow(10,Math.floor(Math.log10(v)));for(const m of [1,2,2.5,5,10]){if(m*p>=v)return m*p;}return 10*p;}
   function axes(svg,W,H,L,B,T,max,fmt){
     for(let i=0;i<=4;i++){const v=max*i/4;const y=H-B-(H-B-T)*i/4;

@@ -1,0 +1,11 @@
+---
+layout: null
+permalink: /search.json
+---
+[{%- assign sep = "" -%}
+{%- for p in site.pages -%}
+{%- if p.slug and p.slug != "index" -%}
+{{ sep }}{"t":{{ p.title | jsonify }},"u":{{ p.url | relative_url | jsonify }},"d":{{ p.description | jsonify }},"c":{{ p.content | strip_html | normalize_whitespace | jsonify }}}
+{%- assign sep = "," -%}
+{%- endif -%}
+{%- endfor -%}]

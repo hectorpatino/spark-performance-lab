@@ -8,3 +8,8 @@ exclude:
   - Gemfile
   - Gemfile.lock
   - vendor
+defaults:
+  - scope:
+      path: ""
+    values:
+      verified: "2026-10-07"
