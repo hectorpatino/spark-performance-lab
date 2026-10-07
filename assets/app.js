@@ -348,7 +348,7 @@ A.join(broadcast(B_peq), "cliente_id") \\
     });
     // end line
     const xe=xs(sim.end); svg.appendChild(el('line',{x1:xe,x2:xe,y1:T,y2:H-B,class:'ln thr'}));
-    svg.appendChild(el('text',{x:Math.min(xe+3,R-40),y:H-4,class:'lbl thr'},'fin '+sim.end.toFixed(1)+'s'));
+    svg.appendChild(el('text',{x:xe>R-60?xe-3:xe+3,y:H-4,'text-anchor':xe>R-60?'end':'start',class:'lbl thr'},'fin '+sim.end.toFixed(1)+'s'));
     const waves=Math.ceil(n/c), last=n-(waves-1)*c;
     const busy=sim.tasks.reduce((a,k)=>a+k.d,0), util=busy/(c*sim.end);
     const ideal=WORK/c;

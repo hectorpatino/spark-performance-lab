@@ -3,27 +3,36 @@
 - slug: stages
   section: "Fundamentos"
   title: "Stages y waves"
+  summary: "Cómo se reparte el trabajo en tasks y waves, y por qué más workers no siempre ayudan."
 - slug: shuffle
   section: "Fundamentos"
   title: "Shuffle"
+  summary: "Qué se escribe y qué se lee cuando las filas cambian de máquina."
 - slug: diagnostico
   section: "Skew y spill"
   title: "Diagnóstico"
+  summary: "Leer un stage lento en el Spark UI: spill, skew o I/O."
 - slug: aqe
   section: "Skew y spill"
   title: "AQE"
+  summary: "Lo que Adaptive Query Execution arregla solo, y los casos en que no actúa."
 - slug: lab
   section: "Skew y spill"
   title: "Lab"
+  summary: "Provocar skew en Free Edition y arreglarlo."
 - slug: remedios
   section: "Skew y spill"
   title: "Remedios"
+  summary: "Ajustar particiones, filtrar claves calientes y hacer salting."
 - slug: skew-hints
   section: "Skew y spill"
   title: "Skew hints"
+  summary: "El enfoque antiguo con hints y por qué ya no hace falta."
 - slug: liquid-clustering
   section: "Archivos"
   title: "Liquid clustering"
+  summary: "Organizar los archivos para leer solo lo necesario."
 - slug: casos
   section: "Práctica"
   title: "Casos"
+  summary: "Nueve síntomas típicos, con su evidencia, para practicar el diagnóstico."

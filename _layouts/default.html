@@ -7,23 +7,31 @@
 <meta name="description" content="{{ page.description | default: site.description | escape }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
 <link rel="stylesheet" href="{{ '/assets/style.css' | relative_url }}">
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <a class="brand" href="{{ '/' | relative_url }}">{{ site.title }}</a>
-  </header>
-  {% include nav.html %}
-  <main>
-  <section class="panel">
+<a class="skip" href="#contenido">Saltar al contenido</a>
+<header class="topbar">
+  <a class="wordmark" href="{{ '/' | relative_url }}">{{ site.title }}</a>
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="sidebar">Menú</button>
+</header>
+<div class="shell">
+  <aside class="sidebar" id="sidebar">
+    <a class="wordmark" href="{{ '/' | relative_url }}">{{ site.title }}</a>
+    <p class="tagline">Diagnóstico de rendimiento en Databricks y Apache Spark</p>
+    {% include nav.html %}
+  </aside>
+  <main class="main" id="contenido">
+    <article class="doc">
 {{ content }}
-  </section>
+      {% include pager.html %}
+      {% include footer.html %}
+    </article>
+    <nav class="onpage" aria-label="En esta página" hidden></nav>
   </main>
-  {% include pager.html %}
-  {% include footer.html %}
 </div>
 <script src="{{ '/assets/app.js' | relative_url }}"></script>
+<script src="{{ '/assets/site.js' | relative_url }}"></script>
 </body>
 </html>

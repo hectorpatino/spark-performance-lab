@@ -1,7 +1,16 @@
-<nav class="tabs" aria-label="Páginas"><div class="row">
+<nav class="sidenav" aria-label="Páginas">
+  <a class="home" href="{{ '/' | relative_url }}"{% if page.slug == "index" %} aria-current="page"{% endif %}>Inicio</a>
 {%- assign nav_group = "" -%}
 {%- for p in site.data.pages -%}
-  {%- if p.section != nav_group -%}<span class="grp">{{ p.section }}</span>{%- assign nav_group = p.section -%}{%- endif -%}
-  <a href="{{ p.slug | append: '.html' | relative_url }}"{% if p.slug == page.slug %} aria-current="page"{% endif %}>{{ p.title }}</a>
-{%- endfor -%}
-</div></nav>
+  {%- if p.section != nav_group -%}
+    {%- unless forloop.first %}</ul>{% endunless %}
+  <p class="grp">{{ p.section }}</p>
+  <ul>
+    {%- assign nav_group = p.section -%}
+  {%- endif %}
+    <li><a href="{{ p.slug | append: '.html' | relative_url }}"{% if p.slug == page.slug %} aria-current="page"{% endif %}>{{ p.title }}</a></li>
+  {%- if forloop.last %}
+  </ul>
+  {%- endif -%}
+{%- endfor %}
+</nav>
