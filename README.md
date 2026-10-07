@@ -8,27 +8,29 @@ Es material de estudio personal. No es documentación oficial ni está afiliado 
 
 ## Estructura
 
-Sitio Jekyll que GitHub Pages compila solo al hacer push a `main`.
+Sitio Jekyll. Al hacer push a `main`, el workflow `pages.yml` lo compila y lo publica en GitHub Pages. Todo el contenido vive en `src/`.
 
 ```
-_config.yml          título, baseurl
-_data/pages.yml      orden del menú y de anterior/siguiente
-_layouts/default.html
-_includes/           nav.html, pager.html, footer.html
-assets/style.css     estilos compartidos (tema claro y oscuro)
-assets/app.js        simuladores base y recreaciones del Spark UI (expone window.SPL)
-assets/js/, css/     JS y CSS propios de cada página (front matter extra_js / extra_css)
-assets/site.js       menú, índice por página, buscador, tema, glosario, copiar, progreso
-assets/glossary.json términos con definición al pasar el cursor
-search.json          índice del buscador generado por Jekyll
-notebooks/           notebooks en formato source de Databricks para importar
-.github/workflows/   revisión semanal de enlaces externos (lychee)
-*.html               una página por tema, con front matter
+_config.yml              título, baseurl y source: src
+Gemfile                  github-pages (mismas versiones que GitHub Pages)
+.github/workflows/       pages.yml (compila y publica), check-links.yml (enlaces externos, lychee)
+src/
+  _data/pages.yml        orden del menú y de anterior/siguiente
+  _layouts/default.html
+  _includes/             nav.html, pager.html, footer.html
+  assets/style.css       estilos compartidos (tema claro y oscuro)
+  assets/app.js          simuladores base y recreaciones del Spark UI (expone window.SPL)
+  assets/js/, css/       JS y CSS propios de cada página (front matter extra_js / extra_css)
+  assets/site.js         menú, índice por página, buscador, tema, glosario, copiar, progreso
+  assets/glossary.json   términos con definición al pasar el cursor
+  search.json            índice del buscador generado por Jekyll
+  notebooks/             notebooks en formato source de Databricks para importar
+  *.html                 una página por tema, con front matter
 ```
 
 ## Añadir una página
 
-1. Crea `joins.html` con este front matter y el contenido debajo:
+1. Crea `src/joins.html` con este front matter y el contenido debajo:
 
    ```
    ---
@@ -39,7 +41,7 @@ notebooks/           notebooks en formato source de Databricks para importar
    ---
    ```
 
-2. Añádela en `_data/pages.yml`, en la posición que quieras dentro del menú.
+2. Añádela en `src/_data/pages.yml`, en la posición que quieras dentro del menú.
 
 ## Ver en local
 
