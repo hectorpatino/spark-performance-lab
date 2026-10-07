@@ -1,9 +1,13 @@
 # Orden del menú y de los enlaces anterior/siguiente. Para añadir una página:
 # crea <slug>.html con front matter (layout, slug, title, description) y añádela aquí.
+- slug: plan-ejecucion
+  section: "Fundamentos"
+  title: "Plan de ejecución"
+  summary: "Application, jobs, stages y tasks: qué crea cada nivel y cómo se corta tu código en stages."
 - slug: stages
   section: "Fundamentos"
-  title: "Stages y waves"
-  summary: "Cómo se reparte el trabajo en tasks y waves, y por qué más workers no siempre ayudan."
+  title: "Tasks, cores y waves"
+  summary: "Cómo reparte el scheduler las tasks entre los cores, y por qué más workers no siempre ayudan."
 - slug: shuffle
   section: "Fundamentos"
   title: "Shuffle"

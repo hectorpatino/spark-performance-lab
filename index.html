@@ -13,7 +13,7 @@ description: "Manual para diagnosticar jobs lentos en Databricks y Apache Spark:
 <p>Primero mira dónde corre el job; después recorre las preguntas en orden.</p>
 <ol class="flow">
   <li><a href="spark-ui.html"><b>¿Compute clásico o serverless?</b><span>En compute clásico abres el Spark UI. En serverless y en los SQL warehouses no hay Spark UI: usas el query profile.</span><em>Leer el Spark UI · Query profile</em></a></li>
-  <li><a href="stages.html"><b>¿Cuántas tasks tiene el stage frente a los cores?</b><span>Una sola task, menos tasks que cores o una última wave casi vacía.</span><em>Stages y waves</em></a></li>
+  <li><a href="stages.html"><b>¿Cuántas tasks tiene el stage frente a los cores?</b><span>Una sola task, menos tasks que cores o una última wave casi vacía.</span><em>Tasks, cores y waves</em></a></li>
   <li><a href="diagnostico.html"><b>¿Hay spill o skew?</b><span>Spill en todas las tasks: particiones grandes. Max de Duration más de un 50% sobre el p75: skew. Comprueba si AQE pudo partirlo.</span><em>Diagnóstico · AQE · Remedios</em></a></li>
   <li><a href="joins.html"><b>¿Qué hace el join?</b><span>Un sort-merge con mucho shuffle donde cabría un broadcast, o un join que produce muchas más filas de las que entran.</span><em>Estrategias de join</em></a></li>
   <li><a href="liquid-clustering.html"><b>¿El scan lee de más?</b><span>Decenas de miles de archivos pequeños, o casi todos los archivos para un filtro selectivo.</span><em>Liquid clustering · Mantenimiento de Delta</em></a></li>
