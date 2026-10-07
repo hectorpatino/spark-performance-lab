@@ -1,0 +1,32 @@
+/* Plan de ejecución: árbol Application › Jobs › Stages › Tasks */
+svg .tr-node rect{fill:color-mix(in srgb,var(--c) 16%,var(--surface));stroke:var(--c);stroke-width:1;transition:fill .25s,stroke-width .15s}
+svg .tr-node text{pointer-events:none}
+svg .tr-node .t{fill:var(--ink);font:600 8.5px var(--f-mono)}
+svg .tr-node .t2{fill:var(--ink);font:600 8px var(--f-mono)}
+svg .tr-node .s,svg .tr-tasks>.s{fill:var(--muted);font:7.5px var(--f-mono)}
+svg .tr-node .pl{fill:var(--hot);font:7.5px var(--f-mono)}
+svg .tr-node .tt{fill:var(--ink);font:7px var(--f-mono)}
+svg .tr-app{--c:var(--hot)}
+svg .tr-job{--c:var(--accent)}
+svg .tr-stage{--c:var(--warn)}
+svg .tr-task{--c:var(--ok)}
+svg .tr-node[role=button]{cursor:pointer}
+svg .tr-node[role=button]:hover rect{stroke-width:1.6}
+svg .tr-node[role=button]:focus{outline:none}
+svg .tr-node[role=button]:focus-visible rect{stroke-width:2.2}
+svg .tr-node.sel rect{stroke-width:2.2}
+svg .tr-edge{fill:none;stroke:var(--muted);stroke-width:.8;opacity:.55}
+svg .tr-node,svg .tr-tasks{transition:opacity .2s}
+svg .dim{opacity:.25}
+svg.playing .tr-job,svg.playing .tr-stage,svg.playing .tr-tasks{opacity:.35}
+svg.playing .run,svg.playing .done{opacity:1}
+svg .tr-node.run rect,svg .tr-tasks.run rect{fill:color-mix(in srgb,var(--c) 55%,var(--surface));stroke-width:1.8}
+svg .tr-tasks.done .tr-task rect{fill:color-mix(in srgb,var(--ok) 40%,var(--surface))}
+#tr-code{white-space:pre;overflow-x:auto;font-size:.78rem;line-height:1.55}
+#tr-code .ln{display:block;padding:0 .35rem;border-radius:3px;transition:opacity .2s,background .2s}
+#tr-code .ln.act{color:var(--warn);cursor:pointer}
+#tr-code .ln.on{background:color-mix(in srgb,var(--accent) 18%,transparent)}
+#tr-code .ln.off{opacity:.4}
+#tr-code .c{color:var(--muted)}
+#tr-add button:disabled{opacity:.35;cursor:not-allowed}
+#tr-info p{margin:.35rem 0}

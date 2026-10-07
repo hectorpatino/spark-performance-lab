@@ -858,7 +858,7 @@ DESCRIBE EXTENDED prod.bronze.clicks;            <span class="c">-- Type debe de
 <p>Según la doc de conversión, tras <code>SET MANAGED</code> predictive optimization se activa solo, salvo que lo hubieras apagado a mano. Antes de convertir, cancela los jobs de <code>OPTIMIZE</code> que tocan la tabla y comprueba que los lectores y escritores usan DBR 15.4 LTS o superior, y que los clientes externos pueden leer tablas managed. Los datos de la ubicación external se conservan 14 días por si necesitas volver con <code>UNSET MANAGED</code>. El insight <code>MANUAL_DATA_LAYOUT</code> del query profile recomienda esta misma conversión. Los números del caso son ilustrativos.</p>`,
      src:`${A(D_PO,'Predictive optimization · limitations')} · ${A(D_CONV,'Convert to managed tables')} · ${A(D_POST,'Predictive optimization system table')}`,tab:'mantenimiento-delta'}
   ];
-  const TABNAME={aqe:['aqe.html','AQE'],remedios:['remedios.html','Remedios'],stages:['stages.html','Stages y waves'],lc:['liquid-clustering.html','Liquid clustering'],
+  const TABNAME={aqe:['aqe.html','AQE'],remedios:['remedios.html','Remedios'],stages:['stages.html','Tasks, cores y waves'],lc:['liquid-clustering.html','Liquid clustering'],
     'query-profile':['query-profile.html','Query profile'],'system-tables':['system-tables.html','System tables'],'spark-ui':['spark-ui.html','Spark UI'],joins:['joins.html','Joins'],
     'memoria-oom':['memoria-oom.html','Memoria y OOM'],'mantenimiento-delta':['mantenimiento-delta.html','Mantenimiento Delta'],azure:['azure.html','Azure']};
   const repaso=t=>[].concat(t).filter(x=>TABNAME[x]).map(x=>`<a href="${TABNAME[x][0]}">${TABNAME[x][1]}</a>`).join(', ');

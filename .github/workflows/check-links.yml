@@ -26,5 +26,5 @@ jobs:
             --accept 200,206,403,429
             --exclude "fonts.googleapis.com|fonts.gstatic.com"
             --exclude "%7B%7B|\\{\\{"
-            "*.html"
+            "src/*.html"
           fail: true

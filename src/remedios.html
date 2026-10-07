@@ -38,7 +38,7 @@ description: "Qué probar contra el spill y el skew, en orden: medir, dejar que 
     <p class="c">Un matiz de la <a href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide" target="_blank" rel="noopener">guía de optimización de 2023</a> (no está en docs.databricks.com): <code>auto</code> puede quedarse corto con tablas muy comprimidas (20x–40x), porque el tamaño en disco subestima el tamaño en memoria.</p>
 
     <h4>Si necesitas fijar el número a mano</h4>
-    <p>La guía de 2023 propone que cada task procese unos <b>128–200 MB</b>: particiones = datos del shuffle ÷ 128 MB, redondeado a un múltiplo de los cores para que ninguna wave deje cores ociosos. Es una regla práctica de esa guía, no de la documentación oficial. Relación entre tasks, cores y waves en <a href="stages.html">Stages y waves</a>.</p>
+    <p>La guía de 2023 propone que cada task procese unos <b>128–200 MB</b>: particiones = datos del shuffle ÷ 128 MB, redondeado a un múltiplo de los cores para que ninguna wave deje cores ociosos. Es una regla práctica de esa guía, no de la documentación oficial. Relación entre tasks, cores y waves en <a href="stages.html">Tasks, cores y waves</a>.</p>
     <div class="console">
       <div class="ttl">Calculadora de shuffle partitions · regla práctica de la guía de 2023</div>
       <div class="grid2">
