@@ -44,7 +44,7 @@ GROUP BY cliente_id`,
         {id:'r',n:'Result',ph:1,c:'C',r:5,t:55,m:1*MiB,rw:1,in:['a2']}
       ],
       hot:'s', lookMetric:'rows',
-      look:'El Scan se lleva el 86% del tiempo de tareas. Lee 4,010 de los 4,096 archivos de la tabla y solo descarta el 2%. Después, el Filter deja 1,240 filas de 6,200 millones. Leíste casi toda la tabla para quedarte con una fracción mínima.',
+      look:'El Scan se lleva el 86% del tiempo de tasks. Lee 4,010 de los 4,096 archivos de la tabla y solo descarta el 2%. Después, el Filter deja 1,240 filas de 6,200 millones. Leíste casi toda la tabla para quedarte con una fracción mínima.',
       fix:[
         'La tabla está clusterizada por <code>fecha_venta</code> y el filtro usa <code>cliente_id</code>. Añade <code>cliente_id</code> a las claves (<code>ALTER TABLE ventas CLUSTER BY (fecha_venta, cliente_id)</code>) y reclusteriza con <code>OPTIMIZE ventas FULL</code>, o deja que Databricks elija con <code>CLUSTER BY AUTO</code>. Ver <a href="liquid-clustering.html">Liquid clustering</a>.',
         'Si el caso de uso admite un rango de fechas, añádelo al <code>WHERE</code>. Es lo que pide el insight <code>COVERAGE_FILTER_KEYS_CLUSTERING</code>.',
@@ -74,7 +74,7 @@ GROUP BY e.estado`,
         {id:'r',n:'Result',ph:1,c:'C',r:6,t:60,m:1*MiB,rw:6,in:['a2']}
       ],
       hot:'j', lookMetric:'rows',
-      look:'El Shuffled Hash Join recibe 20.4 millones de filas y entrega 3,100 millones. Ese join y el agregado que procesa su salida suman el 87% del tiempo de tareas. El pruning va bien (3,140 archivos descartados en pedidos), así que el problema está en el join.',
+      look:'El Shuffled Hash Join recibe 20.4 millones de filas y entrega 3,100 millones. Ese join y el agregado que procesa su salida suman el 87% del tiempo de tasks. El pruning va bien (3,140 archivos descartados en pedidos), así que el problema está en el join.',
       fix:[
         'La condición une por <code>cliente_id</code>, que se repite muchas veces en las dos tablas. La clave correcta es <code>pedido_id</code>. Corrige la condición, o deduplica un lado antes del join si de verdad unes por cliente. Ver <a href="joins.html">Joins</a>.',
         'Es lo que describe el insight <code>EXPLODING_JOIN</code>: revisa qué subconjunto necesitas y ajusta la condición o reduce las filas de entrada.',
@@ -237,7 +237,7 @@ GROUP BY c.segmento`,
       const q=Q[st.q];
       frame.querySelectorAll('[data-metric]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.metric===st.metric));
       drawDag(document.getElementById('qp-dag'),q.nodes,st.metric,st.sel,q.hot,true);
-      document.getElementById('qp-gnote').textContent=st.metric==='rows'?'Rows: filas de salida de cada operador, color en escala logarítmica.':st.metric==='mem'?'Memory peak: memoria máxima que usó cada operador.':'Time spent: tiempo de tareas de cada operador y su parte del total.';
+      document.getElementById('qp-gnote').textContent=st.metric==='rows'?'Rows: filas de salida de cada operador, color en escala logarítmica.':st.metric==='mem'?'Memory peak: memoria máxima que usó cada operador.':'Time spent: tiempo de tasks de cada operador y su parte del total.';
       const n=q.nodes.find(x=>x.id===st.sel)||q.nodes[0], tot=q.nodes.reduce((s,x)=>s+x.t,0);
       document.getElementById('qp-op').innerHTML=`<div class="qp-oph"><b>${esc(n.n)}</b><span class="qp-badge ${n.ph?'ph':'noph'}">${n.ph?'Photon':'No Photon'}</span></div>
         <dl class="qp-kv"><dt>Time spent</dt><dd>${fT(n.t)} (${Math.round(100*n.t/tot)}%)</dd><dt>Memory peak</dt><dd>${fBytes(n.m)}</dd><dt>Rows</dt><dd>${fRows(n.rw)}</dd>${(n.x||[]).map(s=>{const i=s.indexOf(': ');return i>0?`<dt>${esc(s.slice(0,i))}</dt><dd>${esc(s.slice(i+2))}</dd>`:`<dt></dt><dd>${esc(s)}</dd>`;}).join('')}</dl>`;

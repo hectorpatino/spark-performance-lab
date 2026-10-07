@@ -9,6 +9,17 @@ extra_css: ["/assets/css/azure.css"]
 
     <h2>Azure Databricks: qué VM, spot o no, y cuánto escalar</h2>
     <p class="src">Fuentes: <a href="https://learn.microsoft.com/azure/databricks/compute/configure" target="_blank" rel="noopener">Compute configuration reference</a>, <a href="https://learn.microsoft.com/azure/databricks/compute/cluster-config-best-practices" target="_blank" rel="noopener">Classic compute configuration best practices</a>, <a href="https://learn.microsoft.com/azure/databricks/lakehouse-architecture/cost-optimization/best-practices" target="_blank" rel="noopener">Best practices for cost optimization</a>, <a href="https://learn.microsoft.com/azure/databricks/optimizations/disk-cache" target="_blank" rel="noopener">Disk cache</a>, <a href="https://learn.microsoft.com/azure/databricks/compute/photon" target="_blank" rel="noopener">Photon</a>, <a href="https://learn.microsoft.com/azure/databricks/spark/conf" target="_blank" rel="noopener">Spark configuration</a>, <a href="https://learn.microsoft.com/azure/databricks/compute/clusters-manage" target="_blank" rel="noopener">Manage classic compute</a>, <a href="https://learn.microsoft.com/azure/well-architected/service-guides/azure-databricks" target="_blank" rel="noopener">Well-Architected: Azure Databricks</a> y <a href="https://learn.microsoft.com/azure/virtual-machines/sizes/overview" target="_blank" rel="noopener">Sizes for virtual machines in Azure</a>. Las páginas de Databricks tienen equivalente en docs.databricks.com (por ejemplo <a href="https://docs.databricks.com/aws/en/compute/configure" target="_blank" rel="noopener">Compute configuration reference</a>), pero los detalles de VM, spot y discos de esta página son propios de Azure.</p>
+    <div class="essentials" role="note">
+      <p class="essentials-title">Lo esencial en 1 minuto</p>
+      <ul>
+        <li>Para cargas nuevas, la doc recomienda serverless. Esta página aplica al compute clásico, donde cada nodo es una VM de Azure y Azure Databricks corre un executor por worker.</li>
+        <li>Memory optimized (serie E) para shuffle pesado y spill; compute optimized (F) para Structured Streaming y <code>OPTIMIZE</code>/<code>VACUUM</code>; storage optimized (L) para análisis interactivo con caché. Para ETL con joins, menos workers y más grandes.</li>
+        <li>Con spot, el driver siempre es on-demand, y los workers desalojados se reemplazan por spot u on-demand. Úsalo en batch que tolera retrasos, no con SLA estricto.</li>
+        <li>No actives <code>spark.dynamicAllocation.enabled</code>: no está soportado en compute clásico. Usa el autoscaling de Databricks, y evítalo en jobs de Structured Streaming.</li>
+        <li>Ninguna VM arregla el skew ni los archivos pequeños.</li>
+      </ul>
+      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> elige la familia según el recurso que te falta: memoria, CPU o disco local.</p>
+    </div>
 
     <h3><span class="k">Qué problema resuelve</span>El mismo código, otra factura</h3>
     <p>Un job con spill tarda 40 minutos en una VM de propósito general y 15 en una con el doble de memoria por core. Un streaming 24/7 en spot se queda sin workers en plena tarde. Un cluster con <code>spark.dynamicAllocation.enabled</code> heredado de un Spark on-premise pierde nodos sin motivo. En el compute clásico de Azure Databricks, cada nodo es una VM de Azure y tú eliges su familia, si es spot y cómo escala. Esas tres decisiones pesan tanto como el código.</p>
@@ -17,7 +28,7 @@ extra_css: ["/assets/css/azure.css"]
     <p class="def">Un compute clásico tiene <b>un driver y cero o más workers</b>, cada uno en una VM de Azure. Azure Databricks corre <b>un executor por worker</b>, así que executor y worker son lo mismo aquí. La <b>familia</b> de la VM fija la proporción de CPU, memoria y disco local: memory optimized, compute optimized, storage optimized, GPU o propósito general.</p>
 
     <h3><span class="k">Idea mental</span>Tres recursos y un cuello de botella</h3>
-    <p>Piensa cada worker como una mesa de trabajo con tres cosas: manos (cores), mesa (memoria) y un estante al lado (disco local). Si la tarea no cabe en la mesa, los papeles van al estante y todo se vuelve lento: eso es el spill. Si la tarea es puro cálculo, sobran mesa y estante y faltan manos. Si consultas una y otra vez los mismos papeles, conviene un estante grande y rápido cerca. Elegir familia es elegir cuál de las tres cosas compras de más.</p>
+    <p>Piensa cada worker como una mesa de trabajo con tres cosas: manos (cores), mesa (memoria) y un estante al lado (disco local). Si el trabajo no cabe en la mesa, los papeles van al estante y todo se vuelve lento; eso es el spill. Si el trabajo es puro cálculo, sobran mesa y estante y faltan manos. Si consultas una y otra vez los mismos papeles, conviene un estante grande y rápido cerca. Elegir familia es elegir cuál de las tres cosas compras de más.</p>
 
     <h3><span class="k">Por dentro · 1</span>Las familias, con la regla de la doc</h3>
     <div class="tblwrap"><table>
@@ -145,7 +156,7 @@ extra_css: ["/assets/css/azure.css"]
     <h3><span class="k">Con qué se confunde</span></h3>
     <ul>
       <li><b>Autoscaling de Databricks y dynamic allocation de Spark.</b> El primero agrega y quita VMs y gestiona los executors; el segundo no está soportado en compute clásico de Databricks.</li>
-      <li><b>Autoscaling local storage y disk cache.</b> El primero agrega managed disks cuando falta espacio (útil para spill). El segundo usa el SSD local para cachear Parquet. Un disco grande no convierte una VM en "acelerada para caché".</li>
+      <li><b>Autoscaling local storage y disk cache.</b> El primero agrega managed disks cuando falta espacio (útil para spill). El segundo usa el SSD local para cachear Parquet. Un disco grande no convierte una VM en <i>acelerada para caché</i>.</li>
       <li><b>Spot con fallback y capacity reservation.</b> El fallback cambia spot por on-demand si no hay spot. La reserva asegura capacidad de un tamaño concreto y solo funciona con on-demand.</li>
       <li><b>Photon y serverless.</b> Photon es el motor de ejecución; también existe en compute clásico. Serverless es quién administra las VM.</li>
     </ul>

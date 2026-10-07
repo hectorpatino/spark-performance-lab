@@ -2,49 +2,88 @@
 layout: default
 slug: diagnostico
 title: "Diagnóstico"
-description: "Leer un stage lento en el Spark UI: spill, skew o I/O."
+description: "Detectar spill y skew: en el Spark UI con el árbol de Databricks, y en serverless con el query profile y system tables."
 ---
 
-    <h2>Leer un stage lento en el Spark UI</h2>
-    <p class="src">Fuente: <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-page" target="_blank" rel="noopener">docs.databricks.com/…/spark-ui-guide/long-spark-stage-page</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage-page" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a></p>
+    <h2>Detectar spill y skew en un stage lento</h2>
+    <p class="src">Fuentes: <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/" target="_blank" rel="noopener">Diagnose cost and performance issues using the Spark UI</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-page" target="_blank" rel="noopener">Skew and spill</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage-page" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/sql/user/queries/performance-insights" target="_blank" rel="noopener">Query performance insights</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/sql/user/queries/performance-insights" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/admin/system-tables/query-history" target="_blank" rel="noopener">Query history system table</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/query-history" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a></p>
+
+    <div class="essentials" role="note">
+      <p class="essentials-title">Lo esencial en 1 minuto</p>
+      <ul>
+        <li>Orden de la guía de Databricks para el stage más largo: primero spill, después skew, después I/O, y si no es nada de eso, otras causas.</li>
+        <li>Spill: aparece arriba en los detalles del stage (Spill memory / Spill disk). Si no hay filas de spill, no hay spill.</li>
+        <li>Skew: en Summary Metrics, si <code>Max</code> de Duration supera en más de un 50% al percentil 75 (Max &gt; 1.5 × p75), puede haber skew.</li>
+        <li>Spill solo en una o pocas tasks apunta a skew. Spill en casi todas las tasks apunta a particiones demasiado grandes para todas.</li>
+        <li>En serverless y SQL warehouses no hay Spark UI: usa el query profile con los insights <code>DATA_SPILL</code> y <code>DATA_SKEW</code>, y <code>spilled_local_bytes</code> en <code>system.query.history</code>.</li>
+      </ul>
+      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> antes de subir el cluster, abre el stage más largo y compara Max contra p75; con skew, más workers no ayudan.</p>
+    </div>
 
     <h3><span class="k">Qué problema resuelve</span>Saber por qué un stage tarda, antes de tocar el cluster</h3>
-    <p>Un job pasa de 5 a 50 minutos. La reacción típica es subir el tamaño del cluster. La guía oficial propone otra cosa: abrir el stage más largo y revisar tres sospechosos en orden fijo. Cada uno tiene un remedio distinto, y subir workers solo ayuda en uno de ellos.</p>
+    <p>Un job pasa de 5 a 50 minutos. La reacción típica es subir el tamaño del cluster. La guía oficial propone otra cosa: abrir el stage más largo y revisar los sospechosos en orden fijo. Cada uno tiene un remedio distinto, y subir workers solo ayuda en algunos. Para llegar al stage más largo (Jobs Timeline, pestaña Stages) mira <a href="spark-ui.html">Leer el Spark UI</a>.</p>
 
     <div class="tree" aria-label="Árbol de decisión de la guía">
-      <div class="node"><b>1. ¿Hay spill?</b> Míralo arriba en los detalles del stage (Spill memory / Spill disk). <span class="yes">sí →</span> guía de spill (ver <a href="remedios.html">Remedios</a>).</div>
+      <div class="node"><b>0. Llega al stage correcto.</b> Empieza por el Event Timeline de los jobs: busca fallos y huecos de un minuto o más (los huecos cortos son normales mientras el driver coordina). Entra al job más largo y ordena sus stages por duración (<a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/jobs-timeline" target="_blank" rel="noopener">Jobs timeline</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/jobs-timeline" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage" target="_blank" rel="noopener">longest stage</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>). Si el stage tiene una sola task, ya tienes una pista.</div>
+      <div class="arrow">↓</div>
+      <div class="node"><b>1. ¿Hay spill?</b> Míralo arriba en los detalles del stage (Spill memory / Spill disk). Si no aparecen esas filas, el stage no tiene spill. <span class="yes">sí →</span> <a href="remedios.html">Remedios</a> (mecanismo en <a href="memoria-oom.html">Memoria y OOM</a>).</div>
       <div class="arrow">no ↓</div>
-      <div class="node"><b>2. ¿Hay skew?</b> Summary Metrics: compara <code>Max</code> contra el percentil 75 de <code>Duration</code>. Si Max supera al p75 en más de un 50%, puede haber skew. <span class="yes">sí →</span> remediación de skew (ver <a href="remedios.html">Remedios</a>).</div>
+      <div class="node"><b>2. ¿Hay skew?</b> Summary Metrics: compara <code>Max</code> contra el percentil 75 de <code>Duration</code>. En un stage sano son casi iguales. Si Max supera al p75 en más de un 50%, puede haber skew. <span class="yes">sí →</span> <a href="aqe.html">AQE</a> y <a href="remedios.html">Remedios</a>.</div>
       <div class="arrow">no ↓</div>
-      <div class="node"><b>3. Ni spill ni skew.</b> Sube al job (<i>Associated Job Ids</i>) y revisa la guía de <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener">I/O alto del stage</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</div>
+      <div class="node"><b>3. ¿El stage está limitado por I/O?</b> Sube al job (<i>Associated Job Ids</i>) y revisa input, output y shuffle. La guía de Databricks considera un stage limitado por I/O cuando la mayor de esas columnas, dividida entre los cores y entre los segundos del stage, se acerca a 3 MB por segundo y core. Detalle en la guía de <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener">I/O alto del stage</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</div>
+      <div class="arrow">no ↓</div>
+      <div class="node"><b>4. Otras causas.</b> Poco I/O y aun así lento. Las causas que lista la guía: leer o escribir decenas de miles de archivos de menos de 8 MB, UDFs lentas, joins cartesianos y joins o <code>explode()</code> que multiplican filas. Mira la guía <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/slow-spark-stage-low-io" target="_blank" rel="noopener">Slow Spark stage with little I/O</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/slow-spark-stage-low-io" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>. Recorrido completo en <a href="spark-ui.html">Leer el Spark UI</a>.</div>
     </div>
 
     <h3><span class="k">Definiciones cortas</span>Spill y skew</h3>
-    <p class="def"><b>Spill</b>: Spark se queda sin memoria de ejecución (la que usan shuffles, joins, sorts y agregaciones) y empieza a mover datos a disco. Serializar, escribir y volver a leer es caro.</p>
-    <p class="def"><b>Skew</b>: una o pocas tareas tardan mucho más que el resto. El cluster queda casi ocioso esperando a la más lenta.</p>
+    <p class="def"><b>Spill</b>: Spark se queda sin memoria de ejecución (la que usan shuffles, joins, sorts y agregaciones) y empieza a mover datos a disco, lo que es caro. Es más común durante el shuffle. Cómo se reparte la memoria y cuándo un spill se convierte en OOM: <a href="memoria-oom.html">Memoria y OOM</a>.</p>
+    <p class="def"><b>Skew</b>: una o pocas tasks tardan mucho más que el resto. El cluster queda mal aprovechado esperando a la más lenta y el job tarda más.</p>
+
+    <h3><span class="k">Confirmarlo</span>De Summary Metrics a la tabla Tasks</h3>
+    <p>La regla Max contra p75 te dice que algo pasa. Estas señales te dicen qué es:</p>
+    <ul>
+      <li><b>Ordena la tabla Tasks por Duration, de mayor a menor.</b> Si una task tardó mucho más que las demás, hay skew. Es el método de la página archivada de skew join, que también describe el síntoma típico: la query parece atascada terminando muy pocas tasks (por ejemplo, las últimas 3 de 200) (<a href="https://docs.databricks.com/aws/en/archive/legacy/skew-join" target="_blank" rel="noopener">skew join</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/archive/legacy/skew-join" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
+      <li><b>Mira Shuffle Read Size en Summary Metrics.</b> Una diferencia enorme entre min y max indica que unas pocas claves concentran los datos.</li>
+      <li><b>Mira dónde está el spill.</b> Spill solo en la task lenta apunta a skew. Spill repartido en casi todas las tasks apunta a particiones demasiado grandes para todas. Esto es una lectura del sitio a partir de las definiciones de la doc, no una regla escrita en ella.</li>
+      <li><b>Cuenta filas por clave.</b> <code>df.groupBy("clave").count().orderBy(F.desc("count"))</code> sobre la clave del join o la agregación confirma el skew sin mirar ninguna UI.</li>
+      <li><b>Ajustaste las shuffle partitions y el spill sigue.</b> Otra pista de skew: más particiones reparten las claves normales, pero la clave caliente sigue cayendo entera en una.</li>
+    </ul>
+    <p class="c">Las tres últimas señales vienen de la <a href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide" target="_blank" rel="noopener">Comprehensive Guide to Optimize Data Workloads</a> (Databricks, 2023), a la que enlaza la guía del Spark UI; no están en docs.databricks.com.</p>
 
     <h3><span class="k">Simulador</span>Mueve el skew y mira las Summary Metrics</h3>
     <div class="console">
-      <div class="ttl">Stage con 16 tareas · 16 M filas · números ilustrativos</div>
+      <div class="ttl">Stage con 16 tasks · 16 M filas · números ilustrativos</div>
       <div class="ctrl">
         <label for="s1-hot">Filas que caen en una sola clave caliente <output id="s1-hot-o">0%</output></label>
         <input type="range" id="s1-hot" min="0" max="80" step="5" value="35">
       </div>
-      <svg class="chart" id="s1-chart" viewBox="0 0 360 190" role="img" aria-label="Duración por tarea"></svg>
-      <div class="legend"><span style="--sw:var(--cool)">tiempo de cómputo</span><span style="--sw:var(--hot)">tarea con la clave caliente</span><span style="--sw:color-mix(in srgb,var(--hot) 45%,transparent)">tiempo extra por spill</span></div>
+      <svg class="chart" id="s1-chart" viewBox="0 0 360 190" role="img" aria-label="Duración por task"></svg>
+      <div class="legend"><span style="--sw:var(--cool)">tiempo de cómputo</span><span style="--sw:var(--hot)">task con la clave caliente</span><span style="--sw:color-mix(in srgb,var(--hot) 45%,transparent)">tiempo extra por spill</span></div>
       <div id="s1-ui"></div>
       <div class="verdict" id="s1-verdict"></div>
     </div>
     <p>Pon el deslizador en 0% y luego súbelo poco a poco. Fíjate en tres cosas:</p>
     <ul>
-      <li>La mediana y el p75 casi no se mueven. Por eso la guía compara contra el p75 y no contra el promedio: el promedio lo arrastra la tarea lenta.</li>
-      <li>A partir de cierto punto la tarea caliente no cabe en memoria y aparece el spill. El tiempo crece más rápido que las filas. El spill es un coste que crece más rápido que los datos.</li>
-      <li>El spill aparece <b>solo</b> en la tarea caliente. Eso apunta a skew. Si el spill estuviera repartido en casi todas las tareas, el problema sería otro: particiones demasiado grandes para todos.</li>
+      <li>La mediana y el p75 casi no se mueven. Por eso la guía compara contra el p75 y no contra el promedio: el promedio lo arrastra la task lenta.</li>
+      <li>A partir de cierto punto la task caliente no cabe en memoria y aparece el spill. El tiempo crece más rápido que las filas.</li>
+      <li>El spill aparece <b>solo</b> en la task caliente. Eso apunta a skew. Si el spill estuviera repartido en casi todas las tasks, el problema sería otro: particiones demasiado grandes para todas.</li>
     </ul>
 
-    <h3><span class="k">Con qué se confunde</span>Tres trampas</h3>
+    <h3><span class="k">En serverless y SQL warehouses</span>Las mismas preguntas sin Spark UI</h3>
+    <p>En serverless el Spark UI no está disponible; la doc indica usar el query profile (<a href="https://docs.databricks.com/aws/en/compute/serverless/limitations" target="_blank" rel="noopener">limitaciones de serverless</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/serverless/limitations" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>). Free Edition es serverless, así que en el <a href="lab.html">lab</a> verás el query profile, no la pantalla del stage. Las preguntas son las mismas:</p>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Pregunta</th><th>Spark UI (compute clásico)</th><th>Serverless y SQL warehouses</th></tr></thead>
+      <tbody>
+        <tr><td>¿Hay spill?</td><td>Spill memory / Spill disk en los detalles del stage</td><td>Insight <code>DATA_SPILL</code> en el query profile; columna <code>spilled_local_bytes</code> en <code>system.query.history</code></td></tr>
+        <tr><td>¿Hay skew?</td><td>Max contra p75 en Summary Metrics; tabla Tasks ordenada por Duration</td><td>Insight <code>DATA_SKEW</code> (datos repartidos de forma desigual entre los recursos de cómputo)</td></tr>
+        <tr><td>¿Dónde ocurre?</td><td>El stage y su nodo en SQL / DataFrame</td><td>El operador con más tiempo o <b>Memory peak</b> en el grafo del query profile</td></tr>
+        <tr><td>¿En qué queries pasa?</td><td>Uno a uno en el Spark UI</td><td>A escala con <code>system.query.history</code>, filtrando <code>spilled_local_bytes &gt; 0</code></td></tr>
+      </tbody>
+    </table></div>
+    <p>Los insights aparecen en el panel de detalles de la query (ordenados por su efecto estimado en el tiempo total de tasks) y en la pestaña <b>Performance insights</b> del query profile. Cómo leer el perfil: <a href="query-profile.html">Query profile</a>. Queries listas para buscar spill en todas las queries: <a href="system-tables.html">System tables</a>.</p>
+
+    <h3><span class="k">Con qué se confunde</span>Dos trampas</h3>
     <ul>
-      <li><b>Skew vs falta de recursos.</b> Con skew, añadir workers no ayuda: la clave caliente sigue cayendo en una sola tarea. Con falta de recursos, todas las tareas son lentas por igual.</li>
-      <li><b>Spill causado por skew vs spill por pocas particiones.</b> Si el spill viene del skew, ajustar <code>spark.sql.shuffle.partitions</code> no lo arregla. Primero hay que quitar el skew (lo dice la guía de optimización; ver <a href="remedios.html">Remedios</a>).</li>
-      <li><b>Spark UI en serverless.</b> En serverless el Spark UI no existe; se usa el <i>query profile</i>. Free Edition es serverless, así que en el lab verás el query profile, no esta pantalla. <a href="https://docs.databricks.com/aws/en/compute/serverless/limitations" target="_blank" rel="noopener">Limitaciones de serverless</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/serverless/limitations" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</li>
+      <li><b>Skew vs falta de recursos.</b> Con skew, añadir workers no ayuda: la clave caliente sigue cayendo en una sola task. Con falta de recursos, todas las tasks son lentas por igual.</li>
+      <li><b>Spill causado por skew vs spill por pocas particiones.</b> Si el spill viene del skew, ajustar <code>spark.sql.shuffle.partitions</code> no lo arregla. Primero hay que quitar el skew (ver <a href="remedios.html">Remedios</a>).</li>
     </ul>

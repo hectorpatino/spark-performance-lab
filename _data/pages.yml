@@ -32,10 +32,6 @@
   section: "Diagnóstico y remedios"
   title: "AQE"
   summary: "Lo que Adaptive Query Execution arregla solo, y los casos en que no actúa."
-- slug: skew-hints
-  section: "Diagnóstico y remedios"
-  title: "Skew hints"
-  summary: "El enfoque antiguo con hints y por qué ya no hace falta."
 - slug: remedios
   section: "Diagnóstico y remedios"
   title: "Remedios"

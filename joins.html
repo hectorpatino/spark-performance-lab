@@ -9,6 +9,17 @@ extra_css: ["/assets/css/joins.css"]
 
     <h2>Estrategias de join: quién se mueve y cuánto</h2>
     <p class="src">Fuentes: <a href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#optimizing-the-join-strategy" target="_blank" rel="noopener">Apache Spark · Optimizing the join strategy</a> y <a href="https://spark.apache.org/docs/latest/sql-ref-syntax-qry-select-hints.html#join-hints" target="_blank" rel="noopener">Join hints</a> · <a href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank" rel="noopener">AQE</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/aqe" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-hints" target="_blank" rel="noopener">Hints</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/sql/language-manual/sql-ref-syntax-qry-select-hints" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/optimizations/range-join" target="_blank" rel="noopener">Range join optimization</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/range-join" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/slow-spark-stage-low-io" target="_blank" rel="noopener">Slow Spark stage with little I/O</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/slow-spark-stage-low-io" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/sql/user/queries/performance-insights" target="_blank" rel="noopener">Query performance insights</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/sql/user/queries/performance-insights" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a></p>
+    <div class="essentials" role="note">
+      <p class="essentials-title">Lo esencial en 1 minuto</p>
+      <ul>
+        <li>Broadcast copia el lado pequeño a cada executor y la tabla grande no se mueve. Sort-merge hace shuffle de los dos lados y ordena.</li>
+        <li>Umbral estático <code>spark.sql.autoBroadcastJoinThreshold</code>: 10 MB, con estadísticas. Umbral de AQE en runtime: 30 MB, con tamaños reales y después de los shuffles.</li>
+        <li>Nunca se hace broadcast del lado que conserva todas sus filas: el izquierdo de un <code>LEFT</code>, el derecho de un <code>RIGHT</code>, ninguno en un <code>FULL</code>.</li>
+        <li>El hint <code>BROADCAST</code> se aplica aunque la tabla supere el umbral. En serverless el umbral no se puede cambiar, pero el hint sí funciona.</li>
+        <li>Un exploding join (muchas más filas de salida que de entrada) no se arregla cambiando la estrategia; hay que corregir la condición o reducir la entrada.</li>
+      </ul>
+      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> mira el nodo de join en el plan final después de ejecutar; ahí ves la estrategia real y si AQE la cambió.</p>
+    </div>
     <div class="nb-dl"><a class="btn" href="notebooks/shuffle-y-joins.py" download="shuffle-y-joins.py">Descargar notebook</a><span>Notebook con experimentos de broadcast frente a sort-merge, hints y el plan de AQE. Impórtalo en Databricks desde <b>Workspace</b> → clic derecho en una carpeta → <b>Import</b> → <b>File</b> (<a href="https://docs.databricks.com/aws/en/notebooks/notebook-export-import" target="_blank" rel="noopener">fuente</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/notebooks/notebook-export-import" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</span></div>
 
     <h3><span class="k">Qué problema resuelve</span>Las filas con la misma clave tienen que encontrarse</h3>
@@ -38,7 +49,7 @@ extra_css: ["/assets/css/joins.css"]
         <tr><td><code>FULL OUTER</code></td><td class="no">No</td><td class="no">No</td><td>Cualquier lado</td></tr>
       </tbody>
     </table></div>
-    <p>Regla para recordarlo: se puede hacer broadcast del lado "opcional", nunca del lado que conserva todas sus filas. En un <code>LEFT JOIN</code> Spark tiene que devolver cada fila de la izquierda aunque no tenga pareja, y eso no se puede decidir si la izquierda está copiada en todos los executors.</p>
+    <p>Regla para recordarlo: se puede hacer broadcast del lado opcional, nunca del lado que conserva todas sus filas. En un <code>LEFT JOIN</code> Spark tiene que devolver cada fila de la izquierda aunque no tenga pareja, y eso no se puede decidir si la izquierda está copiada en todos los executors.</p>
     <div class="verify"><b>Verifícalo.</b> La doc de Databricks confirma el caso del <code>LEFT OUTER</code> ("the left relation of a LEFT OUTER JOIN cannot be broadcast", FAQ de AQE). El resto de la tabla sale del código de Apache Spark (<code>canBuildBroadcastLeft</code>, <code>canBuildBroadcastRight</code> y las equivalentes de shuffle hash en <code>joins.scala</code>), no de una página de docs. Compruébalo con <code>df.explain()</code> en tu runtime.</div>
 
     <h3><span class="k">Idea mental</span>Cruzar una lista corta con un archivo enorme</h3>
@@ -205,7 +216,7 @@ SET spark.databricks.optimizer.rangeJoin.binSize = 60;</code></pre>
       <li><b>Tamaño en disco vs tamaño en memoria.</b> Las estadísticas hablan del tamaño de la tabla, pero el broadcast ocupa su tamaño descomprimido en memoria. Una tabla de 700 MB en Parquet puede no caber (ver el <a href="casos.html">caso del driver que se cae en un broadcast</a>).</li>
       <li><b>Skew vs exploding join.</b> El skew es una partición mucho más grande que las demás; AQE la parte. El exploding join produce demasiadas filas en todas; ningún reparto lo arregla.</li>
       <li><b><code>SHUFFLE_REPLICATE_NL</code> vs nested loop con broadcast.</b> El hint pide <code>CartesianProduct</code>, sin broadcast. <code>BroadcastNestedLoopJoin</code> aparece cuando un lado se puede copiar.</li>
-      <li><b>Skew join hint.</b> Para skew, la doc de Databricks recomienda AQE sobre el hint <code>SKEW</code> (ver <a href="skew-hints.html">Skew hints</a>).</li>
+      <li><b>Skew join hint.</b> Para skew, la doc de Databricks recomienda AQE sobre el hint <code>SKEW</code> (ver <a href="aqe.html#skew-hints">Skew hints en AQE</a>).</li>
     </ul>
 
     <h3><span class="k">Qué pasaría si</span></h3>

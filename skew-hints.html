@@ -1,40 +1,18 @@
 ---
-layout: default
-slug: skew-hints
-title: "Skew hints"
-description: "El enfoque antiguo con /*+ SKEW */ y por qué ya no hace falta."
+layout: null
 ---
-
-    <h2>Skew hints: el enfoque antiguo</h2>
-    <p class="src">Fuente: <a href="https://docs.databricks.com/aws/en/archive/legacy/skew-join" target="_blank" rel="noopener">docs.databricks.com/…/archive/legacy/skew-join</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/archive/legacy/skew-join" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> (página archivada, puede no actualizarse)</p>
-
-    <h3><span class="k">Por qué estudiarlo</span>Para reconocerlo, no para usarlo</h3>
-    <p>La página dice que los skew hints no son necesarios porque Databricks maneja el skew por defecto con AQE, siempre que <code>spark.sql.adaptive.skewJoin.enabled</code> sea true (el default). Lo verás en código heredado y en preguntas que buscan que elijas AQE.</p>
-
-    <h3><span class="k">Sintaxis</span>Tres niveles de precisión</h3>
-    <p>Cuanto más le dices, menos trabajo extra hace. La optimización de skew tiene overhead, por eso conviene acotarla.</p>
-<pre><code><span class="c">-- 1. Solo la tabla: todos sus joins usan la optimización</span>
-SELECT /*+ SKEW('orders') */ * FROM orders, customers WHERE c_custId = o_custId
-
-<span class="c">-- 2. Tabla + columna(s): solo los joins por esas columnas</span>
-SELECT /*+ SKEW('orders', 'o_custId') */ ...
-SELECT /*+ SKEW('orders', ('o_custId', 'o_storeRegionId')) */ ...
-
-<span class="c">-- 3. Tabla + columna(s) + valores calientes: el menor overhead</span>
-SELECT /*+ SKEW('orders', 'o_custId', 0) */ ...
-SELECT /*+ SKEW('orders', 'o_custId', (0, 1, 2)) */ ...
-SELECT /*+ SKEW('orders', ('o_custId', 'o_storeRegionId'), ((0, 1001), (1, 1002))) */ ...</code></pre>
-
-    <h3><span class="k">Comparación</span>Hint vs AQE</h3>
-    <div class="tblwrap"><table>
-      <thead><tr><th></th><th>Skew hint</th><th>AQE skew join</th></tr></thead>
-      <tbody>
-        <tr><td>Quién detecta</td><td>Tú, a mano</td><td>Spark, con estadísticas reales del shuffle</td></tr>
-        <tr><td>Se adapta si cambian los datos</td><td class="no">No</td><td class="yes">Sí</td></tr>
-        <tr><td>Estado</td><td>Legacy, página archivada</td><td>Activado por defecto</td></tr>
-        <tr><td>Recomendación de la doc</td><td colspan="2">Confiar en AQE: es automático y en general rinde mejor que el hint</td></tr>
-      </tbody>
-    </table></div>
-
-    <h3><span class="k">No confundir</span>Hints que sí siguen vigentes</h3>
-    <p>El hint de <b>broadcast</b> sí se sigue recomendando cuando conoces la query, porque evita el shuffle desde el plan inicial (ver <a href="aqe.html">AQE</a>). "Los hints son legacy" vale para <code>SKEW()</code>, no para todos los hints.</p>
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skew hints · Spark Performance Lab</title>
+<meta name="robots" content="noindex">
+<meta http-equiv="refresh" content="0; url=aqe.html#skew-hints">
+<link rel="canonical" href="aqe.html#skew-hints">
+<style>body{font:16px/1.5 system-ui,sans-serif;margin:2rem 16px;background:#fff;color:#222}a{color:#1a5fb4}@media (prefers-color-scheme:dark){body{background:#151515;color:#e6e6e6}a{color:#8cb4ff}}</style>
+</head>
+<body>
+<p><a href="aqe.html#skew-hints">Esta página se movió a AQE</a></p>
+</body>
+</html>

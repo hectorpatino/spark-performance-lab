@@ -229,8 +229,8 @@
       const i = kind === 'managed' ? 1 : 2;
       const auto = T.filter(r => r[i][0] === 'auto').length;
       document.getElementById('md-mx-sum').innerHTML = kind === 'managed'
-        ? `<div><span class="pill ok">${auto} de ${T.length}</span>tareas corren solas con predictive optimization activo. Se paga como serverless jobs.</div>`
-        : `<div><span class="pill bad">${auto} de ${T.length}</span>tareas automáticas. El resto son jobs que tú programas, vigilas y pagas en tu compute.</div>`;
+        ? `<div><span class="pill ok">${auto} de ${T.length}</span>operaciones corren solas con predictive optimization activo. Se paga como serverless jobs.</div>`
+        : `<div><span class="pill bad">${auto} de ${T.length}</span>operaciones automáticas. El resto son jobs que tú programas, vigilas y pagas en tu compute.</div>`;
       document.getElementById('md-mx-list').innerHTML = T.map(r => `<div class="md-task"><div class="md-task-h">${PILL[r[i][0]]}<b>${r[0]}</b></div><p>${r[i][1]}</p></div>`).join('');
     }
     const g = document.getElementById('md-mx');

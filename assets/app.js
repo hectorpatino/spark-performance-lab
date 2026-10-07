@@ -74,7 +74,7 @@
     const totalSpill=spills.reduce((a,b)=>a+b,0), ratio=st.max/st.p75;
     const totalRows=TOTAL;
     document.getElementById('s1-verdict').innerHTML=
-      `<div>${totalSpill>0?'<span class="pill bad">SPILL</span>'+totalSpill.toFixed(1)+' GB a disco, solo en la tarea '+(HOT+1)+'.':'<span class="pill ok">SIN SPILL</span>Todas las tareas caben en memoria.'}</div>
+      `<div>${totalSpill>0?'<span class="pill bad">SPILL</span>'+totalSpill.toFixed(1)+' GB a disco, solo en la task '+(HOT+1)+'.':'<span class="pill ok">SIN SPILL</span>Todas las tasks caben en memoria.'}</div>
        <div>${ratio>=1.5?'<span class="pill bad">SKEW</span>':'<span class="pill ok">SIN SKEW</span>'}Max / p75 = <b>${ratio.toFixed(1)}×</b> (la guía avisa a partir de 1.5×).</div>
        <div class="c">Stage total ≈ ${fmtT(st.max)}. Si las ${totalRows} M filas se repartieran parejo, serían ≈ ${fmtT(totalRows/16*2)}.</div>`;
   }
@@ -100,7 +100,7 @@
     parts.forEach((v,i)=>{const x=L+i*bw+2;const hh=v*sc;
       svg.appendChild(el('rect',{x,y:H-B-hh,width:bw-4,height:hh,class:'bar'+(i===parts.length-1?' hot':'')}));
       svg.appendChild(el('text',{x:x+(bw-4)/2,y:H-8,'text-anchor':'middle',class:'tick'},i+1));});
-    if(skew){ // dibuja cortes de sub-tareas
+    if(skew){ // dibuja cortes de las tasks resultantes
       const target=Math.max(64,base.reduce((a,b)=>a+b,0)/base.length); const n=Math.ceil(hot/target);
       const x=L+(parts.length-1)*bw+2;
       for(let k=1;k<n&&k<40;k++){const y=H-B-hot*sc*k/n;svg.appendChild(el('line',{x1:x,x2:x+bw-4,y1:y,y2:y,style:'stroke:var(--surface);stroke-width:1.5'}));}
@@ -113,7 +113,7 @@
     document.getElementById('s2-verdict').innerHTML=
       `<div>${c1?'<span class="pill ok">✓</span>':'<span class="pill bad">✗</span>'}${hot} MB &gt; ${fac} × ${Math.round(med)} MB = ${Math.round(facLine)} MB</div>
        <div>${c2?'<span class="pill ok">✓</span>':'<span class="pill bad">✗</span>'}${hot} MB &gt; umbral ${thr} MB</div>
-       <div><b>${skew?'AQE la parte en ≈ '+Math.ceil(hot/target)+' sub-tareas (estimación).':'AQE no la marca como skewed: no cumple las dos condiciones.'}</b></div>`;
+       <div><b>${skew?'AQE la parte en ≈ '+Math.ceil(hot/target)+' tasks (estimación).':'AQE no la marca como skewed: no cumple las dos condiciones.'}</b></div>`;
     const rd=skew?'AQEShuffleRead skewed':'AQEShuffleRead coalesced';
     document.getElementById('s2-ui').innerHTML=UI.frame('SQL / DataFrame',`<h5>Details for Query 12</h5><div class="ui-link">Details</div><pre><code>== Physical Plan ==
 AdaptiveSparkPlan isFinalPlan=true
@@ -143,7 +143,7 @@ AdaptiveSparkPlan isFinalPlan=true
     document.getElementById('c-out').innerHTML=
       `<div>${gb} GB ÷ ${mb} MB = <b>${raw.toLocaleString('es')}</b> particiones</div>
        <div>Redondeado al múltiplo de ${co} cores: <b><code>spark.sql.shuffle.partitions = ${rounded}</code></b></div>
-       <div class="c">≈ ${per.toFixed(0)} MB por tarea · ${waves} olas de ${co} tareas · sin ajuste, la regla de respaldo es 2–3× los cores (${2*co}–${3*co})</div>`;
+       <div class="c">≈ ${per.toFixed(0)} MB por task · ${waves} waves de ${co} tasks · sin ajuste, la regla de respaldo es 2–3× los cores (${2*co}–${3*co})</div>`;
   }
   [cgb,cco,cmb].forEach(x=>x.addEventListener('input',calc)); calc();
 
@@ -168,7 +168,7 @@ AdaptiveSparkPlan isFinalPlan=true
       svg.appendChild(el('text',{x:x+(bw-8)/2,y:H-8,'text-anchor':'middle',class:'tick'},'t'+(i+1)));}
     const mx=Math.max(...hotPer.map(v=>v+NORM));
     document.getElementById('s4-verdict').innerHTML=
-      `<div>Tarea más cargada: <b>${mx.toFixed(1)} M filas</b> (sin salting: ${(HOTROWS+NORM).toFixed(1)} M)</div>
+      `<div>Task más cargada: <b>${mx.toFixed(1)} M filas</b> (sin salting: ${(HOTROWS+NORM).toFixed(1)} M)</div>
        <div class="c">Lado pequeño del join replicado ×${n}: 100 k → ${(100*n).toLocaleString('es')} k filas</div>`;
   }
   s4.addEventListener('input',draw4); draw4();

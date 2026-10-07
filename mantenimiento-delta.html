@@ -9,6 +9,17 @@ extra_css: ["/assets/css/mantenimiento-delta.css"]
 
     <h2>Mantenimiento de Delta: lo que haces tú y lo que hace Databricks</h2>
     <p class="src">Fuentes: <a href="https://docs.databricks.com/aws/en/tables/managed" target="_blank" rel="noopener">Unity Catalog managed tables</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/managed" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/optimizations/predictive-optimization" target="_blank" rel="noopener">Predictive optimization</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/predictive-optimization" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/features/deletion-vectors" target="_blank" rel="noopener">Deletion vectors</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/features/deletion-vectors" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/operations/vacuum" target="_blank" rel="noopener">Vacuum</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/operations/vacuum" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/operations/optimize" target="_blank" rel="noopener">Optimize</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/operations/optimize" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/tune-file-size" target="_blank" rel="noopener">Control data file size</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/tune-file-size" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/data-skipping" target="_blank" rel="noopener">Data skipping</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/data-skipping" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/history" target="_blank" rel="noopener">Table history</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/history" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> y <a href="https://docs.databricks.com/aws/en/admin/system-tables/predictive-optimization" target="_blank" rel="noopener">Predictive optimization system table</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/predictive-optimization" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
+    <div class="essentials" role="note">
+      <p class="essentials-title">Lo esencial en 1 minuto</p>
+      <ul>
+        <li>Predictive optimization ejecuta <code>OPTIMIZE</code>, <code>VACUUM</code> y <code>ANALYZE</code> solo en tablas managed de Unity Catalog, en serverless. En tablas external te toca programarlos a ti.</li>
+        <li><code>VACUUM</code> borra archivos sin referencia más viejos que <code>delta.deletedFileRetentionDuration</code> (7 días), y eso marca hasta dónde llega el time travel. El historial (<code>logRetentionDuration</code>, 30 días) es otra cosa.</li>
+        <li>Con deletion vectors, <code>DELETE</code>, <code>UPDATE</code> y <code>MERGE</code> marcan filas en vez de reescribir archivos. Para borrar de verdad: <code>REORG … APPLY (PURGE)</code> y después <code>VACUUM</code>.</li>
+        <li><code>OPTIMIZE</code> compacta archivos pequeños hacia un tamaño objetivo que crece con la tabla (256 MB hasta 2,56 TB). Es idempotente.</li>
+        <li>Con predictive optimization activo, quita tus jobs de <code>OPTIMIZE</code> y <code>VACUUM</code> sobre esas tablas: serían gasto duplicado.</li>
+      </ul>
+      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> la pregunta clave es si la tabla es managed de Unity Catalog; de eso depende quién hace el mantenimiento.</p>
+    </div>
 
     <h3><span class="k">Qué problema resuelve</span>Una tabla que empeora sola</h3>
     <p>Una tabla Delta recién creada suele ir bien. Con los meses aparecen tres síntomas. Las cargas incrementales dejan miles de archivos pequeños y cada query abre más archivos de los necesarios. Los <code>UPDATE</code> y <code>DELETE</code> reescriben archivos enteros para cambiar unas pocas filas. Y el storage crece aunque la tabla no crezca, porque los archivos viejos siguen en ADLS para el time travel.</p>
@@ -58,7 +69,7 @@ extra_css: ["/assets/css/mantenimiento-delta.css"]
     </div>
     <p>Secuencias para probar:</p>
     <ul>
-      <li><b>Con y sin deletion vectors.</b> Pulsa DELETE dos veces con el interruptor encendido y mira "MB reescritos". Reinicia, apágalo y repite. Sin DV, cada DELETE copia los archivos completos.</li>
+      <li><b>Con y sin deletion vectors.</b> Pulsa DELETE dos veces con el interruptor encendido y mira <i>MB reescritos</i>. Reinicia, apágalo y repite. Sin DV, cada DELETE copia los archivos completos.</li>
       <li><b>OPTIMIZE no lo arregla todo.</b> Haz tres INSERT, un DELETE y OPTIMIZE. Los archivos pequeños se juntan, pero los grandes con DV siguen marcados: no eran candidatos a compactación. REORG PURGE sí los reescribe.</li>
       <li><b>VACUUM y time travel.</b> Después de un OPTIMIZE, pulsa VACUUM: no borra nada, porque los archivos viejos tienen menos de 7 días. Avanza 7 días y repite. Las versiones viejas pierden el time travel.</li>
     </ul>
@@ -128,9 +139,9 @@ extra_css: ["/assets/css/mantenimiento-delta.css"]
     </ul>
 
     <h3><span class="k">Managed vs external</span>Qué es automático y qué es manual</h3>
-    <p>Según la doc, una tabla external tiene la metadata gobernada por Unity Catalog, pero Unity Catalog no gestiona su ciclo de vida, optimización, ubicación ni layout. Cambia el tipo de tabla y mira qué tareas pasan a ser tuyas:</p>
+    <p>Según la doc, una tabla external tiene la metadata gobernada por Unity Catalog, pero Unity Catalog no gestiona su ciclo de vida, optimización, ubicación ni layout. Cambia el tipo de tabla y mira qué operaciones pasan a ser tuyas:</p>
     <div class="console">
-      <div class="ttl">Tareas de mantenimiento según el tipo de tabla</div>
+      <div class="ttl">Operaciones de mantenimiento según el tipo de tabla</div>
       <div class="chips" role="group" aria-label="Tipo de tabla" id="md-mx">
         <span class="lab">Tabla:</span>
         <button type="button" data-md-mx="managed" aria-pressed="true">Managed de Unity Catalog</button>

@@ -2,64 +2,65 @@
 layout: default
 slug: remedios
 title: "Remedios"
-description: "Spill, skew y salting: los arreglos manuales."
+description: "Qué probar contra el spill y el skew, en orden: medir, dejar que Databricks lo haga, arreglar datos o query, salting y recursos."
 ---
 
-    <h2>Remedios manuales: spill, skew y salting</h2>
-    <p class="src">Fuente: <a href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide" target="_blank" rel="noopener">Comprehensive Guide to Optimize Data Workloads</a> (Databricks, eBook; no está en docs.databricks.com). Es de 2023 y está desactualizada en varias partes. Usa la tabla de abajo para saber qué tomar de ella.</p>
+    <h2>Remedios para spill y skew, en el orden en que se prueban</h2>
+    <p class="src">Fuentes: <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener">Spark stage high I/O</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank" rel="noopener">Adaptive query execution</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/aqe" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/sql/user/queries/performance-insights" target="_blank" rel="noopener">Query performance insights</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/sql/user/queries/performance-insights" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/spark/conf#serverless" target="_blank" rel="noopener">Spark confs en serverless</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/spark/conf#configure-spark-properties-for-serverless-notebooks-and-jobs" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a></p>
 
-    <div class="tblwrap"><table>
-      <thead><tr><th>La guía dice</th><th>Hoy (doc oficial)</th><th>Estado</th></tr></thead>
-      <tbody>
-        <tr><td>Skew: hints antes que AQE</td><td>Los hints no hacen falta; AQE maneja el skew por defecto (<a href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank" rel="noopener">AQE</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/aqe" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>)</td><td class="no">Desactualizado</td></tr>
-        <tr><td>AQE marca skew si es 5× el <i>promedio</i></td><td>5× la <b>mediana</b> y más de 256 MB</td><td class="no">Impreciso</td></tr>
-        <tr><td>Particionar si cada partición tiene ≥ 1 GB; Z-order en columnas de alta cardinalidad</td><td>Liquid clustering para todas las tablas nuevas; reemplaza al particionado y a <code>ZORDER</code>. No particionar con menos de 1 TB (<a href="https://docs.databricks.com/aws/en/tables/clustering" target="_blank" rel="noopener">clustering</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/clustering" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/partitions" target="_blank" rel="noopener">partitions</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/partitions" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>)</td><td class="no">Desactualizado</td></tr>
-        <tr><td>Programar OPTIMIZE, VACUUM y ANALYZE en un job aparte</td><td>Predictive optimization los ejecuta solo en tablas managed de UC; activado por defecto en cuentas nuevas desde nov. 2024 (<a href="https://docs.databricks.com/aws/en/optimizations/predictive-optimization" target="_blank" rel="noopener">predictive optimization</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/predictive-optimization" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>)</td><td class="no">Desactualizado para UC managed</td></tr>
-        <tr><td>Delta cache, Ganglia, Delta Live Tables</td><td>Disk cache, métricas de cluster (DBR 13+), Lakeflow Spark Declarative Pipelines</td><td class="no">Nombres viejos</td></tr>
-        <tr><td>Afinar shuffle partitions, broadcast, GC, tipos de instancia</td><td>Vale para compute clásico. En serverless casi nada de eso se puede configurar</td><td class="c">Solo clásico</td></tr>
-        <tr><td>Shuffle alto → <code>auto</code></td><td>Lo mismo: <code>spark.sql.shuffle.partitions=auto</code></td><td class="yes">Vigente</td></tr>
-        <tr><td>Diagnóstico de skew y spill; salting como último recurso</td><td>Las guías del Spark UI en docs enlazan a esta misma guía para esto</td><td class="yes">Vigente</td></tr>
-        <tr><td>128–200 MB por task; particiones múltiplo de los cores</td><td>No lo encontré en docs.databricks.com</td><td class="c">Regla práctica sin verificar</td></tr>
-      </tbody>
-    </table></div>
+    <div class="essentials" role="note">
+      <p class="essentials-title">Lo esencial en 1 minuto</p>
+      <ul>
+        <li>Orden práctico: medir, dejar que Databricks lo haga, arreglar los datos o la query, salting, y al final más recursos.</li>
+        <li>Para shuffle alto, Databricks recomienda <code>spark.sql.shuffle.partitions=auto</code>. En serverless ya es el default.</li>
+        <li>AQE parte el skew solo en joins con shuffle. En ventanas y agregaciones con una clave caliente te toca a ti.</li>
+        <li>El insight <code>DATA_SKEW</code> recomienda revisar la distribución y usar key salting o pre-agregación. <code>DATA_SPILL</code> recomienda reducir filas, columnas o columnas grandes, o subir el tamaño del warehouse.</li>
+        <li>Si el spill viene del skew, más particiones no lo arreglan: primero quita el skew.</li>
+      </ul>
+      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> antes de cambiar código o comprar memoria, confirma qué tienes (spill en todas las tasks o skew en una) y deja que <code>auto</code> y AQE hagan su parte.</p>
+    </div>
 
-    <h3><span class="k">Spill · qué lo causa</span>Demasiados datos por tarea</h3>
-    <p>Con 200 particiones de shuffle (el default) y muchos datos, cada tarea recibe más de lo que cabe en la memoria de su core y el resto va a disco. La guía da dos caminos:</p>
-    <ul>
-      <li><b>Automático:</b> <code>spark.sql.shuffle.partitions = auto</code> (auto-optimized shuffle). Puede fallar con tablas muy comprimidas (20x–40x), porque el tamaño en disco engaña sobre el tamaño en memoria.</li>
-      <li><b>Manual:</b> que cada tarea procese unos <b>128–200 MB</b>. Fórmula: particiones = datos del shuffle ÷ 128 MB. Conviene que sea múltiplo del número de cores, para que ninguna "ola" de tareas deje cores ociosos.</li>
-    </ul>
+    <div class="order">
+      <div><span>1</span><p><b>Mide e identifica.</b> ¿Spill repartido o skew en pocas tasks? Ver <a href="diagnostico.html">Diagnóstico</a>.</p></div>
+      <div><span>2</span><p><b>Deja que Databricks lo haga.</b> <code>shuffle.partitions = auto</code> y AQE.</p></div>
+      <div><span>3</span><p><b>Arregla los datos o la query.</b> Filtra claves calientes o nulos, usa broadcast, pre-agrega, reduce columnas.</p></div>
+      <div><span>4</span><p><b>Salting.</b> Cuando la clave caliente es legítima y AQE no la parte.</p></div>
+      <div><span>5</span><p><b>Recursos.</b> Más memoria por core en compute clásico, o un warehouse más grande.</p></div>
+    </div>
 
+    <h3><span class="k">1 · Mide primero</span>Spill repartido o skew concentrado</h3>
+    <p>El remedio depende de la causa. Spill en casi todas las tasks pide tasks más pequeñas o más memoria. Skew pide repartir la clave caliente, y ahí más particiones o más workers no ayudan. Cómo distinguirlos en el Spark UI, en el query profile y en <code>system.query.history</code>: <a href="diagnostico.html">Diagnóstico</a>.</p>
+
+    <h3><span class="k">2 · Deja que Databricks lo haga</span>Auto-optimized shuffle y AQE</h3>
+    <p>Para un stage con shuffle alto, la guía del Spark UI recomienda <code>spark.sql.shuffle.partitions=auto</code>: Spark elige el número de particiones según el plan y el tamaño de entrada. El default en compute clásico es 200; en serverless el default ya es <code>auto</code>.</p>
+<pre><code>spark.conf.set("spark.sql.shuffle.partitions", "auto")</code></pre>
+    <p>AQE, activado por defecto, une particiones pequeñas después del shuffle y parte las particiones con skew en joins sort-merge y shuffle hash. Comprueba en el plan final que actuó (<code>isSkew=true</code>). Condiciones, tipos de join y límites en <a href="aqe.html">AQE</a>.</p>
+    <p class="c">Un matiz de la <a href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide" target="_blank" rel="noopener">guía de optimización de 2023</a> (no está en docs.databricks.com): <code>auto</code> puede quedarse corto con tablas muy comprimidas (20x–40x), porque el tamaño en disco subestima el tamaño en memoria.</p>
+
+    <h4>Si necesitas fijar el número a mano</h4>
+    <p>La guía de 2023 propone que cada task procese unos <b>128–200 MB</b>: particiones = datos del shuffle ÷ 128 MB, redondeado a un múltiplo de los cores para que ninguna wave deje cores ociosos. Es una regla práctica de esa guía, no de la documentación oficial. Relación entre tasks, cores y waves en <a href="stages.html">Stages y waves</a>.</p>
     <div class="console">
-      <div class="ttl">Calculadora de shuffle partitions</div>
+      <div class="ttl">Calculadora de shuffle partitions · regla práctica de la guía de 2023</div>
       <div class="grid2">
         <div class="ctrl"><label for="c-gb">Shuffle (GB, del Spark UI)</label><input type="number" id="c-gb" value="300" min="1" step="1"></div>
         <div class="ctrl"><label for="c-cores">Cores totales de workers</label><input type="number" id="c-cores" value="64" min="1" step="1"></div>
-        <div class="ctrl"><label for="c-mb">Objetivo MB por tarea</label><input type="number" id="c-mb" value="128" min="16" step="8"></div>
+        <div class="ctrl"><label for="c-mb">Objetivo MB por task</label><input type="number" id="c-mb" value="128" min="16" step="8"></div>
       </div>
       <div class="verdict" id="c-out"></div>
     </div>
     <div class="note"><b>Ojo:</b> si hay skew, esta calculadora no te salva. Repartes bien las claves normales, pero la clave caliente sigue cayendo entera en una partición. Primero quita el skew.</div>
 
-    <h3><span class="k">Skew · identificarlo</span>Cuatro señales</h3>
+    <h3><span class="k">3 · Arregla los datos o la query</span>Menos datos por task, sin clave caliente</h3>
     <ul>
-      <li>Todas las tareas del stage terminan y una o dos se quedan colgadas.</li>
-      <li>En Summary Metrics hay una diferencia enorme entre el min y el max de <i>shuffle read size</i>.</li>
-      <li>Ajustaste las shuffle partitions y el spill sigue.</li>
-      <li><code>groupBy(clave).count()</code> muestra una disparidad enorme. Este método es definitivo.</li>
+      <li><b>Filtra los valores que causan skew</b>, si puedes descartarlos. El ejemplo clásico es una clave de join con muchos <code>NULL</code> (detalle abajo).</li>
+      <li><b>Usa broadcast si un lado es pequeño.</b> El lado grande no se reparte por clave, así que la clave caliente no se concentra en una task. Hints, umbrales y cuándo no se puede: <a href="joins.html">Estrategias de join</a>.</li>
+      <li><b>Pre-agrega.</b> Es una de las dos salidas que propone el insight <code>DATA_SKEW</code>. Una agregación combinable (<code>max</code>, <code>sum</code>, <code>count</code>) se reduce dentro de cada partición antes del shuffle; el <a href="lab.html">lab</a> lo compara con una ventana.</li>
+      <li><b>Reduce lo que cabe en memoria.</b> Para spill, el insight <code>DATA_SPILL</code> recomienda reducir filas, columnas o el tamaño de columnas grandes (strings, arrays, maps, structs).</li>
     </ul>
 
-    <h3><span class="k">Skew · remediar</span>Orden actualizado</h3>
-    <p>La guía pone los skew hints en segundo lugar. Con la doc actual quedan fuera del orden, porque AQE los reemplaza.</p>
-    <div class="order">
-      <div><span>1</span><p><b>Filtrar los valores que causan skew</b>, si puedes descartarlos. El ejemplo clásico es una clave de join con muchos <code>NULL</code>.</p></div>
-      <div><span>2</span><p><b>AQE</b>, activado por defecto. Solo joins con shuffle (ver <a href="aqe.html">AQE</a>). Comprueba en el plan que actuó (<code>isSkew</code>).</p></div>
-      <div><span>3</span><p><b>Salting</b>: el último recurso, porque requiere cambiar código. Es lo que queda para ventanas, agregaciones o joins que AQE no parte.</p></div>
-    </div>
-
     <details>
-      <summary>Respuesta a la pregunta pendiente: ¿por qué los NULL causan skew?</summary>
-      <p>Todas las filas con <code>NULL</code> en la clave tienen el mismo hash, así que en el shuffle caen en la <b>misma</b> partición. Si el 30% de la tabla tiene <code>NULL</code>, una tarea recibe ese 30%. Lo peor es que esas filas nunca hacen match (<code>NULL = NULL</code> no es verdadero), así que esa tarea trabaja muchísimo para no producir nada útil.</p>
+      <summary>¿Por qué los NULL causan skew?</summary>
+      <p>Todas las filas con <code>NULL</code> en la clave tienen el mismo hash, así que en el shuffle caen en la <b>misma</b> partición. Si el 30% de la tabla tiene <code>NULL</code>, una task recibe ese 30%. Lo peor es que esas filas nunca hacen match (<code>NULL = NULL</code> no es verdadero), así que esa task trabaja muchísimo para no producir nada útil.</p>
       <p>Matiz (comportamiento del optimizador de Spark; no lo encontré en docs.databricks.com, compruébalo con <code>explain()</code> buscando <code>isnotnull</code>): en un <code>INNER JOIN</code> el optimizador suele añadir solo un filtro <code>IS NOT NULL</code>. El problema aparece de verdad en <code>LEFT OUTER</code> (las filas con <code>NULL</code> del lado izquierdo se conservan) y en <code>groupBy</code> sobre la columna con nulos.</p>
 <pre><code><span class="c"># LEFT JOIN con muchos NULL: separa y une</span>
 nulls    = facts.filter(F.col("customer_id").isNull())
@@ -68,29 +69,30 @@ result = (no_nulls.join(dim, "customer_id", "left")
           .unionByName(nulls, allowMissingColumns=True))</code></pre>
     </details>
 
-    <h3><span class="k">Salting · idea mental</span>Inventarle un apellido a la clave caliente</h3>
+    <h3><span class="k">4 · Salting</span>Inventarle un apellido a la clave caliente</h3>
+    <p>El insight <code>DATA_SKEW</code> nombra el key salting como remedio, pero la documentación de Databricks no explica cómo implementarlo. Lo que sigue es la técnica general de Spark. Es el último recurso de código porque añade réplica y complejidad; úsalo para ventanas, agregaciones o joins que AQE no parte.</p>
     <p>Al cliente <code>'xyz'</code> le pones un sufijo aleatorio 0…N-1. Ya no es una clave, son N claves distintas, y el hash las manda a N particiones distintas. El precio está en el otro lado del join: tiene que tener <b>todas</b> las combinaciones, así que se replica N veces.</p>
 
     <div class="console">
-      <div class="ttl">Salting · 8 tareas · clave caliente con 12 M filas</div>
+      <div class="ttl">Salting · 8 tasks · clave caliente con 12 M filas · números ilustrativos</div>
       <div class="ctrl">
         <label for="s4-n">Número de salts (N) <output id="s4-n-o"></output></label>
         <input type="range" id="s4-n" min="1" max="16" step="1" value="1">
       </div>
-      <svg class="chart" id="s4-chart" viewBox="0 0 360 190" role="img" aria-label="Filas por tarea con salting"></svg>
+      <svg class="chart" id="s4-chart" viewBox="0 0 360 190" role="img" aria-label="Filas por task con salting"></svg>
       <div class="legend"><span style="--sw:var(--cool)">claves normales</span><span style="--sw:var(--hot)">filas de la clave caliente</span></div>
       <div class="verdict" id="s4-verdict"></div>
     </div>
-    <p>Fíjate en que pasar N de 8 a 16 ya no mejora mucho con 8 tareas, pero sí duplica la réplica del lado pequeño. N se elige mirando cuántos cores tienes y cuánto pesa replicar.</p>
+    <p>Fíjate en que pasar N de 8 a 16 ya no mejora mucho con 8 tasks, pero sí duplica la réplica del lado pequeño. N se elige mirando cuántos cores tienes y cuánto pesa replicar.</p>
 
-    <h3><span class="k">Código</span>Salting en un join</h3>
+    <h4>Salting en un join</h4>
 <pre><code>N = 8
 big_s   = big.withColumn("salt", (F.rand() * N).cast("int"))
 small_s = small.crossJoin(spark.range(N).withColumnRenamed("id", "salt"))
 joined  = big_s.join(small_s, ["key", "salt"]).drop("salt")</code></pre>
 
-    <h3><span class="k">Código</span>Salting parcial en una agregación</h3>
-    <p>Es el ejemplo de la guía: la última transacción por cliente, con skew en <code>customer_id = 'xyz'</code>. Solo se "sala" la clave problemática y se agrega en dos fases.</p>
+    <h4>Salting parcial en una agregación</h4>
+    <p>La última transacción por cliente, con skew en <code>customer_id = 'xyz'</code>. Solo se "sala" la clave problemática y se agrega en dos fases.</p>
 <pre><code>hot = ["xyz"]; N = 16
 df2 = df.withColumn("salt",
         F.when(F.col("customer_id").isin(hot), (F.rand() * N).cast("int"))
@@ -98,9 +100,29 @@ df2 = df.withColumn("salt",
 fase1 = df2.groupBy("customer_id", "salt").agg(F.max("txn_date").alias("m"))
 final = fase1.groupBy("customer_id").agg(F.max("m").alias("last_txn_date"))</code></pre>
 
+    <h3><span class="k">5 · Recursos</span>Más memoria, cuando lo anterior no basta</h3>
+    <p>Si el spill está repartido en casi todas las tasks y ya ajustaste particiones y columnas, falta memoria por core. En compute clásico, la doc de Databricks recomienda VMs <i>memory optimized</i> para cargas con shuffle pesado y spill (<a href="https://docs.databricks.com/aws/en/lakehouse-architecture/cost-optimization/best-practices#use-the-right-instance-type" target="_blank" rel="noopener">Use the right instance type</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/lakehouse-architecture/cost-optimization/best-practices#use-the-right-instance-type" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>), y para ETL complejo con spill significativo, más memoria por instancia (<a href="https://docs.databricks.com/aws/en/compute/cluster-config-best-practices" target="_blank" rel="noopener">compute configuration best practices</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/cluster-config-best-practices" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>). Familias y tamaños de VM en <a href="azure.html">Azure Databricks</a>; cómo probar si es memoria y en qué orden subir en <a href="memoria-oom.html">Memoria y OOM</a>. En un SQL warehouse, el insight <code>DATA_SPILL</code> recomienda subir el tamaño del warehouse. Con skew, más recursos no ayudan.</p>
+
+    <h3><span class="k">En serverless</span>Qué puedes tocar</h3>
+    <ul>
+      <li>Solo puedes fijar seis propiedades de Spark. Para spill y skew cuentan dos: <code>spark.sql.shuffle.partitions</code> (default <code>auto</code>) y <code>spark.sql.files.maxPartitionBytes</code> (default 128 MB, para el scan).</li>
+      <li>No eliges tipo de VM ni memoria del executor, así que el paso 5 no aplica. AQE sigue trabajando por su cuenta.</li>
+      <li>No hay Spark UI: el diagnóstico se hace con el <a href="query-profile.html">query profile</a> y sus insights (<a href="https://docs.databricks.com/aws/en/compute/serverless/limitations" target="_blank" rel="noopener">limitaciones de serverless</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/serverless/limitations" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
+      <li>Los pasos 3 y 4 (filtrar, broadcast, pre-agregar, salting) son cambios de código y funcionan igual.</li>
+    </ul>
+
     <h3><span class="k">Qué pasaría si</span></h3>
     <ul>
       <li><b>Haces salting en una agregación no combinable</b> (una mediana exacta, por ejemplo): la fase 2 no puede reconstruir el resultado a partir de resultados parciales. El salting en dos fases solo vale para funciones combinables como <code>max</code>, <code>sum</code> o <code>count</code>.</li>
       <li><b>Usas salting con AQE ya resolviendo el join:</b> añades réplica y código sin ganar nada. Mira el plan antes (<code>isSkew=true</code>).</li>
-      <li><b>El join "explota" filas</b> (muchos a muchos): la guía lo llama <i>data explosion</i>. Se ve en <i>rows output</i> del nodo de join, no en el skew.</li>
+      <li><b>El join "explota" filas</b> (muchos a muchos): no es skew. Se ve en <i>rows output</i> del nodo de join y en el insight <code>EXPLODING_JOIN</code>; ver <a href="joins.html">Estrategias de join</a>.</li>
     </ul>
+
+    <div class="note"><b>Sobre la guía de 2023.</b> La <a href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide" target="_blank" rel="noopener">Comprehensive Guide to Optimize Data Workloads</a> sigue enlazada desde la guía del Spark UI, pero es un eBook de 2023. Para esta página, cuatro puntos:
+      <ul>
+        <li>Pone los skew hints antes que AQE. Hoy la doc dice que no hacen falta (<a href="aqe.html#skew-hints">Skew hints</a>).</li>
+        <li>Dice que AQE marca skew a 5× el <i>promedio</i>. La doc de AQE dice 5× la <b>mediana</b> y más de 256 MB.</li>
+        <li>Los 128–200 MB por task son regla práctica suya; no aparecen en docs.databricks.com.</li>
+        <li>Shuffle alto → <code>auto</code> y salting como último recurso siguen vigentes.</li>
+      </ul>
+      Lo que dice sobre particionado, Z-order, OPTIMIZE y VACUUM está actualizado en <a href="liquid-clustering.html">Liquid clustering</a> y <a href="mantenimiento-delta.html">Mantenimiento de Delta</a>.</div>

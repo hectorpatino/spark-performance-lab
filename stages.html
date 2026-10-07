@@ -8,6 +8,18 @@ description: "Jobs, stages, tasks y waves: cómo se reparte el trabajo entre los
     <h2>Jobs, stages, tasks y waves</h2>
     <p class="src">Fuentes: <a href="https://spark.apache.org/docs/latest/cluster-overview.html#glossary" target="_blank" rel="noopener">Apache Spark · Cluster overview (glosario)</a>, <a href="https://spark.apache.org/docs/latest/web-ui.html" target="_blank" rel="noopener">Apache Spark · Web UI</a>, <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage" target="_blank" rel="noopener">Databricks · Look at longest stage</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/compute/configure" target="_blank" rel="noopener">Databricks · Compute configuration</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/configure" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> y la <a href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide#cluster-usage" target="_blank" rel="noopener">guía de optimización (Cluster usage)</a>.</p>
 
+    <div class="essentials" role="note">
+      <p class="essentials-title">Lo esencial en 1 minuto</p>
+      <ul>
+        <li>Cada acción (<code>write</code>, <code>count</code>, <code>collect</code>) lanza un job. Cada <code>Exchange</code> (shuffle) corta un stage nuevo. Cada partición es una task.</li>
+        <li><code>waves = ⌈tasks ÷ cores⌉</code>. Si las tasks duran parecido, el stage tarda más o menos waves × duración de una task.</li>
+        <li>Pon las shuffle partitions en un múltiplo de los cores totales (sin ajuste fino, de 2 a 3 veces), o usa <code>auto</code> si el shuffle es alto.</li>
+        <li>Añadir workers solo acelera cuando quita una wave entera. Con menos tasks que cores, los cores extra se quedan mirando.</li>
+        <li>Un stage con una sola task puede ser señal de problema, y una task lenta (skew) no se arregla con más cores.</li>
+      </ul>
+      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> antes de pagar más workers, compara tasks del stage con cores totales.</p>
+    </div>
+
     <h3><span class="k">Qué problema resuelve</span>Entender por qué el cluster no va más rápido</h3>
     <p>Subes de 8 a 16 workers y el job tarda lo mismo. O cambias <code>shuffle.partitions</code> de 200 a 201 y un stage tarda casi el doble. Las dos cosas se explican con la misma cuenta: cuántas tasks tiene el stage frente a cuántos cores hay para ejecutarlas.</p>
 
@@ -20,7 +32,7 @@ description: "Jobs, stages, tasks y waves: cómo se reparte el trabajo entre los
         <tr><td><b>Task</b></td><td>Una unidad de trabajo que se envía a un executor. Procesa <b>una partición</b></td><td>Una por partición del stage</td></tr>
         <tr><td><b>Executor</b></td><td>Proceso en un worker que ejecuta tasks en varios hilos y guarda datos en memoria o disco. Databricks corre <b>un executor por worker</b></td><td>El cluster</td></tr>
         <tr><td><b>Core / slot</b></td><td>Un hueco donde corre una task a la vez (por defecto, 1 task = 1 core)</td><td>Los cores de los workers</td></tr>
-        <tr><td><b>Wave</b></td><td>Una ronda de tasks que corren a la vez. <b>No es un término oficial ni una config</b>: es el resultado de dividir tasks entre cores. La guía de Databricks lo llama <i>iterations</i></td><td>tasks ÷ cores</td></tr>
+        <tr><td><b>Wave</b></td><td>Una ronda de tasks que corren a la vez. <b>Término no oficial y sin config</b>. Sale de dividir tasks entre cores. La guía de Databricks lo llama <i>iterations</i></td><td>tasks ÷ cores</td></tr>
       </tbody>
     </table></div>
 
@@ -87,8 +99,8 @@ description: "Jobs, stages, tasks y waves: cómo se reparte el trabajo entre los
     <p>Prueba esto:</p>
     <ul>
       <li>Con 40 tasks y 16 cores, reproduce sin duraciones variables: verás 3 waves limpias, y en la última solo trabajan 8 cores.</li>
-      <li>Activa las duraciones variables y repite. Las waves se desdibujan: cada core toma una task nueva en cuanto termina la suya. Eso es lo que hace el scheduler de verdad; las "waves" son una forma de razonar, no algo que Spark imponga.</li>
-      <li>Fíjate en el final del stage: con duraciones variables, una task larga que empieza tarde deja a casi todos los cores esperando. Es la misma cola larga que produce el skew.</li>
+      <li>Activa las duraciones variables y repite. Las waves se desdibujan: cada core toma una task nueva en cuanto termina la suya. Eso es lo que hace el scheduler de verdad. Las waves son una forma de razonar; Spark no las impone.</li>
+      <li>Fíjate en el final del stage: con duraciones variables, una task larga que empieza tarde deja a casi todos los cores esperando. Es la misma cola larga que produce el skew (ver <a href="diagnostico.html">Diagnóstico</a>).</li>
     </ul>
 
     <h3><span class="k">Simulador 3</span>Waves: tasks frente a cores</h3>
@@ -163,7 +175,7 @@ agg.count()     <span class="c"># la acción: aquí se lanza el job</span></code
       <li><b>Task vs partición.</b> Es una relación 1:1 dentro de un stage. Cambiar las particiones es cambiar las tasks.</li>
       <li><b>Workers vs executors vs cores.</b> En Databricks hay 1 executor por worker. Los slots para tasks son los cores de esos executors. Lo que cuenta para las waves son los cores totales, no los workers.</li>
       <li><b>Skipped stages.</b> En el Spark UI aparecen como <i>skipped</i> cuando el shuffle que producían ya estaba escrito y se reutiliza. No es un error.</li>
-      <li><b>Waves y skew.</b> Con skew, una task dura mucho más que las demás. El problema no son las waves sino esa task. Más cores no la parten.</li>
+      <li><b>Waves y skew.</b> Con skew, una task dura mucho más que las demás y el problema es esa task. Más cores no la parten. Cómo detectarlo, en <a href="diagnostico.html">Diagnóstico</a>; cómo arreglarlo, en <a href="aqe.html">AQE</a> y <a href="remedios.html">Remedios</a>.</li>
     </ul>
 
     <h3><span class="k">Qué pasaría si</span></h3>

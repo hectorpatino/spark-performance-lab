@@ -10,7 +10,20 @@ extra_css: ["/assets/css/query-profile.css"]
     <h2>Leer el query profile para encontrar el cuello de botella</h2>
     <p class="src">Fuentes: <a href="https://docs.databricks.com/aws/en/sql/user/queries/query-profile" target="_blank" rel="noopener">Query profile</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/sql/user/queries/query-profile" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/sql/user/queries/performance-insights" target="_blank" rel="noopener">Query performance insights</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/sql/user/queries/performance-insights" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/compute/serverless/notebooks#view-query-insights" target="_blank" rel="noopener">Serverless notebooks: query insights</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/serverless/notebooks#view-query-insights" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/compute/photon" target="_blank" rel="noopener">Photon</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/photon" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/admin/system-tables/query-history" target="_blank" rel="noopener">Query history system table</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/query-history" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a></p>
 
+    <div class="essentials" role="note">
+      <p class="essentials-title">Lo esencial en 1 minuto</p>
+      <ul>
+        <li>En serverless y en SQL warehouses no hay Spark UI. El query profile muestra la ejecución por operadores (Scan, Join, Shuffle, Aggregate), no por stages ni tasks.</li>
+        <li>Ábrelo desde Query History, desde el SQL editor o con <b>See performance</b> debajo de la celda, y luego <b>See query profile</b>. Necesitas ser el dueño de la query o tener CAN MONITOR sobre el warehouse.</li>
+        <li>Cambia la métrica del DAG entre Time spent, Memory peak y Rows, o abre Top operators, y mira qué operador está arriba.</li>
+        <li>Tres lecturas del examen. Scan dominante con poco pruning: mal data skipping. Join con muchas más filas de salida que de entrada, o dos Shuffle grandes con un lado pequeño: join ineficiente. Shuffle con spill en Memory peak: shuffle y spill.</li>
+        <li>Para buscar las mismas señales en todas las queries, usa <code>system.query.history</code> (<code>pruned_files</code>, <code>spilled_local_bytes</code>, <code>shuffle_read_bytes</code>).</li>
+      </ul>
+      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> que el Scan sea caro es normal; mira el porcentaje de pruning antes de concluir que hay un problema.</p>
+    </div>
+
     <h3><span class="k">Qué problema resuelve</span>En serverless no hay Spark UI</h3>
+    <p><b>Sin Spark UI, el query profile es la vista con la que encuentras el cuello de botella.</b></p>
     <p>En un notebook o un job serverless, y en un SQL warehouse, no tienes la pestaña de stages ni la de tasks. La doc de serverless lo dice sin rodeos: el acceso al Spark UI no está disponible. Lo que tienes es el <b>query profile</b>, que muestra la ejecución por <b>operadores</b> (Scan, Join, Shuffle, Aggregate) en vez de por stages y tasks.</p>
     <p>El examen lo pide de forma literal. En la sección 6: usar el query profile para analizar la query e identificar cuellos de botella, como mal data skipping, tipos de join ineficientes y shuffle de datos. En la sección 5: usar el Query Profiler UI y el Spark UI para monitorear cargas. Y en la sección 9 aparece entre las fuentes de información de diagnóstico, junto al Spark UI, los logs del cluster y las system tables. Esta página entrena las tres lecturas de la sección 6.</p>
 
@@ -22,6 +35,7 @@ extra_css: ["/assets/css/query-profile.css"]
     <p>Con el parte en la mano no adivinas. Si recepción gastó el 86% de las horas descargando camiones enteros para usar tres cajas, revisa el pedido antes de acelerar el ensamblaje. Si ensamblaje recibió 20 millones de piezas y entregó 3,100 millones, algo está duplicando. Si la bodega del ensamblaje se desbordó y hubo que llevar cajas al patio (spill), te falta espacio o te sobran cajas.</p>
 
     <h3><span class="k">Cómo abrirlo</span>Tres caminos y un requisito</h3>
+    <p><b>Llegas siempre a un panel de detalles y de ahí a See query profile.</b></p>
     <ol class="steps">
       <li><b>Desde Query History.</b> En la barra lateral, <b>Query History</b>. Haz clic en el nombre de una query: se abre a la derecha el panel de detalles de la query (el resumen). Ahí pulsa <b>See query profile</b> para abrir el DAG completo. Puedes filtrar la lista por usuario, fechas, compute, duración, estado, tipo de sentencia, <i>statement ID</i> y query tags.</li>
       <li><b>Desde el SQL editor o un warehouse.</b> Durante y después de la ejecución aparece abajo un enlace con el tiempo transcurrido y las filas devueltas. Ese enlace abre el panel de detalles, y de ahí <b>See query profile</b>.</li>
@@ -29,9 +43,10 @@ extra_css: ["/assets/css/query-profile.css"]
     </ol>
     <p><b>Requisito:</b> ser el dueño de la query o tener al menos <b>CAN MONITOR</b> sobre el SQL warehouse que la ejecutó.</p>
     <p><b>Si sale "Query profile is not available"</b>, la query salió de la caché de resultados y no hay perfil. La doc sugiere un cambio trivial, como cambiar o quitar el <code>LIMIT</code>, para forzar una ejecución real.</p>
-    <div class="note"><b>Limitaciones en serverless (notebooks y jobs).</b> Según la doc: no hay métricas verbose (el verbose mode no está), no se puede descargar el perfil, no hay acceso al Spark UI, el texto de la sentencia muestra solo la última línea ejecutada, y el perfil completo solo está disponible cuando la query termina (las métricas sí se actualizan en vivo).</div>
+    <details><summary>Limitaciones del perfil en serverless (notebooks y jobs)</summary><p>Según la doc: no hay métricas verbose (el verbose mode no está), no se puede descargar el perfil, no hay acceso al Spark UI, el texto de la sentencia muestra solo la última línea ejecutada, y el perfil completo solo está disponible cuando la query termina (las métricas sí se actualizan en vivo).</p></details>
 
     <h3><span class="k">Cómo funciona por dentro</span>Anatomía de la pantalla</h3>
+    <p><b>Un resumen con duración, I/O e insights, y un perfil detallado con el DAG de operadores.</b></p>
     <h4>El panel de detalles (el resumen)</h4>
     <ul>
       <li><b>Estado</b> (Queued, Running, Finished, Failed, Cancelled), usuario, tipo de compute, ID de la ejecución y el texto de la query.</li>
@@ -40,7 +55,7 @@ extra_css: ["/assets/css/query-profile.css"]
       <li><b>Aggregated task time</b>: el tiempo sumado de todas las tasks en todos los cores. Puede ser mucho mayor que el wall-clock si hubo mucho paralelismo, y menor si las tasks esperaron nodos libres.</li>
       <li><b>Input/Output (IO)</b>: lo que se leyó y escribió.</li>
       <li><b>See longest operators for this query</b>: abre el panel <b>Top operators</b>.</li>
-      <li>Un resumen de los <b>performance insights</b> más importantes, ordenados por su efecto estimado en el tiempo total de tareas.</li>
+      <li>Un resumen de los <b>performance insights</b> más importantes, ordenados por su efecto estimado en el tiempo total de las tasks.</li>
     </ul>
     <h4>El perfil detallado</h4>
     <ul>
@@ -48,13 +63,13 @@ extra_css: ["/assets/css/query-profile.css"]
       <li>A la derecha, el <b>DAG</b>. Un selector cambia la métrica que se reporta en cada nodo: <b>Time spent</b>, <b>Memory peak</b> o <b>Rows</b>. Puedes buscar operadores o columnas, hacer zoom y hacer clic en un operador para ver sus métricas en un panel lateral.</li>
       <li><b>Enable verbose mode</b> (menú de tres puntos) muestra métricas de operaciones que por defecto se ocultan porque casi nunca son el cuello de botella. No existe en serverless.</li>
       <li><b>Open in Spark UI</b> (mismo menú) solo para queries de Databricks SQL.</li>
-      <li><b>Colores de Photon.</b> La doc de Photon dice que en el query profile los operadores Photon se ven en <b>morado</b> y los estándar en <b>gris</b>, y que la vista de detalles de ejecución muestra el porcentaje del tiempo de tareas que corrió en Photon. En el Spark UI de un cluster clásico es otra paleta: Photon en naranja, Spark en azul.</li>
+      <li><b>Colores de Photon.</b> La doc de Photon dice que en el query profile los operadores Photon se ven en <b>morado</b> y los estándar en <b>gris</b>, y que la vista de detalles de ejecución muestra el porcentaje del tiempo de las tasks que corrió en Photon. En el Spark UI de un cluster clásico es otra paleta: Photon en naranja, Spark en azul.</li>
       <li>Algunas operaciones no Photon se ejecutan en grupo y <b>comparten métricas</b>: todas muestran el mismo valor que el operador padre. No culpes a cada una por separado.</li>
     </ul>
     <p>Los operadores más comunes, según la doc: <b>Scan</b> (lee de una fuente), <b>Filter</b> (aplica el <code>WHERE</code>), <b>Join</b>, <b>Union</b>, <b>Shuffle</b> (redistribuye datos entre executors, y es caro porque los mueve por la red) y <b>Hash / Sort</b> (agrupa por clave y aplica funciones como <code>SUM</code> o <code>COUNT</code>).</p>
 
     <h3><span class="k">Simulador</span>Cuatro perfiles para leer</h3>
-    <p>Elige una query. Cambia la métrica del grafo y mira qué nodo se calienta. Haz clic en un nodo para ver sus métricas, y recorre las pestañas de la izquierda.</p>
+    <p><b>Practica las tres lecturas del examen y compáralas con una consulta sana.</b> Elige una query. Cambia la métrica del grafo y mira qué nodo se calienta. Haz clic en un nodo para ver sus métricas, y recorre las pestañas de la izquierda.</p>
     <div class="console" id="qp-sim">
       <div class="ttl">Recreación ilustrativa del query profile · números inventados</div>
       <div class="chips" id="qp-chips" role="group" aria-label="Query de ejemplo">
@@ -70,7 +85,7 @@ extra_css: ["/assets/css/query-profile.css"]
     <div class="verify">La estructura (panel de detalles, pestañas, DAG con Time spent / Memory peak / Rows, Top operators, morado para Photon y gris para estándar) sigue la doc. Los <b>nombres exactos</b> de las métricas dentro de cada operador (por ejemplo "Files pruned" o "Spill size") y de los nodos de join (por ejemplo si dice "Shuffled Hash Join" o lleva prefijo "Photon") no están documentados. Los de la recreación son aproximados. <b>Verifícalo</b> abriendo un perfil real en tu workspace.</div>
 
     <h3><span class="k">Método</span>Tres cuellos de botella del examen</h3>
-    <p>Abre el perfil, ordena por <b>Time spent</b> (o abre Top operators) y mira qué tipo de operador está arriba. Cada tipo apunta a una familia de causas.</p>
+    <p><b>El tipo de operador que domina el tiempo te dice qué familia de causas revisar.</b> Abre el perfil, ordena por <b>Time spent</b> (o abre Top operators) y mira qué tipo de operador está arriba. Cada tipo apunta a una familia de causas.</p>
     <div class="tblwrap"><table>
       <thead><tr><th>Cuello de botella</th><th>Dónde lo ves</th><th>Qué arreglas</th></tr></thead>
       <tbody>
@@ -80,13 +95,13 @@ extra_css: ["/assets/css/query-profile.css"]
       </tbody>
     </table></div>
     <ul>
-      <li><b>Sobre el broadcast.</b> La doc de AQE dice que AQE puede cambiar un sort-merge join a broadcast en tiempo de ejecución, pero solo después de hacer el shuffle de ambos lados, y con un umbral (<code>spark.databricks.adaptive.autoBroadcastJoinThreshold</code>) de 30 MB por defecto. El hint <code>BROADCAST</code> evita el shuffle desde el inicio e ignora ese umbral. Y la doc de Photon dice que Photon reemplaza los sort-merge joins por hash joins, así que en serverless y en warehouses espera ver el join con shuffle como un hash join con dos Shuffle debajo (esto último lo deduzco de esa frase; la doc del query profile no lo dice).</li>
-      <li><b>Sobre el spill.</b> Si el spill viene de skew, más particiones no lo arreglan. El query profile muestra operadores, no tasks, así que la pista del skew suele llegar por el insight <code>DATA_SKEW</code>. Ver <a href="remedios.html">Remedios</a>.</li>
+      <li><b>Sobre el broadcast.</b> El hint <code>BROADCAST</code> evita el shuffle desde el inicio; AQE solo cambia a broadcast después de los dos shuffles. Umbrales y reglas en <a href="joins.html">Estrategias de join</a>. La doc de Photon dice que Photon reemplaza los sort-merge joins por hash joins, así que en serverless y en warehouses espera ver el join con shuffle como un hash join con dos Shuffle debajo (esto último lo deduzco de esa frase; la doc del query profile no lo dice).</li>
+      <li><b>Sobre el spill.</b> El query profile no muestra tasks, así que la pista del skew suele llegar por el insight <code>DATA_SKEW</code>. Si el spill viene de skew, más particiones no lo arreglan (<a href="remedios.html">Remedios</a>; mecanismo del spill en <a href="memoria-oom.html">Memoria y OOM</a>).</li>
       <li><b>Lo que no es cuello de botella.</b> Que el Scan sea el operador más caro es normal si lee solo lo necesario. Mira el pruning antes de concluir.</li>
     </ul>
 
     <h3><span class="k">Las mismas señales a escala</span>Del perfil a system.query.history</h3>
-    <p>El query profile es una query a la vez. Para buscar en todas, usa <code>system.query.history</code> (ver <a href="system-tables.html">System tables</a>). Cubre SQL warehouses, serverless para notebooks y jobs, y Lakeflow pipelines; no cubre clusters clásicos all-purpose o de jobs. Por defecto solo la ven los admins.</p>
+    <p><b>Cada señal del perfil tiene una columna en <code>system.query.history</code>, y con ella buscas en todas las queries.</b> El query profile es una query a la vez. Para buscar en todas, usa <code>system.query.history</code> (ver <a href="system-tables.html">System tables</a>). Cubre SQL warehouses, serverless para notebooks y jobs, y Lakeflow pipelines; no cubre clusters clásicos all-purpose o de jobs. Por defecto solo la ven los admins.</p>
     <div class="tblwrap"><table>
       <thead><tr><th>Señal del perfil</th><th>Columnas de <code>system.query.history</code></th></tr></thead>
       <tbody>
@@ -118,15 +133,15 @@ ORDER BY total_duration_ms DESC
 LIMIT 50;</code></pre>
     <p class="c">Las columnas están en la doc de la tabla. La query y el umbral de 60 s son míos. <code>produced_rows</code> son las filas que devuelve la sentencia: un join que explota y luego se agrega no se nota ahí, solo en el perfil.</p>
     <p>Para saltar de una fila al perfil: copia el <code>statement_id</code>, entra al mismo workspace (<code>workspace_id</code>), abre <b>Query History</b>, pega el ID en el filtro <b>Statement ID</b>, haz clic en la query y luego en <b>See query profile</b>.</p>
-    <p><b>Cuidado con <code>read_bytes</code>.</b> No se compara con <code>table_bytes</code>. Mide lo leído después del pruning de columnas y row groups, mezcla datos comprimidos de storage con datos sin comprimir de la caché de disco, y crece con los reintentos. Por eso puede superar el tamaño de la tabla.</p>
+    <details><summary>Cuidado con <code>read_bytes</code></summary><p>No se compara con <code>table_bytes</code>. Mide lo leído después del pruning de columnas y row groups, mezcla datos comprimidos de storage con datos sin comprimir de la caché de disco, y crece con los reintentos. Por eso puede superar el tamaño de la tabla.</p></details>
 
     <h3><span class="k">Practica</span>Elige el diagnóstico</h3>
-    <p>Tres perfiles recortados. Lee el grafo y la tabla de operadores, y elige la causa. Cuenta tu primera respuesta.</p>
+    <p><b>Tres perfiles recortados para practicar sin abrir Databricks.</b> Tres perfiles recortados. Lee el grafo y la tabla de operadores, y elige la causa. Cuenta tu primera respuesta.</p>
     <div class="score" id="qz-score" aria-live="polite"></div>
     <div id="qz-list"></div>
 
     <h3><span class="k">Cómo se usa</span>Un experimento en Free Edition</h3>
-    <p>Free Edition es serverless, así que tienes el query profile y no el Spark UI. Este experimento provoca un join que explota y lo compara con el join correcto.</p>
+    <p><b>Provoca un join que explota y míralo en el perfil.</b> Free Edition es serverless, así que tienes el query profile y no el Spark UI. Este experimento provoca un join que explota y lo compara con el join correcto.</p>
 <pre><code><span class="c">-- 1 millón de pedidos y 1 millón de envíos; cliente_id se repite 1,000 veces en cada tabla</span>
 CREATE OR REPLACE TEMP VIEW pedidos AS
 SELECT id AS pedido_id, id % 1000 AS cliente_id FROM range(1000000);
@@ -150,6 +165,7 @@ SELECT count(*) FROM pedidos p JOIN envios e ON p.pedido_id = e.pedido_id;</code
     <div class="verify">No ejecuté este experimento. Las cifras de filas salen de la aritmética de los datos. El tiempo, el aspecto exacto del grafo (si el join aparece como broadcast o con shuffle, por ejemplo) y si el insight <code>EXPLODING_JOIN</code> aparece en este caso dependen del motor. <b>Verifícalo</b> en tu workspace.</div>
 
     <h3><span class="k">Cuándo usarlo y cuándo no</span>Qué herramienta para qué pregunta</h3>
+    <p><b>El query profile es para una ejecución concreta en serverless o en un warehouse.</b></p>
     <div class="tblwrap"><table>
       <thead><tr><th>Pregunta</th><th>Herramienta</th></tr></thead>
       <tbody>
@@ -162,6 +178,7 @@ SELECT count(*) FROM pedidos p JOIN envios e ON p.pedido_id = e.pedido_id;</code
     </table></div>
 
     <h3><span class="k">Con qué se confunde</span>Cinco trampas</h3>
+    <p><b>Cinco lecturas del perfil que llevan a conclusiones equivocadas.</b></p>
     <ul>
       <li><b>Wall-clock vs aggregated task time.</b> El primero es lo que esperó el usuario. El segundo es la suma de todas las tasks en todos los cores. Una query de 90 s con 3 horas de task time hizo mucho trabajo en paralelo: optimizarla ahorra cómputo aunque el usuario no lo note tanto.</li>
       <li><b>Query insights vs performance insights.</b> En serverless la doc llama <i>query insights</i> a lo que ves al pulsar See performance (la lista de sentencias y sus métricas). Los <i>performance insights</i> son las recomendaciones con nombre, como <code>DATA_SPILL</code> o <code>EXPLODING_JOIN</code>, que aparecen en el resumen y en su propia pestaña del perfil.</li>
@@ -171,6 +188,7 @@ SELECT count(*) FROM pedidos p JOIN envios e ON p.pedido_id = e.pedido_id;</code
     </ul>
 
     <h3><span class="k">Qué pasaría si</span></h3>
+    <p><b>Abre cada pregunta para ver la respuesta.</b></p>
     <details><summary>…subes el tamaño del warehouse para la query del Scan sin data skipping?</summary><p>Leerías los mismos 501 GiB con más cores. El wall-clock baja algo, pero el aggregated task time (y el coste) sigue igual o sube. El arreglo es leer menos: filtrar por las claves de clustering o cambiar las claves.</p></details>
     <details><summary>…pones <code>BROADCAST</code> en el lado grande de un join?</summary><p>Ese lado se copia entero a cada executor. El hint se salta <code>autoBroadcastJoinThreshold</code>, pero no todos los límites: Apache Spark rechaza un broadcast de más de 8 GB (comportamiento de Spark, no aparece en la doc de Databricks), y antes de eso la memoria del driver y de los executors tiene que aguantar la tabla. Lo más probable es un error de memoria. El broadcast es para el lado pequeño.</p></details>
     <details><summary>…el perfil tiene spill pero el agregado parcial sí reduce mucho las filas?</summary><p>Entonces el volumen total no explica el spill y conviene sospechar de skew: unas pocas claves concentran los datos. Busca el insight <code>DATA_SKEW</code> y revisa la distribución de la clave (<a href="remedios.html">Remedios</a>).</p></details>

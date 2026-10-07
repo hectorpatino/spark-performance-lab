@@ -7,6 +7,17 @@ description: "Organizar los archivos para que el data skipping funcione."
 
     <h2>Liquid clustering: ordenar los archivos para leer menos</h2>
     <p class="src">Fuentes: <a href="https://docs.databricks.com/aws/en/tables/clustering" target="_blank" rel="noopener">Use liquid clustering for tables</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/clustering" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/data-skipping" target="_blank" rel="noopener">Data skipping</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/data-skipping" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/partitions" target="_blank" rel="noopener">When to partition tables</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/partitions" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> y <a href="https://docs.databricks.com/aws/en/optimizations/predictive-optimization" target="_blank" rel="noopener">Predictive optimization</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/predictive-optimization" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
+    <div class="essentials" role="note">
+      <p class="essentials-title">Lo esencial en 1 minuto</p>
+      <ul>
+        <li>Delta guarda por archivo el mínimo y el máximo de cada columna con estadísticas (por defecto, las primeras 32). Liquid clustering ordena las filas para que esos rangos sean estrechos y el filtro descarte archivos.</li>
+        <li>Reemplaza al particionado y a <code>ZORDER</code>, y Databricks lo recomienda para todas las tablas nuevas. Hasta 4 claves: las columnas de los filtros más frecuentes.</li>
+        <li>Es incremental. <code>ALTER TABLE … CLUSTER BY</code> no reescribe lo existente; <code>OPTIMIZE … FULL</code> sí. Con predictive optimization, Databricks corre el <code>OPTIMIZE</code> por ti.</li>
+        <li>Con menos de 1 TB no particiones. Si particionas, cada partición debe tener al menos 1 GB.</li>
+        <li><code>CLUSTER BY AUTO</code> elige las claves según el historial de queries, solo en tablas managed de Unity Catalog con predictive optimization.</li>
+      </ul>
+      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> si un filtro selectivo lee casi toda la tabla, clusteriza por la columna del filtro y corre <code>OPTIMIZE</code>.</p>
+    </div>
     <div class="nb-dl"><a class="btn" href="notebooks/liquid-clustering.sql" download="liquid-clustering.sql">Descargar notebook</a><span>Notebook SQL con el ejemplo de esta página, listo para Free Edition. Impórtalo en Databricks desde <b>Workspace</b> → clic derecho en una carpeta → <b>Import</b> → <b>File</b> (<a href="https://docs.databricks.com/aws/en/notebooks/notebook-export-import" target="_blank" rel="noopener">fuente</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/notebooks/notebook-export-import" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</span></div>
 
     <h3><span class="k">Qué problema resuelve</span>Leer archivos que no tienen nada de lo que buscas</h3>
@@ -42,7 +53,7 @@ description: "Organizar los archivos para que el data skipping funcione."
     </div>
     <p>Fíjate en tres cosas:</p>
     <ul>
-      <li>"Orden de llegada" ya salta bien por <code>fecha</code>, porque los datos llegan día a día. Por <code>cliente_id</code> lee los 16 archivos.</li>
+      <li><i>Orden de llegada</i> ya salta bien por <code>fecha</code>, porque los datos llegan día a día. Por <code>cliente_id</code> lee los 16 archivos.</li>
       <li>Con una sola clave, el filtro por esa clave lee 1 archivo, pero el de fecha vuelve a leerlo todo.</li>
       <li>Con dos claves, ningún filtro es perfecto, pero los dos saltan la mayoría. Por eso la doc limita a <b>4 claves</b>: cada clave extra reparte el beneficio entre más columnas.</li>
     </ul>
@@ -67,7 +78,7 @@ description: "Organizar los archivos para que el data skipping funcione."
 
     <h3><span class="k">Por dentro · 3</span>Quién ejecuta el OPTIMIZE</h3>
     <ul>
-      <li><b>Con predictive optimization</b> (tablas managed de Unity Catalog), Databricks ejecuta <code>OPTIMIZE</code> por ti. También ejecuta <code>VACUUM</code> y <code>ANALYZE</code>.</li>
+      <li><b>Con predictive optimization</b> (tablas managed de Unity Catalog), Databricks ejecuta <code>OPTIMIZE</code> por ti. También ejecuta <code>VACUUM</code> y <code>ANALYZE</code> (ver <a href="mantenimiento-delta.html">Mantenimiento de Delta</a>).</li>
       <li><b>Sin predictive optimization</b>, la doc recomienda programar un job de <code>OPTIMIZE</code> cada una o dos horas en tablas que se actualizan a menudo.</li>
       <li><b>Clustering on write.</b> Algunas escrituras (<code>INSERT</code>, CTAS, RTAS, <code>COPY INTO</code> desde Parquet) ya clusterizan al escribir si el volumen supera un umbral. En tablas managed de UC el umbral es 64 MB con 1 clave, 256 MB con 2, 512 MB con 3 y 1 GB con 4. En las demás tablas es 4 veces eso.</li>
     </ul>
@@ -130,9 +141,9 @@ ALTER TABLE workspace.default.ventas_lc CLUSTER BY AUTO;</code></pre>
 
     <h3><span class="k">Con qué se confunde</span></h3>
     <ul>
-      <li><b>"Heavy data skew" vs skew de shuffle.</b> La doc recomienda liquid clustering para tablas con mucho skew. Habla de cómo se reparten los datos <b>en los archivos</b> (una partición <code>pais = 'CO'</code> enorme y las demás diminutas). No arregla el skew de un join o un <code>groupBy</code>: ese se resuelve con AQE o salting.</li>
+      <li><b><i>Heavy data skew</i> vs skew de shuffle.</b> La doc recomienda liquid clustering para tablas con mucho skew. Habla de cómo se reparten los datos <b>en los archivos</b> (una partición <code>pais = 'CO'</code> enorme y las demás diminutas). No arregla el skew de un join o un <code>groupBy</code>; ese se resuelve con <a href="aqe.html">AQE</a> o con <a href="remedios.html">salting</a>.</li>
       <li><b>Partition pruning vs data skipping vs dynamic file pruning.</b> El partition pruning descarta <b>directorios</b> según el filtro. El data skipping descarta <b>archivos</b> con sus estadísticas mín/máx, y es lo que aprovecha liquid clustering. El dynamic file pruning descarta archivos en runtime usando los valores del otro lado de un join.</li>
-      <li><b>ALTER CLUSTER BY reescribe la tabla.</b> No: cambia las claves para lo que venga. Para reorganizar lo existente hace falta <code>OPTIMIZE FULL</code>.</li>
+      <li><b>ALTER CLUSTER BY y reescribir la tabla.</b> El <code>ALTER</code> solo cambia las claves para lo que venga. Para reorganizar lo existente hace falta <code>OPTIMIZE FULL</code>.</li>
       <li><b>Liquid clustering + ZORDER.</b> No se combinan, igual que liquid clustering y particionado.</li>
       <li><b>CLUSTER BY AUTO en cualquier tabla.</b> Solo en tablas managed de Unity Catalog (DBR 15.4 LTS o superior) y con predictive optimization activado.</li>
     </ul>

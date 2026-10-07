@@ -9,6 +9,17 @@ extra_css: ["/assets/css/casos.css"]
     <h2>Casos de diagnóstico</h2>
     <p>Cada caso es un síntoma con su evidencia, como te llegaría en el trabajo. Elige una opción. Cuenta tu primera respuesta, y después verás por qué cada opción es correcta o no, junto con la fuente.</p>
     <p class="c" style="font-size:.88rem">Los números son inventados para el ejercicio. Las reglas que se aplican vienen de la doc citada en cada caso. Cada caso lleva la sección de la guía del examen Data Engineer Professional con la que se relaciona.</p>
+    <div class="essentials" role="note">
+      <p class="essentials-title">Lo esencial en 1 minuto</p>
+      <ul>
+        <li>Lee la evidencia antes de las opciones y decide qué métrica la explica. Responde una vez: cuenta tu primera respuesta. Filtra por sección del examen para repasar tus puntos débiles.</li>
+        <li>Regla 1: compara Max con p75. Si una task se sale, es skew; si todas sufren igual (spill en todas), las particiones son demasiado grandes y el salting no sirve.</li>
+        <li>Regla 2: mira dónde ocurre el fallo. <code>collect()</code>, <code>toPandas()</code> y los broadcasts pasan por el driver; más workers no le dan memoria.</li>
+        <li>Regla 3: antes de esperar que AQE lo arregle, comprueba sus condiciones: tipo de join, 5 veces la mediana y 256 MB para el skew, 30 MB para cambiar a broadcast, y nada de streaming.</li>
+        <li>Regla 4: más cómputo casi nunca es la respuesta correcta. Busca la causa en los archivos leídos, en las filas que salen del join o en el número de particiones.</li>
+      </ul>
+      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> en cada caso, nombra la métrica que prueba la causa antes de elegir el arreglo.</p>
+    </div>
     <div class="chips cs-filter" id="cs-filter" role="group" aria-label="Filtrar por sección del examen"></div>
     <div class="cs-bar">
       <div class="score" id="cs-score" aria-live="polite"></div>
