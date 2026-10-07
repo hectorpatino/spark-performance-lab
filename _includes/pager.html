@@ -1,0 +1,21 @@
+{%- assign pg_list = site.data.pages -%}
+{%- assign pg_prev = nil -%}
+{%- assign pg_next = nil -%}
+{%- if page.slug == "index" -%}
+  {%- assign pg_next = pg_list.first -%}
+{%- else -%}
+  {%- for p in pg_list -%}
+    {%- if p.slug == page.slug -%}
+      {%- assign i_prev = forloop.index0 | minus: 1 -%}
+      {%- assign i_next = forloop.index0 | plus: 1 -%}
+      {%- if forloop.first == false -%}{%- assign pg_prev = pg_list[i_prev] -%}{%- endif -%}
+      {%- if forloop.last == false -%}{%- assign pg_next = pg_list[i_next] -%}{%- endif -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endif -%}
+{%- if pg_prev or pg_next -%}
+<nav class="pager" aria-label="Anterior y siguiente">
+  {%- if pg_prev -%}<a class="prev" href="{{ pg_prev.slug | append: '.html' | relative_url }}"><span>Anterior</span>{{ pg_prev.title }}</a>{%- endif -%}
+  {%- if pg_next -%}<a class="next" href="{{ pg_next.slug | append: '.html' | relative_url }}"><span>Siguiente</span>{{ pg_next.title }}</a>{%- endif -%}
+</nav>
+{%- endif -%}

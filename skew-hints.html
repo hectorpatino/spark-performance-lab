@@ -1,21 +1,9 @@
-<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Skew hints · Spark Performance Lab</title>
-<meta name="description" content="El enfoque antiguo con /*+ SKEW */ y por qué ya no hace falta.">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
-<link rel="stylesheet" href="assets/style.css">
-</head>
-<body>
-<div class="wrap">
-  <header class="top">
-    <a class="brand" href="index.html">Spark Performance Lab</a>
-  </header>
-  <nav class="tabs" aria-label="Páginas"><div class="row"><span class="grp">Fundamentos</span><a href="stages.html">Stages y waves</a><a href="shuffle.html">Shuffle</a><span class="grp">Skew y spill</span><a href="diagnostico.html">Diagnóstico</a><a href="aqe.html">AQE</a><a href="lab.html">Lab</a><a href="remedios.html">Remedios</a><a href="skew-hints.html" aria-current="page">Skew hints</a><span class="grp">Archivos</span><a href="liquid-clustering.html">Liquid clustering</a><span class="grp">Práctica</span><a href="casos.html">Casos</a></div></nav>
-  <main>
-  <section class="panel">
+---
+layout: default
+slug: skew-hints
+title: "Skew hints"
+description: "El enfoque antiguo con /*+ SKEW */ y por qué ya no hace falta."
+---
 
     <h2>Skew hints: el enfoque antiguo</h2>
     <p class="src">Fuente: <a href="https://docs.databricks.com/aws/en/archive/legacy/skew-join" target="_blank" rel="noopener">docs.databricks.com/…/archive/legacy/skew-join</a> (página archivada, puede no actualizarse)</p>
@@ -50,11 +38,3 @@ SELECT /*+ SKEW('orders', ('o_custId', 'o_storeRegionId'), ((0, 1001), (1, 1002)
 
     <h3><span class="k">No confundir</span>Hints que sí siguen vigentes</h3>
     <p>El hint de <b>broadcast</b> sí se sigue recomendando cuando conoces la query, porque evita el shuffle desde el plan inicial (ver <a href="aqe.html">AQE</a>). "Los hints son legacy" vale para <code>SKEW()</code>, no para todos los hints.</p>
-  </section>
-  </main>
-  <nav class="pager" aria-label="Anterior y siguiente"><a class="prev" href="remedios.html"><span>Anterior</span>Remedios</a><a class="next" href="liquid-clustering.html"><span>Siguiente</span>Liquid clustering</a></nav>
-  <footer class="site">Material de estudio personal sobre Databricks y Apache Spark, hecho a partir de la documentación oficial citada en cada página. No es documentación oficial ni está afiliado a Databricks. Los números de los simuladores son ilustrativos; verifica siempre en <a href="https://docs.databricks.com" target="_blank" rel="noopener">docs.databricks.com</a>.</footer>
-</div>
-<script src="assets/app.js"></script>
-</body>
-</html>

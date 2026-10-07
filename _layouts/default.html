@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="{{ site.lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% if page.slug == "index" %}{{ site.title }}{% else %}{{ page.title }} · {{ site.title }}{% endif %}</title>
+<meta name="description" content="{{ page.description | default: site.description | escape }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="{{ '/assets/style.css' | relative_url }}">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="{{ '/' | relative_url }}">{{ site.title }}</a>
+  </header>
+  {% include nav.html %}
+  <main>
+  <section class="panel">
+{{ content }}
+  </section>
+  </main>
+  {% include pager.html %}
+  {% include footer.html %}
+</div>
+<script src="{{ '/assets/app.js' | relative_url }}"></script>
+</body>
+</html>

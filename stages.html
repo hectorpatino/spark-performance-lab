@@ -1,21 +1,9 @@
-<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Stages y waves · Spark Performance Lab</title>
-<meta name="description" content="Jobs, stages, tasks y waves: cómo se reparte el trabajo entre los cores.">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
-<link rel="stylesheet" href="assets/style.css">
-</head>
-<body>
-<div class="wrap">
-  <header class="top">
-    <a class="brand" href="index.html">Spark Performance Lab</a>
-  </header>
-  <nav class="tabs" aria-label="Páginas"><div class="row"><span class="grp">Fundamentos</span><a href="stages.html" aria-current="page">Stages y waves</a><a href="shuffle.html">Shuffle</a><span class="grp">Skew y spill</span><a href="diagnostico.html">Diagnóstico</a><a href="aqe.html">AQE</a><a href="lab.html">Lab</a><a href="remedios.html">Remedios</a><a href="skew-hints.html">Skew hints</a><span class="grp">Archivos</span><a href="liquid-clustering.html">Liquid clustering</a><span class="grp">Práctica</span><a href="casos.html">Casos</a></div></nav>
-  <main>
-  <section class="panel">
+---
+layout: default
+slug: stages
+title: "Stages y waves"
+description: "Jobs, stages, tasks y waves: cómo se reparte el trabajo entre los cores."
+---
 
     <h2>Jobs, stages, tasks y waves</h2>
     <p class="src">Fuentes: <a href="https://spark.apache.org/docs/latest/cluster-overview.html#glossary" target="_blank" rel="noopener">Apache Spark · Cluster overview (glosario)</a>, <a href="https://spark.apache.org/docs/latest/web-ui.html" target="_blank" rel="noopener">Apache Spark · Web UI</a>, <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage" target="_blank" rel="noopener">Databricks · Look at longest stage</a>, <a href="https://docs.databricks.com/aws/en/compute/configure" target="_blank" rel="noopener">Databricks · Compute configuration</a> y la <a href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide#cluster-usage" target="_blank" rel="noopener">guía de optimización (Cluster usage)</a>.</p>
@@ -126,11 +114,3 @@ agg.count()     <span class="c"># la acción: aquí se lanza el job</span></code
       <li><b>Pones shuffle.partitions = cores + 1:</b> casi duplicas el tiempo del stage por una sola task.</li>
       <li><b>Usas <code>auto</code></b>: Databricks elige el número de particiones según el plan y el tamaño de la entrada. Es la recomendación para shuffle alto.</li>
     </ul>
-  </section>
-  </main>
-  <nav class="pager" aria-label="Anterior y siguiente"><a class="next" href="shuffle.html"><span>Siguiente</span>Shuffle</a></nav>
-  <footer class="site">Material de estudio personal sobre Databricks y Apache Spark, hecho a partir de la documentación oficial citada en cada página. No es documentación oficial ni está afiliado a Databricks. Los números de los simuladores son ilustrativos; verifica siempre en <a href="https://docs.databricks.com" target="_blank" rel="noopener">docs.databricks.com</a>.</footer>
-</div>
-<script src="assets/app.js"></script>
-</body>
-</html>

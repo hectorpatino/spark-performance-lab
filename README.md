@@ -8,8 +8,37 @@ Es material de estudio personal. No es documentación oficial ni está afiliado 
 
 ## Estructura
 
-Sitio estático sin build: HTML, `assets/style.css` y `assets/app.js`. Para verlo en local:
+Sitio Jekyll que GitHub Pages compila solo al hacer push a `main`.
+
+```
+_config.yml          título, baseurl
+_data/pages.yml      orden del menú y de anterior/siguiente
+_layouts/default.html
+_includes/           nav.html, pager.html, footer.html
+assets/style.css     estilos compartidos (tema claro y oscuro)
+assets/app.js        simuladores; cada uno se activa si su elemento existe en la página
+*.html               una página por tema, con front matter
+```
+
+## Añadir una página
+
+1. Crea `joins.html` con este front matter y el contenido debajo:
+
+   ```
+   ---
+   layout: default
+   slug: joins
+   title: "Estrategias de join"
+   description: "Broadcast, sort-merge y shuffle hash."
+   ---
+   ```
+
+2. Añádela en `_data/pages.yml`, en la posición que quieras dentro del menú.
+
+## Ver en local
 
 ```bash
-python -m http.server 8000
+bundle install
+bundle exec jekyll serve
+# http://localhost:4000/spark-performance-lab/
 ```

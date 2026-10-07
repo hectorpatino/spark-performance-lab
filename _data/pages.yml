@@ -1,0 +1,29 @@
+# Orden del menú y de los enlaces anterior/siguiente. Para añadir una página:
+# crea <slug>.html con front matter (layout, slug, title, description) y añádela aquí.
+- slug: stages
+  section: "Fundamentos"
+  title: "Stages y waves"
+- slug: shuffle
+  section: "Fundamentos"
+  title: "Shuffle"
+- slug: diagnostico
+  section: "Skew y spill"
+  title: "Diagnóstico"
+- slug: aqe
+  section: "Skew y spill"
+  title: "AQE"
+- slug: lab
+  section: "Skew y spill"
+  title: "Lab"
+- slug: remedios
+  section: "Skew y spill"
+  title: "Remedios"
+- slug: skew-hints
+  section: "Skew y spill"
+  title: "Skew hints"
+- slug: liquid-clustering
+  section: "Archivos"
+  title: "Liquid clustering"
+- slug: casos
+  section: "Práctica"
+  title: "Casos"

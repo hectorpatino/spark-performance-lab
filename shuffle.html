@@ -1,21 +1,9 @@
-<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Shuffle · Spark Performance Lab</title>
-<meta name="description" content="Shuffle write y shuffle read: cómo se mueven las filas entre stages.">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
-<link rel="stylesheet" href="assets/style.css">
-</head>
-<body>
-<div class="wrap">
-  <header class="top">
-    <a class="brand" href="index.html">Spark Performance Lab</a>
-  </header>
-  <nav class="tabs" aria-label="Páginas"><div class="row"><span class="grp">Fundamentos</span><a href="stages.html">Stages y waves</a><a href="shuffle.html" aria-current="page">Shuffle</a><span class="grp">Skew y spill</span><a href="diagnostico.html">Diagnóstico</a><a href="aqe.html">AQE</a><a href="lab.html">Lab</a><a href="remedios.html">Remedios</a><a href="skew-hints.html">Skew hints</a><span class="grp">Archivos</span><a href="liquid-clustering.html">Liquid clustering</a><span class="grp">Práctica</span><a href="casos.html">Casos</a></div></nav>
-  <main>
-  <section class="panel">
+---
+layout: default
+slug: shuffle
+title: "Shuffle"
+description: "Shuffle write y shuffle read: cómo se mueven las filas entre stages."
+---
 
     <h2>Shuffle: mover filas entre máquinas</h2>
     <p class="src">Fuentes: <a href="https://spark.apache.org/docs/latest/rdd-programming-guide.html#shuffle-operations" target="_blank" rel="noopener">Apache Spark · Shuffle operations</a> y <a href="https://spark.apache.org/docs/latest/web-ui.html" target="_blank" rel="noopener">Apache Spark · Web UI</a>. Son documentación oficial de Apache Spark, no de docs.databricks.com; Databricks da este concepto por sabido. La recomendación de Databricks para shuffle alto viene de <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener">Spark stage high I/O</a>.</p>
@@ -142,11 +130,3 @@
       <li><b>Muchísimas particiones para poco shuffle:</b> el número de bloques es map tasks × particiones, y cada reduce task hace muchas lecturas diminutas. Esto es razonamiento mío, no de la doc; AQE lo mitiga uniendo particiones pequeñas.</li>
       <li><b>Haces broadcast de la tabla pequeña:</b> la grande no se mueve. Es la forma más barata de evitar un shuffle en un join.</li>
     </ul>
-  </section>
-  </main>
-  <nav class="pager" aria-label="Anterior y siguiente"><a class="prev" href="stages.html"><span>Anterior</span>Stages y waves</a><a class="next" href="diagnostico.html"><span>Siguiente</span>Diagnóstico</a></nav>
-  <footer class="site">Material de estudio personal sobre Databricks y Apache Spark, hecho a partir de la documentación oficial citada en cada página. No es documentación oficial ni está afiliado a Databricks. Los números de los simuladores son ilustrativos; verifica siempre en <a href="https://docs.databricks.com" target="_blank" rel="noopener">docs.databricks.com</a>.</footer>
-</div>
-<script src="assets/app.js"></script>
-</body>
-</html>

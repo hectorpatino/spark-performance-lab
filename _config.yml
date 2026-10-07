@@ -1,0 +1,10 @@
+title: Spark Performance Lab
+description: Manual para diagnosticar jobs lentos en Databricks y Apache Spark - shuffle, waves, skew, spill, AQE y liquid clustering.
+lang: es
+url: "https://hectorpatino.github.io"
+baseurl: "/spark-performance-lab"
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - vendor
