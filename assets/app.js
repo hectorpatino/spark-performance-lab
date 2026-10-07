@@ -3,6 +3,7 @@
   const el=(tag,attrs,txt)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(txt!=null)e.textContent=txt;return e;};
   const q=(arr,p)=>{const s=[...arr].sort((a,b)=>a-b);const i=(s.length-1)*p;const lo=Math.floor(i),hi=Math.ceil(i);return s[lo]+(s[hi]-s[lo])*(i-lo);};
   const fmtT=s=>s>=60?Math.floor(s/60)+' min '+String(Math.round(s%60)).padStart(2,'0')+' s':s.toFixed(1)+' s';
+  function tickMax(v){for(const c of [1,2,4,5,8,10,15,20,25,50,100]){if(4*c>=v)return 4*c;}return niceMax(v);}
   function niceMax(v){const p=Math.pow(10,Math.floor(Math.log10(v)));for(const m of [1,2,2.5,5,10]){if(m*p>=v)return m*p;}return 10*p;}
   function axes(svg,W,H,L,B,T,max,fmt){
     for(let i=0;i<=4;i++){const v=max*i/4;const y=H-B-(H-B-T)*i/4;
@@ -660,4 +661,159 @@ OPTIMIZE eventos;   <span class="c">-- o predictive optimization si es managed d
   });
   csScore();
   } catch (e) { console.error('7. casos', e); } }
+
+  /* ---------- 0a-3. línea de tiempo del job ---------- */
+  if (document.getElementById('jt-chart')) { try {
+  const JOBS={
+    narrow:[{id:1,n:80,d:4,deps:[]}],
+    agg:[{id:1,n:80,d:4,deps:[]},{id:2,n:200,d:1.5,deps:[1]}],
+    smj:[{id:1,n:80,d:4,deps:[]},{id:2,n:40,d:4,deps:[]},{id:3,n:200,d:2,deps:[1,2]}],
+    bhj:[{id:1,n:8,d:2,deps:[],note:'broadcast'},{id:2,n:80,d:4.5,deps:[1]}],
+    aggsort:[{id:1,n:80,d:4,deps:[]},{id:2,n:200,d:1.5,deps:[1]},{id:3,n:200,d:1.2,deps:[2]}]
+  };
+  let jtKey='narrow'; const jtC=document.getElementById('jt-c');
+  function simJob(stages,C){
+    const st=stages.map(s=>Object.assign({},s,{left:s.n,ready:!s.deps.length,start:null,end:null}));
+    const queue=[]; st.forEach(s=>{if(s.ready) for(let i=0;i<s.n;i++) queue.push(s);});
+    const busy=Array(C).fill(false), tasks=[]; let running=[], t=0, guard=0;
+    while((queue.length||running.length)&&guard++<100000){
+      for(let c=0;c<C&&queue.length;c++){ if(!busy[c]){const s=queue.shift(); busy[c]=true; if(s.start===null)s.start=t; const k={c,s:t,e:t+s.d,st:s}; running.push(k); tasks.push(k);} }
+      if(!running.length) break;
+      t=Math.min(...running.map(k=>k.e));
+      const fin=running.filter(k=>k.e<=t+1e-9); running=running.filter(k=>k.e>t+1e-9);
+      fin.forEach(k=>{busy[k.c]=false; k.st.left--; if(k.st.left===0) k.st.end=t;});
+      st.forEach(s=>{ if(!s.ready && s.deps.every(id=>st.find(x=>x.id===id).end!==null)){ s.ready=true; for(let i=0;i<s.n;i++) queue.push(s);} });
+    }
+    return {st,tasks,end:t};
+  }
+  function drawJt(){
+    const C=+jtC.value; document.getElementById('jt-c-o').textContent=C;
+    const r=simJob(JOBS[jtKey],C), svg=document.getElementById('jt-chart'); svg.textContent='';
+    const L=36,R=354,T=16,B=22,H=190, rh=(H-T-B)/C, xmax=tickMax(r.end*1.02), xs=v=>L+(R-L)*v/xmax;
+    for(let i=0;i<=4;i++){const v=xmax*i/4,x=xs(v); svg.appendChild(el('line',{x1:x,x2:x,y1:T,y2:H-B,class:'ax',opacity:i?0.35:1})); svg.appendChild(el('text',{x,y:H-B+12,'text-anchor':'middle',class:'tick'},Math.round(v)+'s'));}
+    svg.appendChild(el('text',{x:L-4,y:T+6,'text-anchor':'end',class:'tick'},'1'));
+    svg.appendChild(el('text',{x:L-4,y:H-B-1,'text-anchor':'end',class:'tick'},C));
+    const cls=['p0','p3','p1','p2'];
+    r.tasks.forEach(k=>{const x=xs(k.s),w=Math.max(xs(k.e)-x-0.5,0.5); svg.appendChild(el('rect',{x,y:T+k.c*rh+Math.min(.4,rh*.15),width:w,height:Math.max(rh-Math.min(.8,rh*.3),.6),class:cls[(k.st.id-1)%4]}));});
+    r.st.forEach(s=>{ if(s.start>0){const x=xs(s.start); svg.appendChild(el('line',{x1:x,x2:x,y1:T-4,y2:H-B,class:'ln thr'})); svg.appendChild(el('text',{x:x+2,y:T-6,class:'lbl thr'},'Stage '+s.id));} });
+    document.getElementById('jt-legend').innerHTML=r.st.map(s=>`<span style="--sw:var(--${cls[(s.id-1)%4]})">Stage ${s.id} · ${s.n} tasks${s.note?' (broadcast)':''}</span>`).join('');
+    const v=[`<div><b>Duración total ≈ ${r.end.toFixed(1)} s</b> con ${C} cores.</div>`];
+    r.st.forEach(s=>{
+      if(s.deps.length){ v.push(`<div>Stage ${s.id} empieza en ${s.start.toFixed(1)} s, justo cuando ${s.deps.length>1?'terminan los Stages '+s.deps.join(' y '):'termina el Stage '+s.deps[0]}: necesita su ${s.deps.length>1?'salida':'salida'} completa.</div>`); }
+    });
+    const par=r.st.filter(s=>!s.deps.length); if(par.length>1) v.push(`<div>Los Stages ${par.map(s=>s.id).join(' y ')} no dependen entre sí: el Stage ${par[1].id} arranca en cuanto quedan cores libres (en ${par[1].start.toFixed(1)} s), sin esperar a que el ${par[0].id} termine. Con el scheduler por defecto (FIFO), las tasks se lanzan en el orden en que quedaron listas.</div>`);
+    document.getElementById('jt-verdict').innerHTML=v.join('');
+  }
+  jtC.addEventListener('input',drawJt);
+  document.querySelectorAll('[data-q]').forEach(b=>b.addEventListener('click',()=>{jtKey=b.dataset.q; drawJt();}));
+  drawJt();
+  } catch (e) { console.error('0a-3. línea de tiempo del job', e); } }
+
+  /* ---------- 0a-4. scheduler en vivo ---------- */
+  if (document.getElementById('sc-chart')) { try {
+  const scN=document.getElementById('sc-n'), scC=document.getElementById('sc-c'), scV=document.getElementById('sc-var'), scT=document.getElementById('sc-t'), scPlay=document.getElementById('sc-play');
+  const BASE=4; let sim=null, t=0, playing=false, speed=1, last=0;
+  const rnd=i=>((Math.sin((i+1)*78.233)*43758.5453)%1+1)%1;
+  function build(){
+    const n=+scN.value, c=+scC.value, vary=scV.checked;
+    document.getElementById('sc-n-o').textContent=n; document.getElementById('sc-c-o').textContent=c;
+    const free=Array(c).fill(0), tasks=[];
+    for(let i=0;i<n;i++){
+      let core=0; for(let j=1;j<c;j++) if(free[j]<free[core]-1e-9) core=j;
+      const d=vary?BASE*(0.5+1.5*rnd(i)):BASE; const s=free[core]; free[core]=s+d;
+      tasks.push({i,core,s,e:s+d});
+    }
+    sim={n,c,tasks,end:Math.max(...free),free};
+  }
+  const fmt=s=>s.toFixed(1)+' s';
+  function draw(){
+    if(!sim) return;
+    const {n,c,tasks,end}=sim, svg=document.getElementById('sc-chart'); svg.textContent='';
+    const L=34,R=354,T=6,B=22,H=200, rh=(H-T-B)/c, xmax=tickMax(end*1.01), xs=v=>L+(R-L)*v/xmax;
+    for(let i=0;i<=4;i++){const v=xmax*i/4,x=xs(v); svg.appendChild(el('line',{x1:x,x2:x,y1:T,y2:H-B,class:'ax',opacity:i?0.3:1})); svg.appendChild(el('text',{x,y:H-B+12,'text-anchor':'middle',class:'tick'},Math.round(v)+'s'));}
+    svg.appendChild(el('text',{x:L-4,y:T+6,'text-anchor':'end',class:'tick'},'1'));
+    svg.appendChild(el('text',{x:L-4,y:H-B-1,'text-anchor':'end',class:'tick'},c));
+    const pad=Math.min(.6,rh*.15), hh=Math.max(rh-2*pad,.8);
+    // ocioso: tras su última task y hasta t (si la cola está vacía)
+    const lastEnd=Array(c).fill(0); tasks.forEach(k=>{if(k.e>lastEnd[k.core]) lastEnd[k.core]=k.e;});
+    for(let r=0;r<c;r++){ if(t>lastEnd[r]){ svg.appendChild(el('rect',{x:xs(lastEnd[r]),y:T+r*rh+pad,width:Math.max(xs(Math.min(t,end))-xs(lastEnd[r]),0),height:hh,style:'fill:color-mix(in srgb,var(--muted) 30%,transparent)'})); } }
+    let pend=0,run=0,done=0;
+    tasks.forEach(k=>{
+      if(k.s>t+1e-9){pend++;return;}
+      const fin=k.e<=t+1e-9; if(fin)done++; else run++;
+      const x=xs(k.s), w=Math.max(xs(Math.min(k.e,t))-x-0.6,0.4);
+      svg.appendChild(el('rect',{x,y:T+k.core*rh+pad,width:w,height:hh,rx:Math.min(1.5,hh/3),class:fin?'bar':'bar hot'}));
+      if(!fin){ svg.appendChild(el('rect',{x:x+w,y:T+k.core*rh+pad,width:Math.max(xs(k.e)-xs(t)-0.6,0),height:hh,style:'fill:none;stroke:var(--hot);stroke-width:.6;stroke-dasharray:2 1.5;opacity:.7'})); }
+    });
+    const xc=xs(Math.min(t,end)); svg.appendChild(el('line',{x1:xc,x2:xc,y1:T,y2:H-B,style:'stroke:var(--ink);stroke-width:1.2'}));
+    const idle=c-run;
+    document.getElementById('sc-stats').innerHTML=
+      `<div><b>${pend}</b><span>en cola</span></div><div><b>${run}</b><span>corriendo</span></div><div><b>${done}</b><span>terminadas</span></div><div class="${pend===0&&run>0&&idle>0?'warn':''}"><b>${t>=end?0:idle}</b><span>cores sin trabajo</span></div>`;
+    document.getElementById('sc-t-o').textContent=fmt(Math.min(t,end))+' de '+fmt(end);
+    scT.value=Math.round(Math.min(t/end,1)*1000);
+    const busy=tasks.reduce((a,k)=>a+(k.e-k.s),0), util=busy/(c*end);
+    let msg;
+    if(t<=1e-9) msg=`Las primeras ${Math.min(n,c)} tasks arrancan a la vez, una por core.${n>c?` Las otras ${n-c} esperan en la cola.`:` Sobran ${c-n} cores: nunca tendrán trabajo.`}`;
+    else if(t>=end-1e-9) msg=`<b>Stage terminado en ${fmt(end)}.</b> Los cores estuvieron ocupados el ${Math.round(util*100)}% del tiempo. ${util<0.9?'El resto se perdió esperando a las últimas tasks.':'Casi no hubo tiempo perdido.'}`;
+    else if(pend>0) msg=`Cada vez que un core termina, toma la siguiente task de la cola. Quedan ${pend} por empezar.`;
+    else msg=`La cola está vacía: ${idle} cores ya no tienen nada que hacer mientras terminan las últimas ${run} tasks.`;
+    document.getElementById('sc-info').innerHTML=msg;
+  }
+  function setPlaying(p){ playing=p; scPlay.setAttribute('aria-pressed',p); scPlay.textContent=p?'Pausar':(t>=sim.end?'Repetir':'Reproducir'); if(p){last=performance.now(); requestAnimationFrame(tick);} }
+  function tick(now){
+    if(!playing) return;
+    const dt=(now-last)/1000; last=now;
+    t=Math.min(t+dt*speed*sim.end/9, sim.end); draw();
+    if(t>=sim.end){ setPlaying(false); return; }
+    requestAnimationFrame(tick);
+  }
+  scPlay.addEventListener('click',()=>{ if(!playing && t>=sim.end) t=0; setPlaying(!playing); draw(); });
+  document.getElementById('sc-reset').addEventListener('click',()=>{ t=0; setPlaying(false); draw(); });
+  document.querySelectorAll('[data-speed]').forEach(b=>b.addEventListener('click',()=>{ speed=+b.dataset.speed; document.querySelectorAll('[data-speed]').forEach(x=>x.setAttribute('aria-pressed',x===b)); }));
+  scT.addEventListener('input',()=>{ setPlaying(false); t=sim.end*(+scT.value)/1000; draw(); });
+  [scN,scC].forEach(x=>x.addEventListener('input',()=>{ build(); t=Math.min(t,sim.end); setPlaying(false); draw(); }));
+  scV.addEventListener('change',()=>{ build(); t=0; setPlaying(false); draw(); });
+  build(); draw();
+  } catch (e) { console.error('0a-4. scheduler en vivo', e); } }
+
+  /* ---------- 0a-5. workers: tiempo y coste ---------- */
+  if (document.getElementById('wk-time')) { try {
+  const wkN=document.getElementById('wk-n'), wkW=document.getElementById('wk-w');
+  const CPW=8, TD=10, WMAX=40, L=44, R=352, T=10, B=24, H=140;
+  const waves=(n,w)=>Math.ceil(n/(CPW*w)), time=(n,w)=>waves(n,w)*TD, cost=(n,w)=>w*time(n,w)/60;
+  const xs=w=>L+(R-L)*(w-1)/(WMAX-1);
+  function chart(svg,fn,unit,n,w){
+    svg.textContent='';
+    const vals=[]; for(let i=1;i<=WMAX;i++) vals.push(fn(n,i));
+    const ymax=niceMax(Math.max(...vals)*1.05), ys=v=>H-B-(H-B-T)*v/ymax;
+    for(let i=0;i<=4;i++){const v=ymax*i/4,y=ys(v); svg.appendChild(el('line',{x1:L,x2:R,y1:y,y2:y,class:'ax',opacity:i?0.3:1})); svg.appendChild(el('text',{x:L-4,y:y+3,'text-anchor':'end',class:'tick'},(v%1?v.toFixed(1):Math.round(v))+unit));}
+    [1,10,20,30,40].forEach(i=>svg.appendChild(el('text',{x:xs(i),y:H-B+12,'text-anchor':'middle',class:'tick'},i)));
+    svg.appendChild(el('text',{x:R,y:H-3,'text-anchor':'end',class:'tick'},'workers →'));
+    let d=''; vals.forEach((v,i)=>{const x=xs(i+1),y=ys(v); d+=(i?`H${x.toFixed(1)}V${y.toFixed(1)}`:`M${x.toFixed(1)},${y.toFixed(1)}`);});
+    svg.appendChild(el('path',{d,style:'fill:none;stroke:var(--cool);stroke-width:1.6'}));
+    vals.forEach((v,i)=>{ const ww=i+1, full=(n%(CPW*ww)===0)||n/(CPW*ww)>=1&&(n/(waves(n,ww)*CPW*ww))>=0.97; if(full) svg.appendChild(el('circle',{cx:xs(ww),cy:ys(v),r:2.2,style:'fill:var(--ok)'})); });
+    const xw=xs(w); svg.appendChild(el('line',{x1:xw,x2:xw,y1:T,y2:H-B,style:'stroke:var(--hot);stroke-width:1;stroke-dasharray:3 2'}));
+    svg.appendChild(el('circle',{cx:xw,cy:ys(fn(n,w)),r:4,style:'fill:var(--hot);stroke:var(--surface);stroke-width:1.5'}));
+    svg.appendChild(el('text',{x:Math.min(Math.max(xw,L+30),R-30),y:T+8,'text-anchor':'middle',class:'lbl',style:'fill:var(--ink)'},(fn(n,w)%1?fn(n,w).toFixed(1):fn(n,w))+unit));
+  }
+  function drawWk(){
+    const n=+wkN.value, w=+wkW.value;
+    document.getElementById('wk-n-o').textContent=n; document.getElementById('wk-w-o').textContent=w+' · '+w*CPW+' cores';
+    chart(document.getElementById('wk-time'),time,' s',n,w);
+    chart(document.getElementById('wk-cost'),cost,'',n,w);
+    const wv=waves(n,w), util=n/(wv*CPW*w), minW=Math.ceil(n/CPW);
+    let nextW=null; for(let i=w+1;i<=WMAX;i++){ if(time(n,i)<time(n,w)){nextW=i;break;} }
+    let cheapest=w; for(let i=1;i<=WMAX;i++){ if(time(n,i)===time(n,w) && i<cheapest) cheapest=i; }
+    const v=[`<div><b>${w} workers</b> → ${wv} wave${wv>1?'s':''} · ${time(n,w)} s · coste ${cost(n,w).toFixed(1)} · cores ocupados el ${Math.round(util*100)}% del tiempo</div>`];
+    if(cheapest<w) v.push(`<div><span class="pill bad">PAGAS DE MÁS</span>Con ${cheapest} workers tardarías lo mismo (${time(n,w)} s) y costaría un ${Math.round((1-cheapest/w)*100)}% menos.</div>`);
+    if(nextW) v.push(`<div>Para bajar de ${time(n,w)} s tendrías que pasar a <b>${nextW} workers</b>: ${time(n,nextW)} s, con un coste ${cost(n,nextW)>cost(n,w)?'un '+Math.round((cost(n,nextW)/cost(n,w)-1)*100)+'% mayor':'igual o menor'}.</div>`);
+    else if(w>=minW) v.push(`<div><span class="pill ok">1 WAVE</span>Ya cabe todo en una wave. A partir de ${minW} workers, añadir más no acelera nada.</div>`);
+    if(w>minW) v.push(`<div><span class="pill bad">CORES SOBRANTES</span>${w*CPW-n} cores no tienen ninguna task.</div>`);
+    document.getElementById('wk-verdict').innerHTML=v.join('');
+  }
+  function pick(e){ const svg=e.currentTarget, rect=svg.getBoundingClientRect(); const x=(e.clientX-rect.left)/rect.width*360; const w=Math.max(1,Math.min(WMAX,Math.round(1+(x-L)/(R-L)*(WMAX-1)))); if(+wkW.value!==w){wkW.value=w; drawWk();} }
+  ['wk-time','wk-cost'].forEach(id=>{ const s=document.getElementById(id); s.addEventListener('pointermove',pick); s.addEventListener('pointerdown',pick); });
+  [wkN,wkW].forEach(x=>x.addEventListener('input',drawWk));
+  drawWk();
+  } catch (e) { console.error('0a-5. workers', e); } }
 })();

@@ -40,7 +40,13 @@ description: "Jobs, stages, tasks y waves: cómo se reparte el trabajo entre los
       <pre id="dag-code" style="margin:.6rem 0"></pre>
       <div id="dag-out" class="dag"></div>
       <div class="stepinfo" id="dag-info"></div>
+      <div class="ttl" style="margin-top:1.2rem">Cómo se ejecuta ese job en el tiempo</div>
+      <div class="ctrl"><label for="jt-c">Cores del cluster <output id="jt-c-o"></output></label><input type="range" id="jt-c" min="8" max="64" step="8" value="32"></div>
+      <svg class="chart" id="jt-chart" viewBox="0 0 360 190" role="img" aria-label="Línea de tiempo del job: tasks de cada stage en los cores"></svg>
+      <div class="legend" id="jt-legend"></div>
+      <div class="verdict" id="jt-verdict"></div>
     </div>
+    <p>Cambia de query arriba y mira la línea de tiempo: cada color es un stage. Con <i>join sort-merge</i>, los Stages 1 y 2 comparten los cores al mismo tiempo, y el 3 no arranca hasta que terminan los dos. Con <i>join broadcast</i>, el stage pequeño termina enseguida y el grande no espera ningún shuffle.</p>
 
     <h3><span class="k">Cómo funciona por dentro</span>De la acción a las waves</h3>
     <ol class="steps">
@@ -52,7 +58,36 @@ description: "Jobs, stages, tasks y waves: cómo se reparte el trabajo entre los
       <li><b>Las waves salen solas de la cuenta.</b> <code>waves = ⌈tasks ÷ cores⌉</code>. Si las tasks duran parecido, el stage tarda más o menos <code>waves × duración de una task</code>.</li>
     </ol>
 
-    <h3><span class="k">Simulador 2</span>Waves: tasks frente a cores</h3>
+    <h3><span class="k">Simulador 2</span>El scheduler en vivo</h3>
+    <p>Dale a reproducir y mira cómo las tasks salen de la cola hacia los cores que quedan libres. También puedes arrastrar el tiempo a mano con la barra de abajo.</p>
+    <div class="console">
+      <div class="ttl">Un stage paso a paso (4 s por task)</div>
+      <div class="grid2">
+        <div class="ctrl"><label for="sc-n">Tasks <output id="sc-n-o"></output></label><input type="range" id="sc-n" min="4" max="120" step="1" value="40"></div>
+        <div class="ctrl"><label for="sc-c">Cores <output id="sc-c-o"></output></label><input type="range" id="sc-c" min="2" max="24" step="1" value="16"></div>
+      </div>
+      <label class="switch" for="sc-var"><input type="checkbox" id="sc-var"> Duraciones variables: cada task tarda entre la mitad y el doble de lo normal</label>
+      <div class="chips" role="group" aria-label="Reproducción">
+        <button type="button" id="sc-play" aria-pressed="false">Reproducir</button>
+        <button type="button" id="sc-reset">Reiniciar</button>
+        <span class="lab" style="margin-left:.4rem">Velocidad</span>
+        <button type="button" data-speed="1" aria-pressed="true">1×</button>
+        <button type="button" data-speed="3" aria-pressed="false">3×</button>
+      </div>
+      <div class="stats" id="sc-stats"></div>
+      <svg class="chart" id="sc-chart" viewBox="0 0 360 200" role="img" aria-label="Tasks en cada core a lo largo del tiempo"></svg>
+      <div class="ctrl"><label for="sc-t">Tiempo <output id="sc-t-o"></output></label><input type="range" id="sc-t" min="0" max="1000" step="1" value="0"></div>
+      <div class="legend"><span style="--sw:var(--cool)">task terminada</span><span style="--sw:var(--hot)">task corriendo</span><span class="dash">lo que le falta</span><span style="--sw:color-mix(in srgb,var(--muted) 40%,transparent)">core sin trabajo</span></div>
+      <div class="stepinfo" id="sc-info" aria-live="polite"></div>
+    </div>
+    <p>Prueba esto:</p>
+    <ul>
+      <li>Con 40 tasks y 16 cores, reproduce sin duraciones variables: verás 3 waves limpias, y en la última solo trabajan 8 cores.</li>
+      <li>Activa las duraciones variables y repite. Las waves se desdibujan: cada core toma una task nueva en cuanto termina la suya. Eso es lo que hace el scheduler de verdad; las "waves" son una forma de razonar, no algo que Spark imponga.</li>
+      <li>Fíjate en el final del stage: con duraciones variables, una task larga que empieza tarde deja a casi todos los cores esperando. Es la misma cola larga que produce el skew.</li>
+    </ul>
+
+    <h3><span class="k">Simulador 3</span>Waves: tasks frente a cores</h3>
     <p>El stage procesa siempre la misma cantidad de datos (512 segundos de trabajo de un core). Más tasks significa tasks más pequeñas. Cada task paga además 0,5 s fijos de arranque (número ilustrativo).</p>
     <div class="console">
       <div class="ttl">Línea de tiempo del stage · una fila por core</div>
@@ -97,6 +132,21 @@ agg.count()     <span class="c"># la acción: aquí se lanza el job</span></code
       <li><b>Menos tasks que cores</b> antes de una UDF lenta: haz <code>repartition()</code> para usar todos los cores (Databricks, <i>slow stage low I/O</i>).</li>
       <li><b>Shuffle partitions múltiplo de los cores totales de los workers</b>, para que ningún core quede ocioso en ninguna iteración. Sin ajuste fino, entre 2 y 3 veces los cores (guía de optimización).</li>
     </ul>
+
+    <h3><span class="k">Simulador 4</span>¿Vale la pena añadir workers?</h3>
+    <p>Un stage de tasks iguales de 10 s en workers de 8 cores. El coste es workers × tiempo, es decir, lo que pagas mientras el stage corre. Los números son ilustrativos y no usan precios reales. Mueve el deslizador o pasa el dedo o el ratón por las gráficas.</p>
+    <div class="console">
+      <div class="ttl">Tiempo y coste del stage según los workers</div>
+      <div class="grid2">
+        <div class="ctrl"><label for="wk-n">Tasks del stage <output id="wk-n-o"></output></label><input type="range" id="wk-n" min="16" max="400" step="8" value="200"></div>
+        <div class="ctrl"><label for="wk-w">Workers <output id="wk-w-o"></output></label><input type="range" id="wk-w" min="1" max="40" step="1" value="16"></div>
+      </div>
+      <svg class="chart" id="wk-time" viewBox="0 0 360 140" role="img" aria-label="Duración del stage según los workers" style="touch-action:pan-y"></svg>
+      <svg class="chart" id="wk-cost" viewBox="0 0 360 140" role="img" aria-label="Coste del stage según los workers" style="touch-action:pan-y"></svg>
+      <div class="legend"><span style="--sw:var(--cool)">duración / coste</span><span style="--sw:var(--ok)">sin cores ociosos (última wave llena)</span><span style="--sw:var(--hot)">tu elección</span></div>
+      <div class="verdict" id="wk-verdict"></div>
+    </div>
+    <p>El tiempo baja a escalones: solo mejora cuando quitas una wave entera. Entre escalón y escalón, cada worker extra no acelera nada y solo sube el coste. Los puntos verdes son las configuraciones donde la última wave va llena; son las más baratas para su tiempo.</p>
 
     <h3><span class="k">Con qué se confunde</span></h3>
     <ul>
