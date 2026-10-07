@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lab · Spark Performance Lab</title>
+<meta name="description" content="Provocar skew en Free Edition y arreglarlo.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html">Spark Performance Lab</a>
+  </header>
+  <nav class="tabs" aria-label="Páginas"><div class="row"><span class="grp">Fundamentos</span><a href="stages.html">Stages y waves</a><a href="shuffle.html">Shuffle</a><span class="grp">Skew y spill</span><a href="diagnostico.html">Diagnóstico</a><a href="aqe.html">AQE</a><a href="lab.html" aria-current="page">Lab</a><a href="remedios.html">Remedios</a><a href="skew-hints.html">Skew hints</a><span class="grp">Archivos</span><a href="liquid-clustering.html">Liquid clustering</a><span class="grp">Práctica</span><a href="casos.html">Casos</a></div></nav>
+  <main>
+  <section class="panel">
+
+    <h2>Lab: provocar skew y verlo</h2>
+    <p class="src">Base: notebook oficial <a href="https://docs.databricks.com/aws/en/notebooks/source/aqe-demo.html" target="_blank" rel="noopener">AQE Demo</a> (crea una tabla <code>sales</code> donde el item 100 está en el 80% de las ventas).</p>
+
+    <div class="note"><b>Antes de empezar.</b> El notebook original desactiva y ajusta configs de AQE para comparar antes y después. En serverless (y Free Edition es serverless) solo se pueden cambiar unas pocas propiedades: <code>spark.sql.shuffle.partitions</code>, <code>spark.sql.files.maxPartitionBytes</code>, <code>spark.sql.ansi.enabled</code>, <code>spark.sql.session.timeZone</code>, <code>spark.sql.legacy.timeParserPolicy</code> y <code>spark.databricks.execution.timeout</code> (<a href="https://docs.databricks.com/aws/en/spark/conf" target="_blank" rel="noopener">fuente</a>). Por eso adapté el lab: no apagamos AQE, sino que buscamos un caso donde AQE <b>no</b> te salva y lo arreglamos a mano.</div>
+
+    <div class="verify">No pude leer el contenido celda por celda del notebook original (la página no devolvió el código). Lo que sigue es mi adaptación con la misma idea de datos. <b>Verifica</b> los nombres exactos de los botones del query profile en tu workspace.</div>
+
+    <ol class="steps">
+      <li>
+        <b>Crea datos con skew deliberado</b> (20 M filas, 80% con <code>product_id = 100</code>).
+<pre><code>from pyspark.sql import functions as F
+from pyspark.sql.window import Window
+
+sales = (spark.range(20_000_000)
+  .withColumn("product_id",
+      F.when(F.rand(seed=1) &lt; 0.8, F.lit(100))
+       .otherwise((F.rand(seed=2) * 100_000).cast("int")))
+  .withColumn("amount", F.round(F.rand(seed=3) * 100, 2)))</code></pre>
+      </li>
+      <li>
+        <b>Detéctalo sin UI.</b> Es el método más simple de la guía de optimización: contar filas por la clave del join o la agregación.
+<pre><code>(sales.groupBy("product_id").count()
+      .orderBy(F.desc("count")).show(5))
+<span class="c"># Esperado: product_id 100 con ~16 M filas; el resto con ~40 cada uno</span></code></pre>
+      </li>
+      <li>
+        <b>Caso lento: ventana sobre la clave caliente.</b> Un acumulado por producto obliga a ordenar todas las filas de cada producto juntas. Las ~16 M filas del producto 100 van a una sola tarea, y AQE no parte ventanas.
+<pre><code>w = Window.partitionBy("product_id").orderBy("amount")
+running = sales.withColumn("acumulado", F.sum("amount").over(w))
+running.agg(F.max("acumulado")).collect()</code></pre>
+        Abre el query profile de esa celda. Busca el operador de ventana / sort y compara el tiempo de la tarea más lenta con el resto.
+      </li>
+      <li>
+        <b>Contraste: una agregación combinable no sufre igual.</b> <code>max</code> se calcula primero dentro de cada partición y luego se combina (agregación parcial). Antes del shuffle, la clave caliente ya está reducida a una fila por partición.
+<pre><code>top_agg = sales.groupBy("product_id").agg(F.max("amount").alias("max_amount"))
+top_agg.count()</code></pre>
+        Compara tiempos. Lección: si tu cálculo admite reescribirse como agregación combinable, hazlo. Un acumulado no lo admite, y para eso existe el salting o rediseñar el cálculo.
+      </li>
+      <li>
+        <b>Salting en dos fases.</b> Aquí se aplica a <code>max</code> solo para que veas la mecánica; el detalle está en <a href="remedios.html">Remedios</a>.
+<pre><code>N = 16
+salted = sales.withColumn("salt", (F.rand(seed=4) * N).cast("int"))
+fase1 = salted.groupBy("product_id", "salt").agg(F.max("amount").alias("m"))
+fase2 = fase1.groupBy("product_id").agg(F.max("m").alias("max_amount"))
+fase2.count()</code></pre>
+      </li>
+      <li>
+        <b>Opcional: juega con particiones.</b> Esta sí se puede cambiar en serverless. Repite el paso 3 con <code>200</code> y con <code>auto</code>, y confirma que <b>no</b> arregla el skew.
+<pre><code>spark.conf.set("spark.sql.shuffle.partitions", "200")</code></pre>
+      </li>
+    </ol>
+    <p><b>Qué deberías sacar del lab:</b> la clave caliente decide el tiempo del stage. AQE solo la parte en joins, y para ventanas o agregaciones sin parcial la solución es cambiar el algoritmo o hacer salting.</p>
+  </section>
+  </main>
+  <nav class="pager" aria-label="Anterior y siguiente"><a class="prev" href="aqe.html"><span>Anterior</span>AQE</a><a class="next" href="remedios.html"><span>Siguiente</span>Remedios</a></nav>
+  <footer class="site">Material de estudio personal sobre Databricks y Apache Spark, hecho a partir de la documentación oficial citada en cada página. No es documentación oficial ni está afiliado a Databricks. Los números de los simuladores son ilustrativos; verifica siempre en <a href="https://docs.databricks.com" target="_blank" rel="noopener">docs.databricks.com</a>.</footer>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shuffle · Spark Performance Lab</title>
+<meta name="description" content="Shuffle write y shuffle read: cómo se mueven las filas entre stages.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html">Spark Performance Lab</a>
+  </header>
+  <nav class="tabs" aria-label="Páginas"><div class="row"><span class="grp">Fundamentos</span><a href="stages.html">Stages y waves</a><a href="shuffle.html" aria-current="page">Shuffle</a><span class="grp">Skew y spill</span><a href="diagnostico.html">Diagnóstico</a><a href="aqe.html">AQE</a><a href="lab.html">Lab</a><a href="remedios.html">Remedios</a><a href="skew-hints.html">Skew hints</a><span class="grp">Archivos</span><a href="liquid-clustering.html">Liquid clustering</a><span class="grp">Práctica</span><a href="casos.html">Casos</a></div></nav>
+  <main>
+  <section class="panel">
+
+    <h2>Shuffle: mover filas entre máquinas</h2>
+    <p class="src">Fuentes: <a href="https://spark.apache.org/docs/latest/rdd-programming-guide.html#shuffle-operations" target="_blank" rel="noopener">Apache Spark · Shuffle operations</a> y <a href="https://spark.apache.org/docs/latest/web-ui.html" target="_blank" rel="noopener">Apache Spark · Web UI</a>. Son documentación oficial de Apache Spark, no de docs.databricks.com; Databricks da este concepto por sabido. La recomendación de Databricks para shuffle alto viene de <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener">Spark stage high I/O</a>.</p>
+
+    <h3><span class="k">Qué problema resuelve</span>Las filas de una clave están desperdigadas</h3>
+    <p>Cuando lees una tabla, cada tarea recibe un trozo de archivos tal como cayeron en el storage. Si quieres agrupar por <code>cliente_id</code>, las filas del cliente 7 están en muchas tareas y en varias máquinas. Para sumarlas, alguien tiene que juntarlas en un mismo sitio. La doc de Spark lo describe como una operación <i>all-to-all</i>: cada tarea puede tener filas para cualquier otra.</p>
+
+    <p class="def"><b>Shuffle</b>: el mecanismo con el que Spark redistribuye los datos para que queden agrupados de otra forma entre particiones. Suele copiar datos entre executors y máquinas, y por eso es caro: escribe a disco, serializa y usa la red.</p>
+
+    <h3><span class="k">Idea mental</span>Una oficina de correos</h3>
+    <p>Cada cartero de recogida (una <b>map task</b>) vacía su buzón y clasifica sus cartas en sacas por código postal. Esa clasificación es el <b>shuffle write</b>. Después, cada repartidor de zona (una <b>reduce task</b>) pasa por <b>todas</b> las oficinas y recoge solo la saca de su código postal. Eso es el <b>shuffle read</b>. Si la oficina está en su mismo edificio, la recoge a mano (lectura local). Si no, se la mandan por camión (lectura remota, por red).</p>
+
+    <div class="console">
+      <div class="ttl">Un shuffle paso a paso · 3 map tasks → 4 reduce tasks · 3 executors</div>
+      <p class="c" style="font-size:.85rem;margin:.2rem 0 .5rem"><b>M1–M3</b> = map tasks: las tareas del stage que lee los datos y escribe el shuffle (una por cada trozo de entrada, ~128 MB). <b>R1–R4</b> = reduce tasks: las tareas del stage siguiente, que leen el shuffle (una por partición de <code>spark.sql.shuffle.partitions</code>). "executor N" indica en qué máquina corre cada tarea.</p>
+      <div class="chips" role="group" aria-label="Paso">
+        <button type="button" data-step="1" aria-pressed="true">1 · Datos leídos</button>
+        <button type="button" data-step="2" aria-pressed="false">2 · Shuffle write</button>
+        <button type="button" data-step="3" aria-pressed="false">3 · Shuffle read</button>
+        <button type="button" data-step="4" aria-pressed="false">4 · Resultado</button>
+      </div>
+      <div class="chips" role="group" aria-label="Reduce task a resaltar" id="sh-sel">
+        <span class="lab">Resaltar:</span>
+        <button type="button" data-sel="-1" aria-pressed="true">Todas</button>
+        <button type="button" data-sel="0" aria-pressed="false">R1</button>
+        <button type="button" data-sel="1" aria-pressed="false">R2</button>
+        <button type="button" data-sel="2" aria-pressed="false">R3</button>
+        <button type="button" data-sel="3" aria-pressed="false">R4</button>
+      </div>
+      <svg class="chart" id="sh-chart" viewBox="0 0 360 300" role="img" aria-label="Diagrama del shuffle"></svg>
+      <div class="legend"><span style="--sw:var(--p0)">→ R1</span><span style="--sw:var(--p1)">→ R2</span><span style="--sw:var(--p2)">→ R3</span><span style="--sw:var(--p3)">→ R4</span><span style="--sw:var(--muted)">línea continua = lectura local · discontinua = remota</span></div>
+      <div class="stepinfo" id="sh-info" aria-live="polite"></div>
+    </div>
+
+    <h3><span class="k">Glosario del diagrama</span>Qué son M y R</h3>
+    <p><b>M</b> significa <b>map task</b> y <b>R</b> significa <b>reduce task</b>. Son los nombres que usa la doc de Spark para las dos mitades de un shuffle.</p>
+    <div class="tblwrap"><table>
+      <thead><tr><th></th><th>M · map task</th><th>R · reduce task</th></tr></thead>
+      <tbody>
+        <tr><td>Qué hace</td><td>Lee un trozo de la entrada, clasifica sus filas por partición destino y escribe su archivo de shuffle</td><td>Recoge su bloque de <b>todos</b> los archivos de las M y hace la agregación, el join o el orden</td></tr>
+        <tr><td>Métrica</td><td>Shuffle <b>write</b></td><td>Shuffle <b>read</b></td></tr>
+        <tr><td>Cuántas hay</td><td>Una por trozo de entrada, de ~128 MB por defecto (<code>spark.sql.files.maxPartitionBytes</code>)</td><td>Una por partición de <code>spark.sql.shuffle.partitions</code>, o menos si AQE las une</td></tr>
+        <tr><td>En el Spark UI</td><td>Las tasks del stage N, las que tienen <i>Shuffle Write</i></td><td>Las tasks del stage N+1, las que tienen <i>Shuffle Read</i></td></tr>
+      </tbody>
+    </table></div>
+    <p>En el Spark UI no aparece escrito "map" ni "reduce". Las dos son tasks normales y cada una corre en un core de algún executor; eso es lo que indica "executor N" en el diagrama. Un stage que está en medio de dos shuffles es a la vez "reduce" del anterior y "map" del siguiente: lee un shuffle y escribe otro.</p>
+
+    <h3><span class="k">Cómo funciona por dentro</span>Write y read, en detalle</h3>
+    <p><b>Shuffle write (lado map).</b> Para cada fila, Spark calcula a qué partición destino va (con un join o un <code>groupBy</code>, el hash de la clave módulo el número de particiones). Los resultados se guardan en memoria hasta que se llena, se ordenan por partición destino y se escriben en <b>un único archivo</b> por map task, en el disco local del executor. Ese archivo queda dividido en bloques, uno por partición destino.</p>
+    <p><b>Shuffle read (lado reduce).</b> Cada reduce task lee <b>su</b> bloque de <b>cada</b> archivo de shuffle. Si el archivo está en su mismo executor, la lectura es local. Si no, la pide por red al otro executor, y mientras llega la tarea queda bloqueada (eso es el <i>fetch wait time</i>).</p>
+    <p><b>Dónde se rompe el stage.</b> El shuffle es la frontera entre stages: el stage N termina escribiendo el shuffle y el stage N+1 empieza leyéndolo. En el plan se ve como un nodo <code>Exchange</code>. Es justo en esa frontera donde AQE tiene los tamaños reales y re-planifica (ver <a href="aqe.html">AQE</a>).</p>
+    <p><b>Memoria y spill.</b> Las operaciones de shuffle usan estructuras en memoria para organizar filas antes de enviarlas (lado map) o después de recibirlas (lado reduce). Si no caben, Spark las vuelca a disco: eso es el spill, con más I/O y más trabajo del garbage collector.</p>
+    <p><b>Archivos intermedios.</b> Los archivos de shuffle se quedan en disco mientras se puedan necesitar, para no rehacer el write si hay que recomputar. Por eso un fallo en un stage posterior no siempre obliga a repetir todo el job.</p>
+
+    <h3><span class="k">Simulador</span>Cuánto escribe y cuánto lee un shuffle</h3>
+    <p>Una agregación tipo <code>groupBy(clave).agg(sum(...))</code>. Cada map task procesa 1 M filas de unos 40 bytes. Los números son ilustrativos; lo importante son las proporciones.</p>
+    <div class="console">
+      <div class="ttl">groupBy con y sin agregación parcial</div>
+      <label class="switch" for="sw-partial"><input type="checkbox" id="sw-partial" checked> Agregación parcial en el lado map (lo normal con <code>sum</code>, <code>count</code>, <code>max</code>…)</label>
+      <div class="grid2">
+        <div class="ctrl"><label for="sw-m">Map tasks <output id="sw-m-o"></output></label><input type="range" id="sw-m" min="10" max="1000" step="10" value="200"></div>
+        <div class="ctrl"><label for="sw-k">Claves distintas <output id="sw-k-o"></output></label><input type="range" id="sw-k" min="1" max="8" step="0.5" value="3"></div>
+        <div class="ctrl"><label for="sw-r">shuffle.partitions <output id="sw-r-o"></output></label><input type="range" id="sw-r" min="10" max="2000" step="10" value="200"></div>
+        <div class="ctrl"><label for="sw-e">Executors <output id="sw-e-o"></output></label><input type="range" id="sw-e" min="1" max="32" step="1" value="8"></div>
+      </div>
+      <svg class="chart" id="sw-chart" viewBox="0 0 360 96" role="img" aria-label="Shuffle write frente a shuffle read"></svg>
+      <div class="legend"><span style="--sw:var(--p0)">shuffle write</span><span style="--sw:var(--cool)">read local</span><span style="--sw:var(--hot)">read remoto</span></div>
+      <div class="tblwrap"><table id="sw-table"></table></div>
+      <div class="verdict" id="sw-verdict"></div>
+    </div>
+    <p>Prueba esto:</p>
+    <ul>
+      <li>Con pocas claves (1.000), apaga la agregación parcial. El shuffle pasa de unos pocos MB a gigas, porque cada fila viaja en vez de viajar una fila por clave y map task. Por eso <code>max</code> no sufría en el lab y la ventana sí.</li>
+      <li>Sube las claves a 100 M. La agregación parcial casi no ayuda: cada map task ve casi todas sus filas como claves distintas.</li>
+      <li>Pon 1 executor. Toda la lectura pasa a ser local. Con 8, unos 7/8 viajan por red (suponiendo tareas repartidas parejo).</li>
+      <li>Baja las claves a 32 con 200 particiones: 168 reduce tasks quedan vacías. Es el caso que AQE resuelve uniendo particiones (coalesce).</li>
+    </ul>
+
+    <h3><span class="k">Dónde verlo</span>Métricas del Spark UI</h3>
+    <p>El mismo shuffle aparece dos veces: como <b>write</b> en el stage que lo produce y como <b>read</b> en el stage siguiente. Definiciones según la doc de Spark:</p>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Métrica</th><th>Qué mide</th><th>Qué mirar</th></tr></thead>
+      <tbody>
+        <tr><td>Shuffle Write Size / Records</td><td>Bytes y filas que el stage escribió para el siguiente</td><td>¿Mucho más que el input? Falta agregación parcial o hay explosión de filas</td></tr>
+        <tr><td>Shuffle Write Time</td><td>Tiempo que las tareas pasaron escribiendo datos de shuffle</td><td>Alto con disco lento o con mucho volumen</td></tr>
+        <tr><td>Shuffle Read Size / Records</td><td>Bytes leídos en total, sumando locales y remotos</td><td>Min vs Max por tarea: la señal de skew</td></tr>
+        <tr><td>Shuffle Remote Reads</td><td>Bytes leídos de otros executors</td><td>La parte que viaja por red</td></tr>
+        <tr><td>Shuffle Read Fetch Wait Time</td><td>Tiempo que las tareas estuvieron bloqueadas esperando datos remotos</td><td>Alto: la red o los executors remotos son el cuello</td></tr>
+        <tr><td>Shuffle spill (memory)</td><td>Tamaño de los datos volcados, en su forma deserializada en memoria</td><td>Siempre mayor que el de disco; no es un error</td></tr>
+        <tr><td>Shuffle spill (disk)</td><td>Tamaño de esos mismos datos, serializados en disco</td><td>Cualquier valor &gt; 0 merece revisión</td></tr>
+      </tbody>
+    </table></div>
+    <p>En la pestaña SQL, el nodo <code>Exchange</code> trae las mismas ideas: <i>shuffle bytes written</i>, <i>shuffle records written</i>, <i>shuffle write time</i>, <i>remote bytes read</i>, <i>local bytes read</i>, <i>fetch wait time</i> y <i>data size</i>.</p>
+    <div class="verify">En serverless (Free Edition) no hay Spark UI; usas el query profile. No confirmé en la doc qué nombre exacto tiene cada una de estas métricas en el query profile. <b>Verifícalo</b> abriendo el perfil de una query con <code>groupBy</code> en tu workspace.</div>
+
+    <h3><span class="k">Cuándo hay shuffle y cuándo no</span></h3>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Operación</th><th>¿Shuffle?</th></tr></thead>
+      <tbody>
+        <tr><td><code>select</code>, <code>filter</code>, <code>withColumn</code> (transformaciones narrow)</td><td class="no">No</td></tr>
+        <tr><td><code>groupBy</code> / agregaciones, <code>distinct</code></td><td class="yes">Sí</td></tr>
+        <tr><td>Join sort-merge o shuffle hash</td><td class="yes">Sí, en los dos lados</td></tr>
+        <tr><td>Broadcast join</td><td class="no">No para la tabla grande; la pequeña se copia entera a cada executor</td></tr>
+        <tr><td>Ventana con <code>partitionBy</code></td><td class="yes">Sí</td></tr>
+        <tr><td><code>orderBy</code> global</td><td class="yes">Sí (por rangos)</td></tr>
+        <tr><td><code>repartition(n)</code></td><td class="yes">Sí</td></tr>
+        <tr><td><code>coalesce(n)</code> de DataFrame</td><td class="no">No; une particiones sin mover todo</td></tr>
+      </tbody>
+    </table></div>
+    <p class="c" style="font-size:.85rem">La doc de Spark lista como operaciones que pueden causar shuffle las de reparticionado (<code>repartition</code>, <code>coalesce</code>), las <i>ByKey</i> (salvo contar) y los joins. La tabla aplica eso a la API de DataFrame. El detalle de <code>coalesce</code> sin shuffle en DataFrame es conocimiento de Spark que no verifiqué en docs.databricks.com.</p>
+
+    <h3><span class="k">Con qué se confunde</span></h3>
+    <ul>
+      <li><b>Shuffle write vs Output.</b> Shuffle write es intermedio, va al disco local del executor y se pierde con el cluster. Output es lo que escribes a la tabla final en el storage.</li>
+      <li><b>Shuffle write vs spill.</b> El write ocurre siempre que hay shuffle. El spill solo ocurre cuando lo que se organiza no cabe en memoria. Un stage puede tener 50 GB de write y 0 de spill, y eso es sano.</li>
+      <li><b>Spill (memory) mayor que spill (disk).</b> Es normal: es el mismo dato medido deserializado y serializado.</li>
+      <li><b>Shuffle read total vs por tarea.</b> El total te dice cuánto mueves. La distribución por tarea (Min/Median/Max) te dice si está repartido o hay skew (ver <a href="diagnostico.html">Diagnóstico</a>).</li>
+    </ul>
+
+    <h3><span class="k">Qué pasaría si</span></h3>
+    <ul>
+      <li><b>El stage tiene shuffle alto:</b> Databricks recomienda <code>spark.sql.shuffle.partitions=auto</code>.</li>
+      <li><b>Pocas particiones para mucho shuffle:</b> cada reduce task lee demasiado, aparece spill. Apunta a 128–200 MB por tarea (ver <a href="remedios.html">Remedios</a>).</li>
+      <li><b>Muchísimas particiones para poco shuffle:</b> el número de bloques es map tasks × particiones, y cada reduce task hace muchas lecturas diminutas. Esto es razonamiento mío, no de la doc; AQE lo mitiga uniendo particiones pequeñas.</li>
+      <li><b>Haces broadcast de la tabla pequeña:</b> la grande no se mueve. Es la forma más barata de evitar un shuffle en un join.</li>
+    </ul>
+  </section>
+  </main>
+  <nav class="pager" aria-label="Anterior y siguiente"><a class="prev" href="stages.html"><span>Anterior</span>Stages y waves</a><a class="next" href="diagnostico.html"><span>Siguiente</span>Diagnóstico</a></nav>
+  <footer class="site">Material de estudio personal sobre Databricks y Apache Spark, hecho a partir de la documentación oficial citada en cada página. No es documentación oficial ni está afiliado a Databricks. Los números de los simuladores son ilustrativos; verifica siempre en <a href="https://docs.databricks.com" target="_blank" rel="noopener">docs.databricks.com</a>.</footer>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

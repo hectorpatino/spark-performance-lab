@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Remedios · Spark Performance Lab</title>
+<meta name="description" content="Spill, skew y salting: los arreglos manuales.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html">Spark Performance Lab</a>
+  </header>
+  <nav class="tabs" aria-label="Páginas"><div class="row"><span class="grp">Fundamentos</span><a href="stages.html">Stages y waves</a><a href="shuffle.html">Shuffle</a><span class="grp">Skew y spill</span><a href="diagnostico.html">Diagnóstico</a><a href="aqe.html">AQE</a><a href="lab.html">Lab</a><a href="remedios.html" aria-current="page">Remedios</a><a href="skew-hints.html">Skew hints</a><span class="grp">Archivos</span><a href="liquid-clustering.html">Liquid clustering</a><span class="grp">Práctica</span><a href="casos.html">Casos</a></div></nav>
+  <main>
+  <section class="panel">
+
+    <h2>Remedios manuales: spill, skew y salting</h2>
+    <p class="src">Fuente: <a href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide" target="_blank" rel="noopener">Comprehensive Guide to Optimize Data Workloads</a> (Databricks, eBook; no está en docs.databricks.com). Es de 2023 y está desactualizada en varias partes. Usa la tabla de abajo para saber qué tomar de ella.</p>
+
+    <div class="tblwrap"><table>
+      <thead><tr><th>La guía dice</th><th>Hoy (doc oficial)</th><th>Estado</th></tr></thead>
+      <tbody>
+        <tr><td>Skew: hints antes que AQE</td><td>Los hints no hacen falta; AQE maneja el skew por defecto (<a href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank" rel="noopener">AQE</a>)</td><td class="no">Desactualizado</td></tr>
+        <tr><td>AQE marca skew si es 5× el <i>promedio</i></td><td>5× la <b>mediana</b> y más de 256 MB</td><td class="no">Impreciso</td></tr>
+        <tr><td>Particionar si cada partición tiene ≥ 1 GB; Z-order en columnas de alta cardinalidad</td><td>Liquid clustering para todas las tablas nuevas; reemplaza al particionado y a <code>ZORDER</code>. No particionar con menos de 1 TB (<a href="https://docs.databricks.com/aws/en/delta/clustering" target="_blank" rel="noopener">clustering</a>, <a href="https://docs.databricks.com/aws/en/tables/partitions" target="_blank" rel="noopener">partitions</a>)</td><td class="no">Desactualizado</td></tr>
+        <tr><td>Programar OPTIMIZE, VACUUM y ANALYZE en un job aparte</td><td>Predictive optimization los ejecuta solo en tablas managed de UC; activado por defecto en cuentas nuevas desde nov. 2024 (<a href="https://docs.databricks.com/aws/en/optimizations/predictive-optimization" target="_blank" rel="noopener">predictive optimization</a>)</td><td class="no">Desactualizado para UC managed</td></tr>
+        <tr><td>Delta cache, Ganglia, Delta Live Tables</td><td>Disk cache, métricas de cluster (DBR 13+), Lakeflow Spark Declarative Pipelines</td><td class="no">Nombres viejos</td></tr>
+        <tr><td>Afinar shuffle partitions, broadcast, GC, tipos de instancia</td><td>Vale para compute clásico. En serverless casi nada de eso se puede configurar</td><td class="c">Solo clásico</td></tr>
+        <tr><td>Shuffle alto → <code>auto</code></td><td>Lo mismo: <code>spark.sql.shuffle.partitions=auto</code></td><td class="yes">Vigente</td></tr>
+        <tr><td>Diagnóstico de skew y spill; salting como último recurso</td><td>Las guías del Spark UI en docs enlazan a esta misma guía para esto</td><td class="yes">Vigente</td></tr>
+        <tr><td>128–200 MB por task; particiones múltiplo de los cores</td><td>No lo encontré en docs.databricks.com</td><td class="c">Regla práctica sin verificar</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3><span class="k">Spill · qué lo causa</span>Demasiados datos por tarea</h3>
+    <p>Con 200 particiones de shuffle (el default) y muchos datos, cada tarea recibe más de lo que cabe en la memoria de su core y el resto va a disco. La guía da dos caminos:</p>
+    <ul>
+      <li><b>Automático:</b> <code>spark.sql.shuffle.partitions = auto</code> (auto-optimized shuffle). Puede fallar con tablas muy comprimidas (20x–40x), porque el tamaño en disco engaña sobre el tamaño en memoria.</li>
+      <li><b>Manual:</b> que cada tarea procese unos <b>128–200 MB</b>. Fórmula: particiones = datos del shuffle ÷ 128 MB. Conviene que sea múltiplo del número de cores, para que ninguna "ola" de tareas deje cores ociosos.</li>
+    </ul>
+
+    <div class="console">
+      <div class="ttl">Calculadora de shuffle partitions</div>
+      <div class="grid2">
+        <div class="ctrl"><label for="c-gb">Shuffle (GB, del Spark UI)</label><input type="number" id="c-gb" value="300" min="1" step="1"></div>
+        <div class="ctrl"><label for="c-cores">Cores totales de workers</label><input type="number" id="c-cores" value="64" min="1" step="1"></div>
+        <div class="ctrl"><label for="c-mb">Objetivo MB por tarea</label><input type="number" id="c-mb" value="128" min="16" step="8"></div>
+      </div>
+      <div class="verdict" id="c-out"></div>
+    </div>
+    <div class="note"><b>Ojo:</b> si hay skew, esta calculadora no te salva. Repartes bien las claves normales, pero la clave caliente sigue cayendo entera en una partición. Primero quita el skew.</div>
+
+    <h3><span class="k">Skew · identificarlo</span>Cuatro señales</h3>
+    <ul>
+      <li>Todas las tareas del stage terminan y una o dos se quedan colgadas.</li>
+      <li>En Summary Metrics hay una diferencia enorme entre el min y el max de <i>shuffle read size</i>.</li>
+      <li>Ajustaste las shuffle partitions y el spill sigue.</li>
+      <li><code>groupBy(clave).count()</code> muestra una disparidad enorme. Este método es definitivo.</li>
+    </ul>
+
+    <h3><span class="k">Skew · remediar</span>Orden actualizado</h3>
+    <p>La guía pone los skew hints en segundo lugar. Con la doc actual quedan fuera del orden, porque AQE los reemplaza.</p>
+    <div class="order">
+      <div><span>1</span><p><b>Filtrar los valores que causan skew</b>, si puedes descartarlos. El ejemplo clásico es una clave de join con muchos <code>NULL</code>.</p></div>
+      <div><span>2</span><p><b>AQE</b>, activado por defecto. Solo joins con shuffle (ver <a href="aqe.html">AQE</a>). Comprueba en el plan que actuó (<code>isSkew</code>).</p></div>
+      <div><span>3</span><p><b>Salting</b>: el último recurso, porque requiere cambiar código. Es lo que queda para ventanas, agregaciones o joins que AQE no parte.</p></div>
+    </div>
+
+    <details>
+      <summary>Respuesta a la pregunta pendiente: ¿por qué los NULL causan skew?</summary>
+      <p>Todas las filas con <code>NULL</code> en la clave tienen el mismo hash, así que en el shuffle caen en la <b>misma</b> partición. Si el 30% de la tabla tiene <code>NULL</code>, una tarea recibe ese 30%. Lo peor es que esas filas nunca hacen match (<code>NULL = NULL</code> no es verdadero), así que esa tarea trabaja muchísimo para no producir nada útil.</p>
+      <p>Matiz (comportamiento del optimizador de Spark; no lo encontré en docs.databricks.com, compruébalo con <code>explain()</code> buscando <code>isnotnull</code>): en un <code>INNER JOIN</code> el optimizador suele añadir solo un filtro <code>IS NOT NULL</code>. El problema aparece de verdad en <code>LEFT OUTER</code> (las filas con <code>NULL</code> del lado izquierdo se conservan) y en <code>groupBy</code> sobre la columna con nulos.</p>
+<pre><code><span class="c"># LEFT JOIN con muchos NULL: separa y une</span>
+nulls    = facts.filter(F.col("customer_id").isNull())
+no_nulls = facts.filter(F.col("customer_id").isNotNull())
+result = (no_nulls.join(dim, "customer_id", "left")
+          .unionByName(nulls, allowMissingColumns=True))</code></pre>
+    </details>
+
+    <h3><span class="k">Salting · idea mental</span>Inventarle un apellido a la clave caliente</h3>
+    <p>Al cliente <code>'xyz'</code> le pones un sufijo aleatorio 0…N-1. Ya no es una clave, son N claves distintas, y el hash las manda a N particiones distintas. El precio está en el otro lado del join: tiene que tener <b>todas</b> las combinaciones, así que se replica N veces.</p>
+
+    <div class="console">
+      <div class="ttl">Salting · 8 tareas · clave caliente con 12 M filas</div>
+      <div class="ctrl">
+        <label for="s4-n">Número de salts (N) <output id="s4-n-o"></output></label>
+        <input type="range" id="s4-n" min="1" max="16" step="1" value="1">
+      </div>
+      <svg class="chart" id="s4-chart" viewBox="0 0 360 190" role="img" aria-label="Filas por tarea con salting"></svg>
+      <div class="legend"><span style="--sw:var(--cool)">claves normales</span><span style="--sw:var(--hot)">filas de la clave caliente</span></div>
+      <div class="verdict" id="s4-verdict"></div>
+    </div>
+    <p>Fíjate en que pasar N de 8 a 16 ya no mejora mucho con 8 tareas, pero sí duplica la réplica del lado pequeño. N se elige mirando cuántos cores tienes y cuánto pesa replicar.</p>
+
+    <h3><span class="k">Código</span>Salting en un join</h3>
+<pre><code>N = 8
+big_s   = big.withColumn("salt", (F.rand() * N).cast("int"))
+small_s = small.crossJoin(spark.range(N).withColumnRenamed("id", "salt"))
+joined  = big_s.join(small_s, ["key", "salt"]).drop("salt")</code></pre>
+
+    <h3><span class="k">Código</span>Salting parcial en una agregación</h3>
+    <p>Es el ejemplo de la guía: la última transacción por cliente, con skew en <code>customer_id = 'xyz'</code>. Solo se "sala" la clave problemática y se agrega en dos fases.</p>
+<pre><code>hot = ["xyz"]; N = 16
+df2 = df.withColumn("salt",
+        F.when(F.col("customer_id").isin(hot), (F.rand() * N).cast("int"))
+         .otherwise(F.lit(0)))
+fase1 = df2.groupBy("customer_id", "salt").agg(F.max("txn_date").alias("m"))
+final = fase1.groupBy("customer_id").agg(F.max("m").alias("last_txn_date"))</code></pre>
+
+    <h3><span class="k">Qué pasaría si</span></h3>
+    <ul>
+      <li><b>Haces salting en una agregación no combinable</b> (una mediana exacta, por ejemplo): la fase 2 no puede reconstruir el resultado a partir de resultados parciales. El salting en dos fases solo vale para funciones combinables como <code>max</code>, <code>sum</code> o <code>count</code>.</li>
+      <li><b>Usas salting con AQE ya resolviendo el join:</b> añades réplica y código sin ganar nada. Mira el plan antes (<code>isSkew=true</code>).</li>
+      <li><b>El join "explota" filas</b> (muchos a muchos): la guía lo llama <i>data explosion</i>. Se ve en <i>rows output</i> del nodo de join, no en el skew.</li>
+    </ul>
+  </section>
+  </main>
+  <nav class="pager" aria-label="Anterior y siguiente"><a class="prev" href="lab.html"><span>Anterior</span>Lab</a><a class="next" href="skew-hints.html"><span>Siguiente</span>Skew hints</a></nav>
+  <footer class="site">Material de estudio personal sobre Databricks y Apache Spark, hecho a partir de la documentación oficial citada en cada página. No es documentación oficial ni está afiliado a Databricks. Los números de los simuladores son ilustrativos; verifica siempre en <a href="https://docs.databricks.com" target="_blank" rel="noopener">docs.databricks.com</a>.</footer>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

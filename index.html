@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spark Performance Lab</title>
+<meta name="description" content="Manual para diagnosticar jobs lentos en Databricks y Apache Spark: shuffle, waves, skew, spill, AQE y liquid clustering.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html">Spark Performance Lab</a>
+  </header>
+  <nav class="tabs" aria-label="Páginas"><div class="row"><span class="grp">Fundamentos</span><a href="stages.html">Stages y waves</a><a href="shuffle.html">Shuffle</a><span class="grp">Skew y spill</span><a href="diagnostico.html">Diagnóstico</a><a href="aqe.html">AQE</a><a href="lab.html">Lab</a><a href="remedios.html">Remedios</a><a href="skew-hints.html">Skew hints</a><span class="grp">Archivos</span><a href="liquid-clustering.html">Liquid clustering</a><span class="grp">Práctica</span><a href="casos.html">Casos</a></div></nav>
+  <main>
+  <section class="panel">
+
+    <h1>Spark Performance Lab</h1>
+    <p class="lede">Un manual para diagnosticar jobs lentos en Databricks y Apache Spark. Cada página explica un problema, trae un simulador para mover números y termina con lo que suele confundirse. Todo está basado en la documentación oficial que se cita en cada página.</p>
+    <div class="chain" aria-label="Cadena típica de fallo">
+      <span class="h">skew</span><i>→</i><span>una tarea recibe demasiadas filas</span><i>→</i><span class="h">spill a disco</span><i>→</i><span class="h">OOM / stage eterno</span>
+    </div>
+
+    <h2 style="margin-top:2rem">Algo va lento: por dónde empezar</h2>
+    <p>Abre el stage más largo del job y recorre estas preguntas en orden. Cada una te lleva a la página que lo explica.</p>
+    <div class="tree-home">
+      <a class="node" href="stages.html"><b>1. ¿Cuántas tasks tiene el stage frente a los cores?</b> Una sola task, menos tasks que cores o una última wave casi vacía. <span class="go">→ Stages y waves</span></a>
+      <a class="node" href="diagnostico.html"><b>2. ¿Hay spill?</b> Spill (memory / disk) en los detalles del stage. Si aparece en todas las tasks, las particiones son grandes; si aparece solo en una, mira el skew. <span class="go">→ Diagnóstico · Remedios</span></a>
+      <a class="node" href="aqe.html"><b>3. ¿Hay skew?</b> Max de Duration más de un 50% por encima del p75. Comprueba si AQE pudo partirlo y, si no, por qué. <span class="go">→ AQE · Remedios</span></a>
+      <a class="node" href="liquid-clustering.html"><b>4. ¿El scan lee de más?</b> Decenas de miles de archivos pequeños, o casi todos los archivos para un filtro selectivo. <span class="go">→ Liquid clustering</span></a>
+      <a class="node" href="casos.html"><b>5. ¿Un join produce muchas más filas de las que entran?</b> Mira <i>rows output</i> del nodo de join. <span class="go">→ Casos (caso 4)</span></a>
+    </div>
+
+    <h2 style="margin-top:2rem">Contenido</h2>
+    <div class="toc">
+      <div><h3>Fundamentos</h3><ul><li><a href="stages.html">Stages y waves</a></li><li><a href="shuffle.html">Shuffle</a></li></ul></div>
+      <div><h3>Skew y spill</h3><ul><li><a href="diagnostico.html">Diagnóstico</a></li><li><a href="aqe.html">AQE</a></li><li><a href="lab.html">Lab</a></li><li><a href="remedios.html">Remedios</a></li><li><a href="skew-hints.html">Skew hints</a></li></ul></div>
+      <div><h3>Archivos</h3><ul><li><a href="liquid-clustering.html">Liquid clustering</a></li></ul></div>
+      <div><h3>Práctica</h3><ul><li><a href="casos.html">Casos</a></li></ul></div>
+      <div><h3>Próximamente</h3><ul class="soon"><li>Estrategias de join</li><li>Memoria y OOM</li><li>Dimensionar el cluster</li><li>Serverless y query profile</li><li>Monitoreo con system tables</li></ul></div>
+    </div>
+
+  </section>
+  </main>
+  <nav class="pager" aria-label="Anterior y siguiente"><a class="next" href="stages.html"><span>Siguiente</span>Stages y waves</a></nav>
+  <footer class="site">Material de estudio personal sobre Databricks y Apache Spark, hecho a partir de la documentación oficial citada en cada página. No es documentación oficial ni está afiliado a Databricks. Los números de los simuladores son ilustrativos; verifica siempre en <a href="https://docs.databricks.com" target="_blank" rel="noopener">docs.databricks.com</a>.</footer>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

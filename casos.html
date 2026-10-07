@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Casos · Spark Performance Lab</title>
+<meta name="description" content="Casos de diagnóstico con evidencia, opciones y explicación.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html">Spark Performance Lab</a>
+  </header>
+  <nav class="tabs" aria-label="Páginas"><div class="row"><span class="grp">Fundamentos</span><a href="stages.html">Stages y waves</a><a href="shuffle.html">Shuffle</a><span class="grp">Skew y spill</span><a href="diagnostico.html">Diagnóstico</a><a href="aqe.html">AQE</a><a href="lab.html">Lab</a><a href="remedios.html">Remedios</a><a href="skew-hints.html">Skew hints</a><span class="grp">Archivos</span><a href="liquid-clustering.html">Liquid clustering</a><span class="grp">Práctica</span><a href="casos.html" aria-current="page">Casos</a></div></nav>
+  <main>
+  <section class="panel">
+
+    <h2>Casos de diagnóstico</h2>
+    <p>Cada caso es un síntoma con su evidencia, como te llegaría en el trabajo. Elige una opción. Cuenta tu primera respuesta, y después verás por qué cada opción es correcta o no, junto con la fuente.</p>
+    <p class="c" style="font-size:.88rem">Los números son inventados para el ejercicio. Las reglas que se aplican vienen de la doc citada en cada caso.</p>
+    <div class="score" id="cs-score" aria-live="polite"></div>
+    <div id="cs-list"></div>
+  </section>
+  </main>
+  <nav class="pager" aria-label="Anterior y siguiente"><a class="prev" href="liquid-clustering.html"><span>Anterior</span>Liquid clustering</a></nav>
+  <footer class="site">Material de estudio personal sobre Databricks y Apache Spark, hecho a partir de la documentación oficial citada en cada página. No es documentación oficial ni está afiliado a Databricks. Los números de los simuladores son ilustrativos; verifica siempre en <a href="https://docs.databricks.com" target="_blank" rel="noopener">docs.databricks.com</a>.</footer>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Liquid clustering · Spark Performance Lab</title>
+<meta name="description" content="Organizar los archivos para que el data skipping funcione.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html">Spark Performance Lab</a>
+  </header>
+  <nav class="tabs" aria-label="Páginas"><div class="row"><span class="grp">Fundamentos</span><a href="stages.html">Stages y waves</a><a href="shuffle.html">Shuffle</a><span class="grp">Skew y spill</span><a href="diagnostico.html">Diagnóstico</a><a href="aqe.html">AQE</a><a href="lab.html">Lab</a><a href="remedios.html">Remedios</a><a href="skew-hints.html">Skew hints</a><span class="grp">Archivos</span><a href="liquid-clustering.html" aria-current="page">Liquid clustering</a><span class="grp">Práctica</span><a href="casos.html">Casos</a></div></nav>
+  <main>
+  <section class="panel">
+
+    <h2>Liquid clustering: ordenar los archivos para leer menos</h2>
+    <p class="src">Fuentes: <a href="https://docs.databricks.com/aws/en/delta/clustering" target="_blank" rel="noopener">Use liquid clustering for tables</a>, <a href="https://docs.databricks.com/aws/en/delta/data-skipping" target="_blank" rel="noopener">Data skipping</a>, <a href="https://docs.databricks.com/aws/en/tables/partitions" target="_blank" rel="noopener">When to partition tables</a> y <a href="https://docs.databricks.com/aws/en/optimizations/predictive-optimization" target="_blank" rel="noopener">Predictive optimization</a>.</p>
+
+    <h3><span class="k">Qué problema resuelve</span>Leer archivos que no tienen nada de lo que buscas</h3>
+    <p>Lanzas <code>WHERE cliente_id = 4217</code> sobre una tabla de 500 GB y Databricks lee casi todo. Las filas de ese cliente están repartidas por todos los archivos, así que ninguno se puede descartar. Antes se resolvía con particiones o con <code>ZORDER</code>. Las dos tienen problemas: el particionado se rompe con columnas de muchos valores o desbalanceadas, y cambiar la columna obliga a reescribir la tabla.</p>
+
+    <p class="def"><b>Liquid clustering</b> es una técnica de organización de los datos que <b>reemplaza al particionado y a <code>ZORDER</code></b>. Agrupa las filas en archivos según unas columnas (las <i>clustering keys</i>), y esas columnas se pueden cambiar sin reescribir los datos que ya existen. Databricks lo recomienda para todas las tablas nuevas, incluidas streaming tables y materialized views.</p>
+
+    <h3><span class="k">Idea mental</span>Un archivador de expedientes</h3>
+    <p>Cada archivo Delta es una carpeta con una etiqueta en la portada: "clientes del 1.200 al 1.900". Es el mínimo y el máximo que Databricks guarda de cada archivo. Si las carpetas están revueltas, cada etiqueta dice "del 1 al 10.000" y hay que abrirlas todas. Si alguien las ordena, cada etiqueta cubre un tramo corto y basta abrir una o dos. Liquid clustering es ese alguien que ordena. Y no ordena todo cada vez: solo los papeles nuevos que todavía no están en su sitio.</p>
+
+    <h3><span class="k">Por dentro · 1</span>Todo descansa sobre el data skipping</h3>
+    <p>Al escribir, Databricks guarda <b>por cada archivo</b> el mínimo, el máximo, el número de nulos y el número de filas de cada columna con estadísticas. Al consultar, compara el filtro con esos rangos y descarta los archivos que no pueden contener el valor. Liquid clustering no añade un índice nuevo. Lo que hace es organizar las filas para que esos rangos sean estrechos.</p>
+
+    <div class="console">
+      <div class="ttl">16 archivos · cada rectángulo es el [mín, máx] de un archivo en fecha × cliente_id</div>
+      <div class="chips" role="group" aria-label="Organización" id="lc-lay">
+        <span class="lab">Archivos:</span>
+        <button type="button" data-lay="rand" aria-pressed="false">Revueltos</button>
+        <button type="button" data-lay="ingest" aria-pressed="true">Orden de llegada</button>
+        <button type="button" data-lay="c1" aria-pressed="false">CLUSTER BY (cliente_id)</button>
+        <button type="button" data-lay="c2" aria-pressed="false">CLUSTER BY (cliente_id, fecha)</button>
+      </div>
+      <div class="chips" role="group" aria-label="Filtro" id="lc-q">
+        <span class="lab">Query:</span>
+        <button type="button" data-lq="cli" aria-pressed="true">cliente_id = 4217</button>
+        <button type="button" data-lq="fec" aria-pressed="false">fecha = 12</button>
+        <button type="button" data-lq="both" aria-pressed="false">los dos</button>
+      </div>
+      <svg class="chart" id="lc-chart" viewBox="0 0 360 230" role="img" aria-label="Rangos de archivos y filtro"></svg>
+      <div class="legend"><span style="--sw:var(--hot)">archivo leído</span><span style="--sw:color-mix(in srgb,var(--cool) 35%,transparent)">archivo saltado</span><span style="--sw:var(--ink)">filtro</span></div>
+      <div class="verdict" id="lc-verdict"></div>
+    </div>
+    <p>Fíjate en tres cosas:</p>
+    <ul>
+      <li>"Orden de llegada" ya salta bien por <code>fecha</code>, porque los datos llegan día a día. Por <code>cliente_id</code> lee los 16 archivos.</li>
+      <li>Con una sola clave, el filtro por esa clave lee 1 archivo, pero el de fecha vuelve a leerlo todo.</li>
+      <li>Con dos claves, ningún filtro es perfecto, pero los dos saltan la mayoría. Por eso la doc limita a <b>4 claves</b>: cada clave extra reparte el beneficio entre más columnas.</li>
+    </ul>
+
+    <h3><span class="k">Por dentro · 2</span>Es incremental: solo reordena lo nuevo</h3>
+    <p>Cuando llegan datos nuevos, quedan sin clusterizar hasta que corre <code>OPTIMIZE</code>. Según la doc, <code>OPTIMIZE</code> solo reescribe los datos que lo necesitan. Si cambias las claves con <code>ALTER TABLE … CLUSTER BY</code>, los datos existentes no se reescriben: los siguientes <code>OPTIMIZE</code> y escrituras usan las claves nuevas. <code>OPTIMIZE … FULL</code> fuerza a reclusterizar todo.</p>
+
+    <div class="console">
+      <div class="ttl">Ciclo de vida de una tabla con liquid clustering</div>
+      <div class="chips" role="group" aria-label="Operaciones">
+        <button type="button" data-op="insert" aria-pressed="false">INSERT</button>
+        <button type="button" data-op="opt" aria-pressed="false">OPTIMIZE</button>
+        <button type="button" data-op="alter" aria-pressed="false">ALTER … CLUSTER BY</button>
+        <button type="button" data-op="full" aria-pressed="false">OPTIMIZE FULL</button>
+        <button type="button" data-op="reset" aria-pressed="false">Reiniciar</button>
+      </div>
+      <div id="lc-files" style="display:flex;flex-wrap:wrap;gap:4px;margin:.6rem 0;min-height:2.2rem"></div>
+      <div class="legend"><span style="--sw:var(--p0)">clusterizado por cliente_id</span><span style="--sw:var(--p1)">clusterizado por region</span><span style="--sw:var(--line)">sin clusterizar</span></div>
+      <div class="stepinfo" id="lc-log" aria-live="polite"></div>
+    </div>
+    <p>Prueba esta secuencia: INSERT, OPTIMIZE, INSERT, OPTIMIZE. La segunda vez solo se reescriben los archivos nuevos. Después pulsa ALTER y luego OPTIMIZE: los archivos viejos siguen con la clave anterior. Solo OPTIMIZE FULL los pone todos al día.</p>
+
+    <h3><span class="k">Por dentro · 3</span>Quién ejecuta el OPTIMIZE</h3>
+    <ul>
+      <li><b>Con predictive optimization</b> (tablas managed de Unity Catalog), Databricks ejecuta <code>OPTIMIZE</code> por ti. También ejecuta <code>VACUUM</code> y <code>ANALYZE</code>.</li>
+      <li><b>Sin predictive optimization</b>, la doc recomienda programar un job de <code>OPTIMIZE</code> cada una o dos horas en tablas que se actualizan a menudo.</li>
+      <li><b>Clustering on write.</b> Algunas escrituras (<code>INSERT</code>, CTAS, RTAS, <code>COPY INTO</code> desde Parquet) ya clusterizan al escribir si el volumen supera un umbral. En tablas managed de UC el umbral es 64 MB con 1 clave, 256 MB con 2, 512 MB con 3 y 1 GB con 4. En las demás tablas es 4 veces eso.</li>
+    </ul>
+
+    <h3><span class="k">Cómo se usa</span>Ejemplo para Free Edition</h3>
+<pre><code><span class="c">-- Cambia workspace.default por tu catálogo y schema si es distinto</span>
+CREATE OR REPLACE TABLE workspace.default.ventas_lc
+CLUSTER BY (cliente_id) AS
+SELECT id,
+       CAST(rand() * 10000 AS INT)                          AS cliente_id,
+       date_add('2026-01-01', CAST(rand() * 30 AS INT))     AS fecha,
+       round(rand() * 100, 2)                               AS monto
+FROM range(20000000);
+
+OPTIMIZE workspace.default.ventas_lc;
+DESCRIBE DETAIL workspace.default.ventas_lc;   <span class="c">-- mira clusteringColumns y numFiles</span>
+
+SELECT sum(monto) FROM workspace.default.ventas_lc WHERE cliente_id = 4217;
+
+<span class="c">-- Cambiar las claves: no reescribe nada todavía</span>
+ALTER TABLE workspace.default.ventas_lc CLUSTER BY (cliente_id, fecha);
+OPTIMIZE workspace.default.ventas_lc FULL;      <span class="c">-- ahora sí, reclusteriza todo</span>
+
+<span class="c">-- Dejar que Databricks elija las claves (UC managed + predictive optimization)</span>
+ALTER TABLE workspace.default.ventas_lc CLUSTER BY AUTO;</code></pre>
+    <div class="verify">Compara el <code>SELECT</code> con filtro antes y después del <code>OPTIMIZE</code> en el query profile, en las métricas de archivos leídos y descartados. <b>Verifica</b> el nombre exacto de esas métricas en tu workspace; no lo confirmé en la doc.</div>
+
+    <h3><span class="k">Elegir las claves</span>Reglas de la doc</h3>
+    <ul>
+      <li>Hasta <b>4 claves</b>.</li>
+      <li>Las columnas de los filtros más frecuentes. Si migras desde <code>ZORDER</code>, usa las columnas del <code>ZORDER BY</code>.</li>
+      <li>Tienen que tener <b>estadísticas</b>. Por defecto se recogen en las primeras 32 columnas del schema; una columna en la posición 40 no sirve como clave a menos que cambies <code>delta.dataSkippingStatsColumns</code>.</li>
+      <li>Tipos válidos: fechas, timestamps, strings, enteros, decimales y floats, y campos anidados de un struct. No sirven <code>STRUCT</code>, <code>MAP</code> ni <code>ARRAY</code> completos.</li>
+      <li>Si no sabes cuáles elegir y la tabla es managed de UC: <code>CLUSTER BY AUTO</code>. Analiza el historial de queries y se adapta si cambian.</li>
+    </ul>
+
+    <h3><span class="k">Cuándo usarlo</span>Particionar o clusterizar</h3>
+    <p>La doc da reglas claras según el tamaño de la tabla: con menos de 1 TB, no particionar; de 1 a 100 TB, liquid clustering en vez de particiones; y si se particiona, cada partición debe tener al menos 1 GB.</p>
+    <div class="console">
+      <div class="ttl">¿Qué pasa si particionas esta tabla?</div>
+      <div class="chips" role="group" aria-label="Columna de partición" id="pt-col">
+        <span class="lab">PARTITIONED BY:</span>
+        <button type="button" data-pc="fecha" aria-pressed="true">fecha (365 días)</button>
+        <button type="button" data-pc="pais" aria-pressed="false">pais (skew)</button>
+        <button type="button" data-pc="cli" aria-pressed="false">cliente_id (100 k)</button>
+      </div>
+      <div class="ctrl"><label for="pt-gb">Tamaño de la tabla <output id="pt-gb-o"></output></label><input type="range" id="pt-gb" min="1" max="4" step="0.05" value="2.7"></div>
+      <svg class="chart" id="pt-chart" viewBox="0 0 360 150" role="img" aria-label="Tamaño de las particiones"></svg>
+      <div class="legend"><span style="--sw:var(--cool)">partición ≥ 1 GB</span><span style="--sw:var(--hot)">partición &lt; 1 GB</span><span style="--sw:var(--warn)">mínimo recomendado: 1 GB</span></div>
+      <div class="verdict" id="pt-verdict"></div>
+    </div>
+
+    <h3><span class="k">Migrar</span>Desde particiones o desde ZORDER</h3>
+    <ul>
+      <li><b>Tabla particionada, DBR 18.1 o superior:</b> <code>ALTER TABLE t REPLACE PARTITIONED BY WITH CLUSTER BY (col)</code> (o <code>AUTO</code>, solo en managed de UC). Sin columnas, usa las de la partición como claves. La doc recomienda mantener claves parecidas a las columnas de partición. No reclusteriza los datos existentes: hay que correr <code>OPTIMIZE</code> después.</li>
+      <li><b>Tabla particionada, versión anterior:</b> recrear la tabla con <code>CREATE OR REPLACE TABLE … CLUSTER BY (…) AS SELECT …</code>. No encontré en la doc qué error da <code>ALTER TABLE … CLUSTER BY</code> sobre una tabla particionada; la doc solo dice que clustering y particionado no son compatibles.</li>
+      <li><b>Tabla con ZORDER:</b> usa las columnas del <code>ZORDER BY</code> como claves.</li>
+      <li><b>Límites de la conversión:</b> no vale para streaming tables ni materialized views de pipelines de Lakeflow, ni para tablas compartidas con Delta Sharing que usan filtros de partición.</li>
+    </ul>
+
+    <h3><span class="k">Con qué se confunde</span></h3>
+    <ul>
+      <li><b>"Heavy data skew" vs skew de shuffle.</b> La doc recomienda liquid clustering para tablas con mucho skew. Habla de cómo se reparten los datos <b>en los archivos</b> (una partición <code>pais = 'CO'</code> enorme y las demás diminutas). No arregla el skew de un join o un <code>groupBy</code>: ese se resuelve con AQE o salting.</li>
+      <li><b>Partition pruning vs data skipping vs dynamic file pruning.</b> El partition pruning descarta <b>directorios</b> según el filtro. El data skipping descarta <b>archivos</b> con sus estadísticas mín/máx, y es lo que aprovecha liquid clustering. El dynamic file pruning descarta archivos en runtime usando los valores del otro lado de un join.</li>
+      <li><b>ALTER CLUSTER BY reescribe la tabla.</b> No: cambia las claves para lo que venga. Para reorganizar lo existente hace falta <code>OPTIMIZE FULL</code>.</li>
+      <li><b>Liquid clustering + ZORDER.</b> No se combinan, igual que liquid clustering y particionado.</li>
+      <li><b>CLUSTER BY AUTO en cualquier tabla.</b> Solo en tablas managed de Unity Catalog (DBR 15.4 LTS o superior) y con predictive optimization activado.</li>
+    </ul>
+
+    <h3><span class="k">Qué pasaría si</span></h3>
+    <ul>
+      <li><b>Nunca corre OPTIMIZE</b> (ni predictive optimization): los datos nuevos se quedan sin clusterizar, salvo lo que se clusterice al escribir. El skipping se degrada poco a poco.</li>
+      <li><b>Eliges una clave que nadie filtra:</b> pagas el OPTIMIZE sin ganar skipping. Cámbiala con <code>ALTER</code>; no pierdes nada.</li>
+      <li><b>Un lector usa un cliente antiguo:</b> las tablas con liquid clustering usan writer version 7 y reader version 3. Un cliente que no soporte esas versiones no podrá leer la tabla.</li>
+      <li><b>Necesitas priorizar una columna:</b> desde DBR 17.1 existe el clustering jerárquico (<code>delta.liquid.hierarchicalClusteringColumns</code>), que organiza primero por la columna de mayor prioridad.</li>
+    </ul>
+  </section>
+  </main>
+  <nav class="pager" aria-label="Anterior y siguiente"><a class="prev" href="skew-hints.html"><span>Anterior</span>Skew hints</a><a class="next" href="casos.html"><span>Siguiente</span>Casos</a></nav>
+  <footer class="site">Material de estudio personal sobre Databricks y Apache Spark, hecho a partir de la documentación oficial citada en cada página. No es documentación oficial ni está afiliado a Databricks. Los números de los simuladores son ilustrativos; verifica siempre en <a href="https://docs.databricks.com" target="_blank" rel="noopener">docs.databricks.com</a>.</footer>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

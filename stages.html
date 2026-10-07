@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stages y waves · Spark Performance Lab</title>
+<meta name="description" content="Jobs, stages, tasks y waves: cómo se reparte el trabajo entre los cores.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html">Spark Performance Lab</a>
+  </header>
+  <nav class="tabs" aria-label="Páginas"><div class="row"><span class="grp">Fundamentos</span><a href="stages.html" aria-current="page">Stages y waves</a><a href="shuffle.html">Shuffle</a><span class="grp">Skew y spill</span><a href="diagnostico.html">Diagnóstico</a><a href="aqe.html">AQE</a><a href="lab.html">Lab</a><a href="remedios.html">Remedios</a><a href="skew-hints.html">Skew hints</a><span class="grp">Archivos</span><a href="liquid-clustering.html">Liquid clustering</a><span class="grp">Práctica</span><a href="casos.html">Casos</a></div></nav>
+  <main>
+  <section class="panel">
+
+    <h2>Jobs, stages, tasks y waves</h2>
+    <p class="src">Fuentes: <a href="https://spark.apache.org/docs/latest/cluster-overview.html#glossary" target="_blank" rel="noopener">Apache Spark · Cluster overview (glosario)</a>, <a href="https://spark.apache.org/docs/latest/web-ui.html" target="_blank" rel="noopener">Apache Spark · Web UI</a>, <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage" target="_blank" rel="noopener">Databricks · Look at longest stage</a>, <a href="https://docs.databricks.com/aws/en/compute/configure" target="_blank" rel="noopener">Databricks · Compute configuration</a> y la <a href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide#cluster-usage" target="_blank" rel="noopener">guía de optimización (Cluster usage)</a>.</p>
+
+    <h3><span class="k">Qué problema resuelve</span>Entender por qué el cluster no va más rápido</h3>
+    <p>Subes de 8 a 16 workers y el job tarda lo mismo. O cambias <code>shuffle.partitions</code> de 200 a 201 y un stage tarda casi el doble. Las dos cosas se explican con la misma cuenta: cuántas tasks tiene el stage frente a cuántos cores hay para ejecutarlas.</p>
+
+    <h3><span class="k">Definiciones cortas</span>De lo grande a lo pequeño</h3>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Término</th><th>Qué es</th><th>Lo crea</th></tr></thead>
+      <tbody>
+        <tr><td><b>Job</b></td><td>Un cálculo paralelo hecho de muchas tasks, que se lanza en respuesta a una <b>acción</b> (<code>write</code>, <code>count</code>, <code>collect</code>…)</td><td>Cada acción</td></tr>
+        <tr><td><b>Stage</b></td><td>Un grupo de tasks dentro de un job. Los stages dependen unos de otros, como las fases map y reduce de MapReduce</td><td>Cada shuffle (<code>Exchange</code>) corta un stage nuevo</td></tr>
+        <tr><td><b>Task</b></td><td>Una unidad de trabajo que se envía a un executor. Procesa <b>una partición</b></td><td>Una por partición del stage</td></tr>
+        <tr><td><b>Executor</b></td><td>Proceso en un worker que ejecuta tasks en varios hilos y guarda datos en memoria o disco. Databricks corre <b>un executor por worker</b></td><td>El cluster</td></tr>
+        <tr><td><b>Core / slot</b></td><td>Un hueco donde corre una task a la vez (por defecto, 1 task = 1 core)</td><td>Los cores de los workers</td></tr>
+        <tr><td><b>Wave</b></td><td>Una ronda de tasks que corren a la vez. <b>No es un término oficial ni una config</b>: es el resultado de dividir tasks entre cores. La guía de Databricks lo llama <i>iterations</i></td><td>tasks ÷ cores</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3><span class="k">Idea mental</span>Una cocina con turnos</h3>
+    <p>Un <b>pedido</b> grande (el job) pasa por <b>estaciones</b> (los stages): primero todo se corta, luego todo se cocina. La estación de cocina no puede empezar hasta que se haya cortado <b>todo</b>, porque cada olla necesita ingredientes de todas las tablas de corte. Ese paso de una estación a otra es el shuffle. Cada estación tiene una pila de <b>platos</b> que preparar (las tasks) y un número fijo de <b>cocineros</b> (los cores). Si hay 20 platos y 8 cocineros, se trabaja en 3 <b>turnos</b> (las waves): 8, 8 y 4. En el último turno, 4 cocineros miran.</p>
+
+    <h3><span class="k">Simulador 1</span>Del código a los stages</h3>
+    <div class="console">
+      <div class="ttl">Elige una query · tabla A de 10 GB (80 archivos de ~128 MB) · tabla B de 5 GB · shuffle.partitions = 200</div>
+      <div class="chips" role="group" aria-label="Query" id="dag-q">
+        <button type="button" data-q="narrow" aria-pressed="true">filter + select</button>
+        <button type="button" data-q="agg" aria-pressed="false">groupBy().count()</button>
+        <button type="button" data-q="smj" aria-pressed="false">join sort-merge</button>
+        <button type="button" data-q="bhj" aria-pressed="false">join broadcast</button>
+        <button type="button" data-q="aggsort" aria-pressed="false">groupBy + orderBy</button>
+      </div>
+      <pre id="dag-code" style="margin:.6rem 0"></pre>
+      <div id="dag-out" class="dag"></div>
+      <div class="stepinfo" id="dag-info"></div>
+    </div>
+
+    <h3><span class="k">Cómo funciona por dentro</span>De la acción a las waves</h3>
+    <ol class="steps">
+      <li><b>La acción crea el job.</b> Mientras solo encadenas transformaciones no pasa nada. Al llamar a <code>write</code>, <code>count</code> o <code>collect</code>, el driver crea un job.</li>
+      <li><b>El plan se corta en cada Exchange.</b> Todo lo que va seguido sin shuffle (scan, filter, select, agregación parcial) cabe en un mismo stage, y Spark lo fusiona en un bloque <code>WholeStageCodegen</code>. Cada <code>Exchange</code> obliga a terminar un stage y empezar otro.</li>
+      <li><b>Cada stage tiene una task por partición.</b> El primer stage tiene tantas tasks como trozos de entrada (~128 MB cada uno). Los stages que leen un shuffle tienen tantas como <code>spark.sql.shuffle.partitions</code>, o menos si AQE une particiones.</li>
+      <li><b>El scheduler reparte tasks en cores libres.</b> Cuando un core queda libre, recibe la siguiente task pendiente. Con 64 cores corren 64 tasks a la vez como máximo.</li>
+      <li><b>Un stage espera al anterior.</b> El stage que lee un shuffle necesita los bloques de <b>todas</b> las map tasks, así que no empieza hasta que el stage anterior termina. Dos stages independientes, como los dos lados de un join, sí pueden correr a la vez.</li>
+      <li><b>Las waves salen solas de la cuenta.</b> <code>waves = ⌈tasks ÷ cores⌉</code>. Si las tasks duran parecido, el stage tarda más o menos <code>waves × duración de una task</code>.</li>
+    </ol>
+
+    <h3><span class="k">Simulador 2</span>Waves: tasks frente a cores</h3>
+    <p>El stage procesa siempre la misma cantidad de datos (512 segundos de trabajo de un core). Más tasks significa tasks más pequeñas. Cada task paga además 0,5 s fijos de arranque (número ilustrativo).</p>
+    <div class="console">
+      <div class="ttl">Línea de tiempo del stage · una fila por core</div>
+      <div class="grid2">
+        <div class="ctrl"><label for="wv-n">Tasks del stage <output id="wv-n-o"></output></label><input type="range" id="wv-n" min="1" max="256" step="1" value="72"></div>
+        <div class="ctrl"><label for="wv-c">Cores totales <output id="wv-c-o"></output></label><input type="range" id="wv-c" min="4" max="32" step="4" value="32"></div>
+      </div>
+      <div class="chips" role="group" aria-label="Task lenta" id="wv-skew">
+        <span class="lab">Task lenta (×4):</span>
+        <button type="button" data-skew="none" aria-pressed="true">Ninguna</button>
+        <button type="button" data-skew="first" aria-pressed="false">Al inicio</button>
+        <button type="button" data-skew="last" aria-pressed="false">Al final</button>
+      </div>
+      <svg class="chart" id="wv-gantt" viewBox="0 0 360 190" role="img" aria-label="Línea de tiempo de tasks por core"></svg>
+      <div class="legend"><span style="--sw:var(--p0)">wave 1</span><span style="--sw:var(--p3)">wave 2</span><span style="--sw:var(--p1)">wave 3</span><span style="--sw:var(--p2)">wave 4+</span><span style="--sw:var(--hot)">task lenta</span></div>
+      <div class="tblwrap"><table id="wv-table"></table></div>
+      <div class="verdict" id="wv-verdict"></div>
+      <div class="ttl" style="margin-top:1rem">Duración del stage según el número de tasks (sin task lenta)</div>
+      <svg class="chart" id="wv-saw" viewBox="0 0 360 170" role="img" aria-label="Duración del stage frente a número de tasks"></svg>
+      <div class="legend"><span style="--sw:var(--cool)">duración del stage</span><span style="--sw:var(--muted)">ideal: todo el trabajo ÷ cores</span><span style="--sw:var(--hot)">tu punto</span></div>
+    </div>
+    <p>Prueba esto:</p>
+    <ul>
+      <li>Pon 32 cores y mueve las tasks entre 32 y 33. Con 33 aparece una segunda wave con <b>una sola task</b> y 31 cores mirando. Eso es el "diente de sierra" de la segunda gráfica.</li>
+      <li>Pon 16 tasks con 32 cores. La mitad del cluster está ocioso todo el stage, y añadir workers no cambiaría nada.</li>
+      <li>Activa la task lenta "al inicio" con muchas tasks: las demás se reparten en los otros cores y el retraso casi se esconde. Ponla "al final": el stage entero espera por ella. La guía de skew habla de esa cola larga.</li>
+      <li>Sube a 256 tasks con 4 cores. Las tasks son tan pequeñas que el arranque fijo pesa cada vez más. Por eso AQE une particiones diminutas.</li>
+    </ul>
+
+    <h3><span class="k">Cómo se usa</span>Ejemplo que puedes correr</h3>
+<pre><code>df  = spark.range(0, 50_000_000, numPartitions=40)
+agg = df.groupBy((df.id % 1000).alias("k")).count()
+
+agg.explain()   <span class="c"># cada Exchange del plan es una frontera de stage</span>
+agg.count()     <span class="c"># la acción: aquí se lanza el job</span></code></pre>
+    <p>En el plan verás <code>HashAggregate</code> (parcial), <code>Exchange hashpartitioning(k, …)</code> y otro <code>HashAggregate</code> (final). Son dos stages: el primero con 40 tasks y el segundo con las particiones del shuffle (o menos, si AQE las une).</p>
+    <div class="verify">En serverless (Free Edition) no eliges los cores ni ves el Spark UI, así que las waves no se observan directamente. Para verlas necesitas un cluster clásico: Spark UI → stage → <b>Event Timeline</b>, que muestra las tasks en el tiempo por executor. En el query profile de serverless solo verás los operadores y sus tiempos; <b>verifica</b> qué detalle por task ofrece en tu workspace.</div>
+
+    <h3><span class="k">Cuándo usar esta cuenta</span>Reglas de la doc</h3>
+    <ul>
+      <li><b>Un stage con 1 sola task</b> puede ser señal de problema (Databricks, <i>Look at longest stage</i>).</li>
+      <li><b>Menos tasks que cores</b> antes de una UDF lenta: haz <code>repartition()</code> para usar todos los cores (Databricks, <i>slow stage low I/O</i>).</li>
+      <li><b>Shuffle partitions múltiplo de los cores totales de los workers</b>, para que ningún core quede ocioso en ninguna iteración. Sin ajuste fino, entre 2 y 3 veces los cores (guía de optimización).</li>
+    </ul>
+
+    <h3><span class="k">Con qué se confunde</span></h3>
+    <ul>
+      <li><b>Stage vs operación.</b> Un stage no es una operación. Agrupa todas las operaciones narrow seguidas hasta el siguiente shuffle.</li>
+      <li><b>Job vs acción.</b> En principio, una acción da un job. Con AQE y broadcast es normal ver varios jobs por una sola acción, porque cada query stage se lanza aparte.</li>
+      <li><b>Task vs partición.</b> Es una relación 1:1 dentro de un stage. Cambiar las particiones es cambiar las tasks.</li>
+      <li><b>Workers vs executors vs cores.</b> En Databricks hay 1 executor por worker. Los slots para tasks son los cores de esos executors. Lo que cuenta para las waves son los cores totales, no los workers.</li>
+      <li><b>Skipped stages.</b> En el Spark UI aparecen como <i>skipped</i> cuando el shuffle que producían ya estaba escrito y se reutiliza. No es un error.</li>
+      <li><b>Waves y skew.</b> Con skew, una task dura mucho más que las demás. El problema no son las waves sino esa task. Más cores no la parten.</li>
+    </ul>
+
+    <h3><span class="k">Qué pasaría si</span></h3>
+    <ul>
+      <li><b>Duplicas los workers con 200 tasks y pasas de 128 a 256 cores:</b> el stage pasa de 2 waves a 1, pero 56 cores no tienen nada que hacer. Pagas más y ganas menos de lo que esperabas.</li>
+      <li><b>Pones shuffle.partitions = cores + 1:</b> casi duplicas el tiempo del stage por una sola task.</li>
+      <li><b>Usas <code>auto</code></b>: Databricks elige el número de particiones según el plan y el tamaño de la entrada. Es la recomendación para shuffle alto.</li>
+    </ul>
+  </section>
+  </main>
+  <nav class="pager" aria-label="Anterior y siguiente"><a class="next" href="shuffle.html"><span>Siguiente</span>Shuffle</a></nav>
+  <footer class="site">Material de estudio personal sobre Databricks y Apache Spark, hecho a partir de la documentación oficial citada en cada página. No es documentación oficial ni está afiliado a Databricks. Los números de los simuladores son ilustrativos; verifica siempre en <a href="https://docs.databricks.com" target="_blank" rel="noopener">docs.databricks.com</a>.</footer>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>

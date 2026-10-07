@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AQE · Spark Performance Lab</title>
+<meta name="description" content="Adaptive Query Execution: qué arregla solo y dónde no actúa.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="index.html">Spark Performance Lab</a>
+  </header>
+  <nav class="tabs" aria-label="Páginas"><div class="row"><span class="grp">Fundamentos</span><a href="stages.html">Stages y waves</a><a href="shuffle.html">Shuffle</a><span class="grp">Skew y spill</span><a href="diagnostico.html">Diagnóstico</a><a href="aqe.html" aria-current="page">AQE</a><a href="lab.html">Lab</a><a href="remedios.html">Remedios</a><a href="skew-hints.html">Skew hints</a><span class="grp">Archivos</span><a href="liquid-clustering.html">Liquid clustering</a><span class="grp">Práctica</span><a href="casos.html">Casos</a></div></nav>
+  <main>
+  <section class="panel">
+
+    <h2>AQE: el arreglo automático y sus límites</h2>
+    <p class="src">Fuente: <a href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank" rel="noopener">docs.databricks.com/aws/en/optimizations/aqe</a></p>
+
+    <h3><span class="k">Qué problema resuelve</span>El plan se decide con estadísticas que pueden estar mal</h3>
+    <p>Antes de ejecutar, Spark estima tamaños. Esas estimaciones fallan si no hay estadísticas, si están viejas o si estás en mitad de una query compleja. Al terminar cada shuffle o broadcast exchange (un <i>query stage</i>), Databricks ya conoce los tamaños reales. AQE aprovecha ese momento para re-planificar el resto de la query.</p>
+
+    <p class="def"><b>AQE</b> re-optimiza la query mientras se ejecuta. Está activado por defecto y hace cuatro cosas: convierte sort-merge join en broadcast hash join, une particiones pequeñas tras un shuffle, parte las particiones con skew en joins, y propaga relaciones vacías.</p>
+
+    <h3><span class="k">Cómo funciona por dentro</span>Cuándo marca una partición como skewed</h3>
+    <p>Tienen que cumplirse las <b>dos</b> condiciones a la vez:</p>
+    <pre><code>tamaño &gt; skewedPartitionFactor × mediana   <span class="c">-- default 5</span>
+tamaño &gt; skewedPartitionThresholdInBytes   <span class="c">-- default 256MB</span></code></pre>
+    <p>Si ambas se cumplen, AQE divide esa partición en varias sub-tareas de tamaño parecido. La partición del otro lado del join se replica para cada sub-tarea, y así el resultado sigue siendo correcto.</p>
+
+    <div class="console">
+      <div class="ttl">¿AQE marca la partición 12 como skewed?</div>
+      <div class="ctrl">
+        <label for="s2-hot">Tamaño de la partición caliente <output id="s2-hot-o"></output></label>
+        <input type="range" id="s2-hot" min="40" max="1500" step="10" value="320">
+      </div>
+      <div class="grid2">
+        <div class="ctrl">
+          <label for="s2-fac">skewedPartitionFactor <output id="s2-fac-o"></output></label>
+          <input type="range" id="s2-fac" min="1" max="10" step="1" value="5">
+        </div>
+        <div class="ctrl">
+          <label for="s2-thr">ThresholdInBytes <output id="s2-thr-o"></output></label>
+          <input type="range" id="s2-thr" min="64" max="1024" step="32" value="256">
+        </div>
+      </div>
+      <svg class="chart" id="s2-chart" viewBox="0 0 360 200" role="img" aria-label="Tamaño de particiones"></svg>
+      <div class="verdict" id="s2-verdict"></div>
+    </div>
+    <p>Pon el factor en 4 y la partición en 250 MB. Supera 4× la mediana, pero no llega al umbral de 256 MB, así que AQE no la toca aunque en el Spark UI sí se vea como skew. Esa es una respuesta típica a "¿por qué AQE no detectó mi skew?".</p>
+
+    <h3><span class="k">Límite 1</span>El tipo de join decide qué lado se puede partir</h3>
+    <p>Solo aplica a joins con shuffle (sort-merge y shuffle hash). <b>Un broadcast join nunca se optimiza por skew.</b></p>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Join</th><th>Skew en lado izquierdo</th><th>Skew en lado derecho</th></tr></thead>
+      <tbody>
+        <tr><td><code>INNER</code></td><td class="yes">Sí</td><td class="yes">Sí</td></tr>
+        <tr><td><code>CROSS</code></td><td class="yes">Sí</td><td class="yes">Sí</td></tr>
+        <tr><td><code>LEFT OUTER</code></td><td class="yes">Sí</td><td class="no">No</td></tr>
+        <tr><td><code>RIGHT OUTER</code></td><td class="no">No</td><td class="yes">Sí</td></tr>
+        <tr><td><code>LEFT SEMI</code></td><td class="yes">Sí</td><td class="no">No</td></tr>
+        <tr><td><code>LEFT ANTI</code></td><td class="yes">Sí</td><td class="no">No</td></tr>
+        <tr><td><code>FULL OUTER</code></td><td class="no">No</td><td class="no">No</td></tr>
+      </tbody>
+    </table></div>
+    <p><b>Cómo recordarlo</b> (esto es mi explicación, no está en la doc): partir un lado obliga a replicar el otro. En un <code>LEFT OUTER</code>, si partes el lado derecho, cada fila izquierda viaja a varias sub-tareas. Las que no encuentran pareja saldrían varias veces con <code>NULL</code> y el resultado tendría duplicados. Regla: se puede partir el lado que conserva todas sus filas, nunca el lado "opcional".</p>
+
+    <h3><span class="k">Límite 2</span>Dónde AQE no actúa</h3>
+    <ul>
+      <li>Solo aplica a queries <b>no streaming</b> que tienen al menos un exchange (join, agregación o ventana) o una subquery.</li>
+      <li>El manejo de skew es para <b>joins</b>. Una ventana <code>PARTITION BY clave_caliente</code> o una agregación sin agregación parcial no se parten. Lo verás en el lab.</li>
+      <li>El reordenamiento dinámico de joins no forma parte de AQE.</li>
+    </ul>
+
+    <h3><span class="k">Cómo comprobar que actuó</span>Señales en el plan</h3>
+    <ul>
+      <li>Nodo raíz <code>AdaptiveSparkPlan</code>: <code>isFinalPlan=false</code> mientras corre y <code>true</code> al terminar.</li>
+      <li>Skew manejado: nodo <code>SortMergeJoin</code> con <code>isSkew</code> en true.</li>
+      <li>Particiones unidas: <code>CustomShuffleReader</code> con <code>Coalesced</code>.</li>
+      <li><code>EXPLAIN</code> en SQL no ejecuta la query, así que nunca muestra el plan final de AQE. Usa el plan del Spark UI o <code>df.explain()</code> después de ejecutar.</li>
+    </ul>
+
+    <h3><span class="k">Configs que conviene reconocer</span>Defaults según la doc</h3>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Config</th><th class="num">Default</th></tr></thead>
+      <tbody>
+        <tr><td><code>spark.sql.adaptive.skewJoin.enabled</code></td><td class="num">true</td></tr>
+        <tr><td><code>spark.sql.adaptive.skewJoin.skewedPartitionFactor</code></td><td class="num">5</td></tr>
+        <tr><td><code>spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes</code></td><td class="num">256MB</td></tr>
+        <tr><td><code>spark.sql.adaptive.advisoryPartitionSizeInBytes</code> (objetivo al unir particiones)</td><td class="num">64MB</td></tr>
+        <tr><td><code>spark.databricks.adaptive.autoBroadcastJoinThreshold</code> (broadcast en runtime)</td><td class="num">30MB</td></tr>
+        <tr><td><code>spark.sql.shuffle.partitions</code> (<code>auto</code> activa auto-optimized shuffle)</td><td class="num">200</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3><span class="k">Con qué se confunde</span></h3>
+    <ul>
+      <li><b>Broadcast hint vs AQE.</b> La doc recomienda seguir usando el hint de broadcast si conoces la query: AQE solo cambia a broadcast después de hacer el shuffle de ambos lados, y el hint evita ese shuffle desde el inicio.</li>
+      <li><b>Skew hint vs AQE.</b> Para skew, la doc recomienda AQE sobre el hint (ver <a href="skew-hints.html">Skew hints</a>).</li>
+      <li><b>Mediana vs promedio.</b> La guía de optimización dice "5 veces el tamaño medio (average)", pero la página de AQE habla de la <b>mediana</b>. Quédate con la mediana, que es la página de referencia.</li>
+    </ul>
+  </section>
+  </main>
+  <nav class="pager" aria-label="Anterior y siguiente"><a class="prev" href="diagnostico.html"><span>Anterior</span>Diagnóstico</a><a class="next" href="lab.html"><span>Siguiente</span>Lab</a></nav>
+  <footer class="site">Material de estudio personal sobre Databricks y Apache Spark, hecho a partir de la documentación oficial citada en cada página. No es documentación oficial ni está afiliado a Databricks. Los números de los simuladores son ilustrativos; verifica siempre en <a href="https://docs.databricks.com" target="_blank" rel="noopener">docs.databricks.com</a>.</footer>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>
