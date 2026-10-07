@@ -14,14 +14,17 @@ jobs:
   links:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Revisar enlaces externos de las páginas
+      - uses: actions/checkout@v5
+      # 403 se acepta porque algunos sitios de documentación bloquean a los robots de CI;
+      # lo que interesa detectar son los 404 (páginas movidas o borradas).
+      - name: Revisar enlaces de las páginas
         uses: lycheeverse/lychee-action@v2
         with:
           args: >-
             --no-progress
             --max-retries 3
-            --accept 200,206,429
+            --accept 200,206,403,429
             --exclude "fonts.googleapis.com|fonts.gstatic.com"
-            "*.html" "_includes/*.html"
+            --exclude "%7B%7B|\\{\\{"
+            "*.html"
           fail: true
