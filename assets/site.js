@@ -106,6 +106,7 @@
 
   /* Glosario: definición al pasar el cursor, en la primera aparición de cada término */
   fetch(base + 'assets/glossary.json').then(function (r) { return r.json(); }).then(function (gl) {
+    gl.sort(function (a, b) { return b.t[0].length - a.t[0].length; });
     var scope = document.querySelectorAll('.doc > p:not(.src):not(.lede), .doc > ul > li, .doc > ol > li, .doc > .def');
     var done = {};
     gl.forEach(function (g) {

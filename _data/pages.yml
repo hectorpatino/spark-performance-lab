@@ -8,31 +8,59 @@
   section: "Fundamentos"
   title: "Shuffle"
   summary: "Qué se escribe y qué se lee cuando las filas cambian de máquina."
+- slug: joins
+  section: "Fundamentos"
+  title: "Estrategias de join"
+  summary: "Broadcast, shuffle hash, sort-merge y nested loop: qué elige Spark, qué cambia AQE y cómo se ve en el plan."
+- slug: spark-ui
+  section: "Dónde mirar"
+  title: "Leer el Spark UI"
+  summary: "Recorrido por el Spark UI pestaña a pestaña, la ruta de diagnóstico de Databricks y los logs del compute."
+- slug: query-profile
+  section: "Dónde mirar"
+  title: "Query profile"
+  summary: "Leer el query profile para encontrar mal data skipping, joins ineficientes y shuffle con spill."
+- slug: system-tables
+  section: "Dónde mirar"
+  title: "System tables"
+  summary: "Coste, queries lentas, uso de clusters y fallos de jobs con SQL, alertas y notificaciones."
 - slug: diagnostico
-  section: "Skew y spill"
+  section: "Diagnóstico y remedios"
   title: "Diagnóstico"
   summary: "Leer un stage lento en el Spark UI: spill, skew o I/O."
 - slug: aqe
-  section: "Skew y spill"
+  section: "Diagnóstico y remedios"
   title: "AQE"
   summary: "Lo que Adaptive Query Execution arregla solo, y los casos en que no actúa."
-- slug: lab
-  section: "Skew y spill"
-  title: "Lab"
-  summary: "Provocar skew en Free Edition y arreglarlo."
-- slug: remedios
-  section: "Skew y spill"
-  title: "Remedios"
-  summary: "Ajustar particiones, filtrar claves calientes y hacer salting."
 - slug: skew-hints
-  section: "Skew y spill"
+  section: "Diagnóstico y remedios"
   title: "Skew hints"
   summary: "El enfoque antiguo con hints y por qué ya no hace falta."
+- slug: remedios
+  section: "Diagnóstico y remedios"
+  title: "Remedios"
+  summary: "Ajustar particiones, filtrar claves calientes y hacer salting."
+- slug: memoria-oom
+  section: "Diagnóstico y remedios"
+  title: "Memoria y OOM"
+  summary: "Cómo se reparte la memoria de un executor, qué hace spill y qué se cae, y cómo diagnosticar un OOM."
+- slug: lab
+  section: "Diagnóstico y remedios"
+  title: "Lab"
+  summary: "Provocar skew en Free Edition y arreglarlo, con notebook descargable."
 - slug: liquid-clustering
-  section: "Archivos"
+  section: "Tablas y archivos"
   title: "Liquid clustering"
   summary: "Organizar los archivos para leer solo lo necesario."
+- slug: mantenimiento-delta
+  section: "Tablas y archivos"
+  title: "Mantenimiento de Delta"
+  summary: "OPTIMIZE, VACUUM, ANALYZE y deletion vectors: qué automatiza predictive optimization y qué te toca a ti."
+- slug: azure
+  section: "Plataforma"
+  title: "Azure Databricks"
+  summary: "Elegir familia de VM, spot u on-demand y autoscaling en el compute clásico."
 - slug: casos
   section: "Práctica"
   title: "Casos"
-  summary: "Nueve síntomas típicos, con su evidencia, para practicar el diagnóstico."
+  summary: "Quince síntomas típicos, con su evidencia y la sección del examen, para practicar el diagnóstico."

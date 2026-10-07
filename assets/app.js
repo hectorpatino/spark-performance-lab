@@ -593,13 +593,23 @@ A.join(broadcast(B_peq), "cliente_id") \\
   /* ---------- 7. casos ---------- */
   if (document.getElementById('cs-list')) { try {
   const SM=(rows)=>`<div class="tblwrap"><table><thead><tr><th>Summary Metrics</th><th class="num">Min</th><th class="num">25th</th><th class="num">Median</th><th class="num">75th</th><th class="num">Max</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r[0]}</td>${r.slice(1).map(c=>`<td class="num">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const TB=(head,rows)=>`<div class="tblwrap"><table><thead><tr>${head.map((h,i)=>`<th${i?' class="num"':''}>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map((c,i)=>`<td${i?' class="num"':''}>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const KV=(rows)=>`<div class="tblwrap"><table><tbody>${rows.map(r=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td></tr>`).join('')}</tbody></table></div>`;
   const A=(href,txt)=>{const m=href.match(/^https:\/\/docs\.databricks\.com\/aws\/en\/(.*)$/);const az=m?' <a class="az" href="https://learn.microsoft.com/azure/databricks/'+m[1].replace(/^delta\/(clustering|data-skipping)/,'tables/$1')+'" target="_blank" rel="noopener">Azure</a>':'';return `<a href="${href}" target="_blank" rel="noopener">${txt}</a>`+az;};
+  const AZ=(path,txt)=>`<a href="https://learn.microsoft.com/azure/databricks/${path}" target="_blank" rel="noopener">${txt}</a> <span class="c">(doc de Azure Databricks)</span>`;
   const D_AQE='https://docs.databricks.com/aws/en/optimizations/aqe', D_SKEW='https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-page',
         D_LONG='https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage', D_LOWIO='https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/slow-spark-stage-low-io',
         D_IO='https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io', D_GUIDE='https://www.databricks.com/discover/pages/optimize-data-workloads-guide',
-        D_PART='https://docs.databricks.com/aws/en/tables/partitions', D_LC='https://docs.databricks.com/aws/en/tables/clustering', D_SCONF='https://docs.databricks.com/aws/en/spark/conf';
+        D_PART='https://docs.databricks.com/aws/en/tables/partitions', D_LC='https://docs.databricks.com/aws/en/tables/clustering', D_SCONF='https://docs.databricks.com/aws/en/spark/conf',
+        D_DS='https://docs.databricks.com/aws/en/tables/data-skipping', D_QP='https://docs.databricks.com/aws/en/sql/user/queries/query-profile',
+        D_QH='https://docs.databricks.com/aws/en/admin/system-tables/query-history', D_PI='https://docs.databricks.com/aws/en/sql/user/queries/performance-insights',
+        D_STC='https://docs.databricks.com/aws/en/admin/system-tables/compute', D_PANDAS='https://docs.databricks.com/aws/en/pandas/pyspark-pandas-conversion',
+        D_HINTS='https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-hints', D_PO='https://docs.databricks.com/aws/en/optimizations/predictive-optimization',
+        D_CONV='https://docs.databricks.com/aws/en/tables/convert-to-managed', D_POST='https://docs.databricks.com/aws/en/admin/system-tables/predictive-optimization',
+        S_CONF='https://spark.apache.org/docs/latest/configuration.html', S_TUNE='https://spark.apache.org/docs/latest/sql-performance-tuning.html';
+  const SECS={1:'Sección 1 · Desarrollo',3:'Sección 3 · Transformación',5:'Sección 5 · Monitoring',6:'Sección 6 · Cost &amp; Performance',9:'Sección 9 · Debugging',10:'Sección 10 · Data Modeling'};
   const CASES=[
-    {t:'Un LEFT JOIN que no termina',
+    {id:'left-join-skew',sec:3,t:'Un LEFT JOIN que no termina',
      ctx:'Un job nocturno que tardaba 6 minutos ahora tarda más de 20. Nadie cambió el código. AQE está activado (el default).',
      ev:`<pre><code>SELECT c.*, v.monto
 FROM dim_clientes c
@@ -619,9 +629,9 @@ rest = dim.filter("cliente_id != 'GENERICO'") \\
           .join(ventas.filter("cliente_id != 'GENERICO'"), "cliente_id", "left")
 res  = hot.unionByName(rest)</code></pre>
 <p>Antes de eso, pregunta si <code>GENERICO</code> debería unirse siquiera. Si es un valor de relleno, como un <code>NULL</code>, filtrarlo es el primer remedio. Un aviso que es razonamiento mío, no de la doc: el salting clásico replica el lado pequeño N veces, y aquí ese lado es el que conserva sus filas. En un LEFT JOIN eso produce filas con <code>NULL</code> duplicadas para los clientes sin ventas.</p>`,
-     src:A(D_AQE,'AQE · Why didn\'t AQE detect my data skew?'),tab:'aqe'},
+     src:A(D_AQE,'AQE · Why didn\'t AQE detect my data skew?'),tab:['aqe','joins']},
 
-    {t:'Spill en todas las tasks',
+    {id:'spill-todas',sec:6,t:'Spill en todas las tasks',
      ctx:'Una agregación grande sobre un cluster clásico de 32 cores. Hay spill a disco y alguien propone hacer salting.',
      ev:`<p>Stage de la agregación: 200 tasks · Shuffle Read total 310 GB.</p>${SM([['Duration','1.9 min','2.1 min','2.2 min','2.3 min','2.6 min'],['Shuffle Read','1.4 GB','1.5 GB','1.5 GB','1.6 GB','1.7 GB'],['Spill (disk)','1.9 GB','2.0 GB','2.1 GB','2.2 GB','2.4 GB']])}`,
      q:'¿Cuál es la causa y qué haces?',
@@ -631,9 +641,9 @@ res  = hot.unionByName(rest)</code></pre>
         ['Activar el skew join de AQE.','Ya está activado por defecto, y además no hay join ni skew.']],
      c:1,
      ex:`<p>El spill aparece en <b>todas</b> las tasks y la distribución es plana. Esa es la firma de particiones demasiado grandes, no de skew. Cada task lee ~1.5 GB, muy por encima de los 128–200 MB por task que sugiere la guía (regla práctica que no encontré en docs.databricks.com). Databricks recomienda <code>spark.sql.shuffle.partitions=auto</code> para shuffle alto. En manual, 310 GB ÷ 128 MB ≈ 2480; redondeado a múltiplo de 32 cores, 2496.</p>`,
-     src:`${A(D_SKEW,'Skew and spill')} · ${A(D_IO,'Spark stage high I/O')}`,tab:'remedios'},
+     src:`${A(D_SKEW,'Skew and spill')} · ${A(D_IO,'Spark stage high I/O')}`,tab:['remedios','spark-ui']},
 
-    {t:'Un stage con una sola task',
+    {id:'una-task',sec:3,t:'Un stage con una sola task',
      ctx:'Un cálculo de saldo acumulado tarda 47 minutos. En la vista de cluster, un core trabaja y los otros 63 están ociosos.',
      ev:`<pre><code>w = Window.orderBy("fecha")
 df.withColumn("saldo", F.sum("monto").over(w))</code></pre><p>Stage del cálculo: <b>Tasks: 1</b> · Shuffle Read 38 GB · Spill (disk) 60 GB.</p>`,
@@ -647,7 +657,7 @@ df.withColumn("saldo", F.sum("monto").over(w))</code></pre><p>Stage del cálculo
 <p>Arreglos: si el negocio lo permite, particiona por una clave (<code>Window.partitionBy("cuenta_id").orderBy("fecha")</code>). Si de verdad necesitas un acumulado global, agrega primero por día (pocas filas) y calcula el acumulado sobre esa tabla pequeña.</p>`,
      src:A(D_LONG,'Look at longest stage'),tab:'stages'},
 
-    {t:'Un join que multiplica filas',
+    {id:'join-explota',sec:3,t:'Un join que multiplica filas',
      ctx:'Un join entre ventas y promociones termina con spill en todos los stages siguientes y una tabla de salida 40 veces más grande de lo esperado.',
      ev:`<p>Pestaña SQL / DataFrame, nodo <code>SortMergeJoin</code>:</p><div class="tblwrap"><table><tbody><tr><td>Entrada ventas</td><td class="num">120 M filas</td></tr><tr><td>Entrada promociones</td><td class="num">2 M filas</td></tr><tr><td>rows output</td><td class="num">4.800 M filas</td></tr></tbody></table></div><pre><code>ventas.join(promociones, "producto_id")</code></pre>`,
      q:'¿Cuál es la causa raíz y la primera acción?',
@@ -660,9 +670,9 @@ df.withColumn("saldo", F.sum("monto").over(w))</code></pre><p>Stage del cálculo
 <pre><code>ventas.join(promociones,
     (ventas.producto_id == promociones.producto_id) &
     ventas.fecha.between(promociones.inicio, promociones.fin))</code></pre>`,
-     src:`${A(D_LOWIO,'Slow stage with low I/O · exploding joins')}`,tab:'stages'},
+     src:`${A(D_LOWIO,'Slow stage with low I/O · exploding joins')}`,tab:['joins','stages']},
 
-    {t:'Miles de tasks de dos segundos',
+    {id:'small-files',sec:10,t:'Miles de tasks de dos segundos',
      ctx:'Leer la tabla <code>eventos</code> (150 GB) es lento aunque casi no hay shuffle. La tabla se creó con <code>PARTITIONED BY (fecha, tienda_id)</code>.',
      ev:`<p>Nodo de scan: <b>number of files read 48.000</b> · tamaño total 150 GB (≈ 3 MB por archivo). El stage tiene miles de tasks que duran ~2 s cada una.</p>`,
      q:'¿Cuál es el mejor arreglo?',
@@ -674,9 +684,9 @@ df.withColumn("saldo", F.sum("monto").over(w))</code></pre><p>Stage del cálculo
      ex:`<p>Según la doc, si el scan lee decenas de miles de archivos hay un problema de small files: los archivos no deberían bajar de 8 MB, y la causa más común es particionar por demasiadas columnas o por una de alta cardinalidad. Aquí se juntan las dos cosas, en una tabla de 150 GB que según la doc ni siquiera debería particionarse (menos de 1 TB).</p>
 <pre><code>ALTER TABLE eventos REPLACE PARTITIONED BY WITH CLUSTER BY (fecha, tienda_id);  <span class="c">-- DBR 18.1+</span>
 OPTIMIZE eventos;   <span class="c">-- o predictive optimization si es managed de UC</span></code></pre>`,
-     src:`${A(D_LOWIO,'Slow stage with low I/O · small files')} · ${A(D_PART,'When to partition')} · ${A(D_LC,'Liquid clustering')}`,tab:'lc'},
+     src:`${A(D_LOWIO,'Slow stage with low I/O · small files')} · ${A(D_PART,'When to partition')} · ${A(D_LC,'Liquid clustering')}`,tab:['lc','mantenimiento-delta']},
 
-    {t:'El driver se cae en un broadcast',
+    {id:'broadcast-2g',sec:9,t:'El driver se cae en un broadcast',
      ctx:'Para evitar shuffles, alguien puso <code>spark.sql.autoBroadcastJoinThreshold = 2g</code> en un cluster clásico. Desde entonces el job falla con <code>OutOfMemoryError</code> en el driver durante un <code>BroadcastExchange</code>.',
      ev:`<p>La tabla que se hace broadcast, <code>clientes</code>, ocupa 700 MB en disco (Parquet) y comprime muy bien.</p>`,
      q:'Si 700 MB es menos que 2 GB, ¿por qué falla?',
@@ -686,9 +696,9 @@ OPTIMIZE eventos;   <span class="c">-- o predictive optimization si es managed d
         ['Hay pocas shuffle partitions.','Un broadcast join no hace shuffle de esa tabla.']],
      c:0,
      ex:`<p>La guía de optimización (2023) da tres reglas que siguen siendo útiles: nunca hacer broadcast de más de 1 GB, porque el broadcast pasa por el driver y puede causar OOM o pausas largas de GC; el tamaño en disco no es el de memoria, porque Parquet comprimido puede crecer mucho al descomprimir; y Spark tiene un límite duro de 8 GB para un broadcast. Con Photon, según la misma guía, el broadcast se hace en los executors.</p>`,
-     src:`${A(D_GUIDE,'Guía de optimización · Broadcast hash join')} (eBook de 2023; ${A(D_AQE,'umbral de AQE: 30 MB')})`,tab:'aqe'},
+     src:`${A(D_GUIDE,'Guía de optimización · Broadcast hash join')} (eBook de 2023; ${A(D_AQE,'umbral de AQE: 30 MB')})`,tab:['memoria-oom','joins']},
 
-    {t:'AQE no ve un skew evidente',
+    {id:'aqe-no-ve',sec:6,t:'AQE no ve un skew evidente',
      ctx:'Un INNER JOIN en compute clásico. En el Spark UI se ve skew claramente, pero el plan dice <code>isSkew=false</code>.',
      ev:`${SM([['Duration','8 s','25 s','30 s','35 s','3.5 min'],['Shuffle Read','18 MB','26 MB','30 MB','34 MB','220 MB']])}`,
      q:'¿Por qué AQE no actuó?',
@@ -700,7 +710,7 @@ OPTIMIZE eventos;   <span class="c">-- o predictive optimization si es managed d
      ex:`<p>Condiciones de AQE: tamaño &gt; <code>skewedPartitionFactor</code> (5) × mediana, <b>y</b> tamaño &gt; <code>skewedPartitionThresholdInBytes</code> (256 MB). 220 MB &gt; 150 MB cumple la primera, pero falla la segunda. En serverless no podrías cambiar ese umbral: solo se pueden fijar seis propiedades de Spark, y esta no está entre ellas.</p>`,
      src:`${A(D_AQE,'AQE · skew join')} · ${A(D_SCONF,'Spark properties en serverless')}`,tab:'aqe'},
 
-    {t:'Una segunda wave casi vacía',
+    {id:'segunda-wave',sec:6,t:'Una segunda wave casi vacía',
      ctx:'16 workers × 8 cores = 128 cores. <code>shuffle.partitions = 130</code>. Las tasks duran todas unos 40 s, sin skew ni spill. El stage tarda 81 s, y el jefe propone añadir workers.',
      ev:`<p>Event Timeline del stage: una primera wave de 128 tasks y una segunda de solo 2.</p>`,
      q:'¿Cuál es el arreglo más barato?',
@@ -712,7 +722,7 @@ OPTIMIZE eventos;   <span class="c">-- o predictive optimization si es managed d
      ex:`<p>130 tasks ÷ 128 cores = 2 waves, y la segunda tiene 2 tasks y 126 cores esperando. Con 128 particiones, cada task procesa un ~1.6% más de datos (≈ 41 s) y el stage baja a ~41 s sin coste extra. La guía recomienda que las shuffle partitions sean múltiplo de los cores totales.</p>`,
      src:A(D_GUIDE,'Guía de optimización · Cluster usage'),tab:'stages'},
 
-    {t:'El cambio de particiones que no se aplica',
+    {id:'streaming-particiones',sec:1,t:'El cambio de particiones que no se aplica',
      ctx:'Una agregación con estado en Structured Streaming va lenta. Cambias <code>spark.sql.shuffle.partitions</code> de 200 a 800 y reinicias el stream con el mismo checkpoint.',
      ev:`<p>En cada micro-batch, el stage con estado sigue teniendo <b>200 tasks</b>.</p>`,
      q:'¿Por qué?',
@@ -722,15 +732,148 @@ OPTIMIZE eventos;   <span class="c">-- o predictive optimization si es managed d
         ['Hace falta <code>trigger(availableNow=True)</code>.','El trigger decide cuándo se procesa, no cuántas particiones de shuffle hay.']],
      c:1,
      ex:`<p>La doc de AQE dice dos cosas aquí. Primero, AQE solo se aplica a queries que no son streaming. Segundo, en Structured Streaming <code>spark.sql.shuffle.partitions</code> no se puede cambiar entre reinicios desde el mismo checkpoint, porque el estado está repartido en esas 200 particiones. Para cambiarlo hace falta un checkpoint nuevo, lo que implica reconstruir el estado (esto último es razonamiento mío).</p>`,
-     src:A(D_AQE,'AQE · Enable auto-optimized shuffle'),tab:'aqe'}
+     src:A(D_AQE,'AQE · Enable auto-optimized shuffle'),tab:'aqe'},
+
+    {id:'skipping-malo',sec:6,t:'Un filtro selectivo que lee toda la tabla',
+     ctx:'Un panel consulta la tabla <code>ventas</code> (managed de Unity Catalog, 800 GB, sin particiones ni clustering) filtrando por un cliente. Devuelve una fila y tarda 3 minutos en un SQL warehouse. La tabla se carga cada noche con un <code>INSERT</code> de las ventas del día.',
+     ev:`<pre><code>SELECT sum(monto) FROM ventas WHERE cliente_id = 4217</code></pre><p>Fila de <code>system.query.history</code> para esa ejecución, y detalle de la tabla:</p>${KV([['read_files','6.380'],['pruned_files','20'],['read_rows','4.100 M'],['produced_rows','1'],['total_duration_ms','182.000'],['DESCRIBE DETAIL · clusteringColumns','[ ]'],['DESCRIBE DETAIL · partitionColumns','[ ]']])}<p>En el resumen de la query, el icono de filtro del scan indica que casi no se podó nada.</p>`,
+     q:'¿Qué haces?',
+     o:[['Subir el SQL warehouse a un tamaño mayor.','Más cómputo lee los mismos 6.380 archivos más deprisa, pero los sigue leyendo todos. Pagas más sin tocar la causa.'],
+        ['Clusterizar por la columna del filtro: <code>ALTER TABLE ventas CLUSTER BY (cliente_id)</code> y luego <code>OPTIMIZE ventas FULL</code>, o <code>CLUSTER BY AUTO</code> con predictive optimization.','Correcto. Agrupar las filas por cliente estrecha el rango mín/máx de cada archivo, y el filtro puede descartar casi todos.'],
+        ['Particionar la tabla por <code>cliente_id</code>.','Con 100.000 clientes saldrían particiones de unos 8 MB. La doc pide no particionar tablas de menos de 1 TB y que cada partición tenga al menos 1 GB.'],
+        ['Ejecutar <code>ANALYZE TABLE ventas COMPUTE STATISTICS</code>.','Esas estadísticas sirven al optimizador para elegir el plan. El data skipping usa el mín/máx por archivo que Delta ya guarda al escribir, y aquí ese rango cubre casi todos los clientes en cada archivo.']],
+     c:1,
+     ex:`<p>Delta guarda, por cada archivo, el mínimo y el máximo de las columnas con estadísticas (por defecto, las primeras 32). Al consultar, descarta los archivos cuyo rango no puede contener el valor. Como los datos llegan por día, cada archivo tiene clientes de todo el rango y casi ninguno se puede descartar: 20 de 6.400 archivos, un 0,3%. El total de archivos es <code>read_files + pruned_files</code>, como define la doc de query history. Es el caso de <i>bad data skipping</i> que pide la sección 6 del examen.</p>
+<pre><code>ALTER TABLE ventas CLUSTER BY (cliente_id);
+OPTIMIZE ventas FULL;          <span class="c">-- reclusteriza también lo existente (16.4 LTS+ según la página de clustering; la referencia SQL de OPTIMIZE dice 16.0)</span>
+<span class="c">-- Alternativa en managed de UC con predictive optimization:</span>
+ALTER TABLE ventas CLUSTER BY AUTO;</code></pre>
+<p>Después, repite la query y compara <code>pruned_files</code> y <code>read_files</code> en <code>system.query.history</code>. Sin <code>FULL</code>, el <code>ALTER</code> solo cambia la clave para los datos que vengan. Los números del caso son ilustrativos.</p>`,
+     src:`${A(D_DS,'Data skipping')} · ${A(D_LC,'Liquid clustering')} · ${A(D_QH,'Query history · scan metrics')} · ${A(D_PART,'When to partition')}`,tab:['query-profile','lc']},
+
+    {id:'dashboard-spill',sec:5,t:'Un dashboard que cada mes va más lento',
+     ctx:'Una query de un dashboard corre en un SQL warehouse serverless de tamaño Small. En agosto tardaba unos 20 s; ahora tarda más de 90 s. La tabla de origen crece cada día. Tienes acceso a <code>system.query.history</code>.',
+     ev:`<pre><code>SELECT date_trunc('WEEK', start_time)              AS semana,
+       COUNT(*)                                     AS ejecuciones,
+       percentile(total_duration_ms, 0.5) / 1000    AS p50_s,
+       avg(spilled_local_bytes) / 1e9               AS spill_gb,
+       avg(read_bytes) / 1e9                        AS leido_gb,
+       avg(waiting_at_capacity_duration_ms) / 1000  AS cola_s,
+       avg(compilation_duration_ms) / 1000          AS compilacion_s
+FROM system.query.history
+WHERE query_source.dashboard_id = '&lt;id del dashboard&gt;'
+  AND start_time &gt;= current_date() - INTERVAL 70 DAYS
+GROUP BY ALL ORDER BY semana</code></pre>${TB(['semana','ejecuciones','p50_s','spill_gb','leido_gb','cola_s','compilacion_s'],[['2026-08-03','140','21','0','38','0,2','0,8'],['2026-08-31','152','34','6,5','52','0,1','0,8'],['2026-09-28','149','96','41','71','0,3','0,9']])}`,
+     q:'¿Qué columna explica el problema y qué haces?',
+     o:[['<code>waiting_at_capacity_duration_ms</code>: subir el número máximo de clusters del warehouse.','La espera en cola sigue en décimas de segundo. Más clusters dan más concurrencia, pero cada query sigue con la misma memoria.'],
+        ['<code>spilled_local_bytes</code> crece con <code>read_bytes</code>: la query ya no cabe en memoria. Subir el tamaño del warehouse (Small a Medium) y leer menos filas o columnas.','Correcto. Es la recomendación del insight <code>DATA_SPILL</code>.'],
+        ['<code>compilation_duration_ms</code>: recoger estadísticas con <code>ANALYZE</code>.','La compilación está estable en menos de un segundo. El tiempo extra se va en la ejecución.'],
+        ['Mirar la memoria del warehouse en <code>system.compute.node_timeline</code>.','Las tablas de <code>system.compute</code> de clusters y nodos solo tienen compute all-purpose y jobs. No incluyen SQL warehouses ni serverless.']],
+     c:1,
+     ex:`<p>Los datos leídos casi se duplican y el spill pasa de 0 a 41 GB por ejecución. Cuando una query hace spill, los datos que no caben en memoria se escriben a disco y se vuelven a leer. Para el insight <code>DATA_SPILL</code>, la doc recomienda subir el tamaño del warehouse para tener más memoria, o reducir filas, columnas y columnas grandes (strings, arrays, maps, structs). Para <code>EXCESSIVE_QUEUE_TIME</code> recomienda otra cosa: subir el máximo de clusters. Leer la columna correcta evita pagar por la palanca equivocada.</p>
+<p>Antes de subir el tamaño, mira si el dashboard filtra por fecha y si lee columnas que no usa. A veces un filtro sobre la clave de clustering arregla las dos cosas. <code>system.query.history</code> cubre SQL warehouses, notebooks y jobs serverless y pipelines de Lakeflow; por defecto solo la leen los admins. Los números del caso son ilustrativos.</p>`,
+     src:`${A(D_QH,'Query history system table')} · ${A(D_PI,'Query performance insights')} · ${A(D_STC,'Compute system tables · limitations')}`,tab:['system-tables','query-profile']},
+
+    {id:'spot-evict',sec:9,t:'Un job que se alarga cuando Azure reclama VMs',
+     ctx:'Un job nocturno corre en job compute clásico de Azure con la casilla <b>Spot instances</b> marcada: 1 driver y 10 workers. Suele tardar 25 minutos. Anoche tardó 70 y terminó con <code>SUCCEEDED</code>.',
+     ev:`<p>Recreación ilustrativa de lo que ves:</p>${KV([['Executors · executors perdidos durante el run','4'],['Event log del compute','nodos perdidos y nodos nuevos añadidos'],['Stages · stage 14','(retry 1)'],['Failure reason del primer intento','FetchFailedException'],['Stages que se recalcularon','9 y 11 (los que escribieron ese shuffle)']])}`,
+     q:'¿Qué explica el retraso y qué cambias?',
+     o:[['El driver era spot, Azure lo desalojó y el job tuvo que reiniciar.','Con la casilla Spot instances, la primera instancia, el driver, siempre es on-demand. Y el run terminó bien.'],
+        ['Al perder workers se perdieron sus archivos de shuffle. El stage que los leía falló con FetchFailed y Spark recalculó lo perdido. Para este job, workers on-demand si el horario importa, o activar decommissioning si prefieres seguir con spot.','Correcto.'],
+        ['Subir los reintentos del job a 3.','El job no falló. Los reintentos del job no evitan el recálculo dentro del run; solo relanzan la tarea si falla.'],
+        ['Desactivar AQE para que no replanifique tras perder executors.','AQE no tiene nada que ver. El tiempo extra viene de recalcular el shuffle perdido.']],
+     c:1,
+     ex:`<p>Según la doc de Azure Databricks, con Spot instances el driver es siempre on-demand y los demás nodos son spot. Si Azure desaloja un worker, Azure Databricks intenta conseguir otra VM spot y, si no puede, la reemplaza por una on-demand. El compute sigue vivo, pero lo que había en los discos de esas VMs se pierde. La doc lista las consecuencias: fallos de shuffle fetch, pérdida de datos de shuffle y de RDD, y fallos de jobs. Que Spark reintente el stage y recalcule las tasks cuyo shuffle se perdió es comportamiento de Apache Spark; no encontré esa descripción en docs.databricks.com.</p>
+<p>Opciones según lo que pese más:</p>
+<ul><li><b>Horario estricto:</b> workers on-demand para este job. Por API, <code>azure_attributes.first_on_demand</code> fija cuántos nodos, empezando por el driver, van on-demand.</li>
+<li><b>Coste:</b> seguir con spot y activar decommissioning. Usa el aviso previo al desalojo (normalmente de 30 s a 2 min según el proveedor; en Azure, hasta 30 s) para migrar shuffle a executors sanos. Es best effort, y con él los fallos de tasks por desalojo no cuentan como intentos fallidos.</li>
+<li><b>Desalojos frecuentes:</b> la guía sugiere cambiar a tipos de instancia con menor tasa de desalojo en Azure, o dejar de usar spot.</li></ul>
+<pre><code><span class="c"># Spark config del compute (Advanced options → Spark)</span>
+spark.decommission.enabled true
+spark.storage.decommission.enabled true
+spark.storage.decommission.shuffleBlocks.enabled true
+<span class="c"># Environment variables</span>
+SPARK_WORKER_OPTS="-Dspark.decommission.enabled=true"</code></pre>
+<p>Los números del caso son ilustrativos.</p>`,
+     src:`${AZ('compute/configure#spot-instances','Compute configuration · Spot instances')} · ${AZ('compute/clusters-manage#decommission-spot-instances','Decommission spot instances')} · ${AZ('optimizations/spark-ui-guide/losing-spot-instances','Losing spot instances')} · ${AZ('admin/clusters/policy-definition#supported-attributes','azure_attributes.first_on_demand')} · <a href="https://learn.microsoft.com/azure/virtual-machines/spot-vms#eviction-policy" target="_blank" rel="noopener">Azure Spot VMs · Eviction policy</a>`,tab:['azure','spark-ui']},
+
+    {id:'driver-topandas',sec:9,t:'El driver muere al pasar a pandas',
+     ctx:'En un cluster clásico, un notebook trae un año de eventos a pandas para hacer un resumen. El resultado tiene unos 180 M filas.',
+     ev:`<pre><code>pdf = spark.table("eventos").filter("fecha &gt;= '2026-01-01'").toPandas()
+resumen = pdf.groupby(["pais", "canal"])["monto"].sum()</code></pre><p>Primer error: <code>Total size of serialized results of 412 tasks (4.0 GiB) is bigger than spark.driver.maxResultSize (4.0 GiB)</code>. Alguien sube <code>spark.driver.maxResultSize</code> a <code>32g</code> y ahora el driver se queda sin memoria y se reinicia.</p>`,
+     q:'¿Cuál es el arreglo?',
+     o:[['Subir <code>spark.driver.maxResultSize</code> todavía más, a 64g.','El límite existe para proteger al driver. La doc de Spark avisa que un límite alto puede causar out of memory en el driver, que es justo lo que pasó.'],
+        ['Añadir workers al cluster.','Todo el resultado termina en el driver. Más workers no le dan memoria.'],
+        ['Hacer la agregación en Spark y traer a pandas solo el resultado pequeño. Si necesitas el detalle fuera de Spark, escríbelo a una tabla en lugar de traerlo al driver.','Correcto.'],
+        ['Activar Arrow con <code>spark.sql.execution.arrow.pyspark.enabled</code>.','Arrow acelera la conversión, pero la doc dice que, incluso con Arrow, <code>toPandas()</code> lleva todas las filas al driver.']],
+     c:2,
+     ex:`<p><code>collect()</code> y <code>toPandas()</code> cargan el resultado entero en la memoria del driver, y la doc pide usarlos solo con resultados pequeños. <code>spark.driver.maxResultSize</code> limita el tamaño serializado de lo que una acción trae al driver. El valor por defecto de Apache Spark es 1g; el de tu compute puede ser otro, míralo en la pestaña Environment del Spark UI.</p>
+<pre><code>resumen = (spark.table("eventos")
+    .filter("fecha &gt;= '2026-01-01'")
+    .groupBy("pais", "canal")
+    .agg(F.sum("monto").alias("monto")))
+pdf = resumen.toPandas()      <span class="c"># unos cientos de filas, no 180 M</span>
+
+<span class="c"># Si otro sistema necesita el detalle, que lo lea de una tabla</span>
+(spark.table("eventos").filter("fecha &gt;= '2026-01-01'")
+    .write.mode("overwrite").saveAsTable("analitica.eventos_2026"))</code></pre>
+<p>Si de verdad necesitas traer mucho al driver, la doc de configuración de compute permite elegir un driver más grande. Es el último recurso. En serverless, <code>spark.driver.maxResultSize</code> no está entre las seis propiedades que se pueden cambiar. Los números del caso son ilustrativos.</p>`,
+     src:`${A(D_PANDAS,'Convert between PySpark and pandas')} · ${A('https://docs.databricks.com/aws/en/compute/configure','Compute configuration · Driver type')} · <a href="${S_CONF}" target="_blank" rel="noopener">Spark configuration · spark.driver.maxResultSize</a>`,tab:'memoria-oom'},
+
+    {id:'broadcast-off',sec:6,t:'Sin broadcast, una dimensión pequeña mueve 400 GB',
+     ctx:'Después del incidente del broadcast de 2 GB (caso 6), el equipo puso <code>spark.sql.autoBroadcastJoinThreshold = -1</code> en todo el cluster clásico. Un join entre <code>ventas</code> (600 GB) y <code>dim_tienda</code> pasó de 6 a 31 minutos.',
+     ev:`<p>Pestaña SQL / DataFrame (recreación ilustrativa):</p>${KV([['Nodo de join','SortMergeJoin Inner (tienda_id)'],['Exchange del lado ventas · shuffle write','410 GiB'],['Exchange del lado dim_tienda · shuffle write','120 MiB'],['Tamaño estimado de dim_tienda en el plan','120 MiB'],['Environment · spark.sql.autoBroadcastJoinThreshold','-1']])}`,
+     q:'¿Cuál es el arreglo correcto?',
+     o:[['Volver a poner el umbral en 2g.','Vuelves al riesgo de OOM en el driver para todos los joins del cluster, que fue lo que motivó el cambio.'],
+        ['Hint de broadcast solo en este join, <code>broadcast(dim_tienda)</code>, y quitar el -1 global.','Correcto. El hint se aplica aunque el umbral no lo permita, y solo afecta a la tabla que sabes que es pequeña.'],
+        ['Esperar a que AQE lo convierta en broadcast en runtime.','El umbral de AQE para cambiar a broadcast en runtime es 30 MB, y dim_tienda ocupa 120 MB. Además, según la doc, AQE puede no cambiar a broadcast hasta después de hacer el shuffle de los dos lados.'],
+        ['Subir <code>spark.sql.shuffle.partitions</code> a 2000.','Reparte los 410 GiB en más tasks, pero los 410 GiB siguen viajando por la red.']],
+     c:1,
+     ex:`<p>Con <code>-1</code>, Spark desactiva el broadcast automático. El optimizador ya no puede elegir broadcast hash join y cae en sort merge join: los dos lados se reparten por <code>tienda_id</code>, y eso obliga a mover los 600 GB de ventas para unirlos con una tabla de 120 MB. Con broadcast, ventas no se mueve.</p>
+<p>La doc de hints de Databricks dice que el lado con hint <code>BROADCAST</code> se hace broadcast sin importar <code>autoBroadcastJoinThreshold</code>. La FAQ de AQE recomienda seguir usando el hint aunque AQE esté activado, porque un broadcast planificado desde el inicio evita el shuffle.</p>
+<pre><code>from pyspark.sql import functions as F
+res = ventas.join(F.broadcast(dim_tienda), "tienda_id")
+
+<span class="c">-- En SQL</span>
+SELECT /*+ BROADCAST(t) */ v.*, t.region
+FROM ventas v JOIN dim_tienda t ON v.tienda_id = t.tienda_id</code></pre>
+<p>Para el umbral global, quita el <code>-1</code> y vuelve a un valor moderado, para que las dimensiones de pocos MB vuelvan a hacer broadcast solas. Esa elección del valor es criterio mío; la doc no da una cifra para tu caso. Los números del caso son ilustrativos.</p>`,
+     src:`${A(D_HINTS,'Join hints')} · ${A(D_AQE,'AQE · broadcast FAQ')} · <a href="${S_TUNE}" target="_blank" rel="noopener">Spark SQL performance tuning · autoBroadcastJoinThreshold</a>`,tab:['joins','aqe']},
+
+    {id:'po-external',sec:6,t:'Predictive optimization ignora una tabla',
+     ctx:'Predictive optimization está activado en el catálogo <code>prod</code>. Las tablas del schema <code>prod.bronze</code> se compactan solas, salvo <code>clicks</code>, que acumula archivos pequeños desde hace meses.',
+     ev:`${KV([['DESCRIBE TABLE EXTENDED · Type','EXTERNAL'],['DESCRIBE TABLE EXTENDED · Location','abfss://bronze@stlake.dfs.core.windows.net/clicks'],['DESCRIBE DETAIL · numFiles','182.000'],['DESCRIBE DETAIL · sizeInBytes','240 GB (≈ 1,3 MB por archivo)']])}<pre><code>SELECT table_name, operation_type, COUNT(*) AS ops
+FROM system.storage.predictive_optimization_operations_history
+WHERE schema_name = 'bronze' AND start_time &gt;= current_date() - INTERVAL 30 DAYS
+GROUP BY ALL</code></pre><p>Salen filas de <code>COMPACTION</code> y <code>VACUUM</code> para otras tablas. Ninguna para <code>clicks</code>.</p>`,
+     q:'¿Por qué y qué haces?',
+     o:[['Predictive optimization tarda en evaluar tablas nuevas; hay que esperar unos días.','La tabla lleva meses así y sus vecinas sí se optimizan. Esperar no cambia nada.'],
+        ['Activarlo a nivel de tabla con <code>ALTER TABLE prod.bronze.clicks ENABLE PREDICTIVE OPTIMIZATION</code>.','La doc lista las tablas external entre las que predictive optimization no procesa. El nivel en que lo actives no cambia eso.'],
+        ['Predictive optimization solo corre en tablas managed de Unity Catalog. Convertirla con <code>ALTER TABLE ... SET MANAGED</code>, o, si tiene que seguir external, programar tú <code>OPTIMIZE</code> y <code>VACUUM</code>.','Correcto.'],
+        ['Hacer <code>OPTIMIZE ... ZORDER BY</code> una vez para que predictive optimization la tome después.','Predictive optimization no ejecuta ZORDER e ignora los archivos ordenados con Z-order. Y la tabla sigue siendo external.']],
+     c:2,
+     ex:`<p>Predictive optimization ejecuta <code>OPTIMIZE</code>, <code>VACUUM</code> y <code>ANALYZE</code> solo en tablas managed de Unity Catalog. En sus limitaciones, la doc dice que no corre en tablas external ni en tablas recibidas por Delta Sharing (OpenSharing). Por eso <code>clicks</code> no aparece en el system table de operaciones.</p>
+<pre><code>ALTER TABLE prod.bronze.clicks SET MANAGED;      <span class="c">-- DBR 17.3 LTS+ o serverless; tienes que ser owner</span>
+DESCRIBE EXTENDED prod.bronze.clicks;            <span class="c">-- Type debe decir MANAGED</span></code></pre>
+<p>Según la doc de conversión, tras <code>SET MANAGED</code> predictive optimization se activa solo, salvo que lo hubieras apagado a mano. Antes de convertir, cancela los jobs de <code>OPTIMIZE</code> que tocan la tabla y comprueba que los lectores y escritores usan DBR 15.4 LTS o superior, y que los clientes externos pueden leer tablas managed. Los datos de la ubicación external se conservan 14 días por si necesitas volver con <code>UNSET MANAGED</code>. El insight <code>MANUAL_DATA_LAYOUT</code> del query profile recomienda esta misma conversión. Los números del caso son ilustrativos.</p>`,
+     src:`${A(D_PO,'Predictive optimization · limitations')} · ${A(D_CONV,'Convert to managed tables')} · ${A(D_POST,'Predictive optimization system table')}`,tab:'mantenimiento-delta'}
   ];
+  const TABNAME={aqe:['aqe.html','AQE'],remedios:['remedios.html','Remedios'],stages:['stages.html','Stages y waves'],lc:['liquid-clustering.html','Liquid clustering'],
+    'query-profile':['query-profile.html','Query profile'],'system-tables':['system-tables.html','System tables'],'spark-ui':['spark-ui.html','Spark UI'],joins:['joins.html','Joins'],
+    'memoria-oom':['memoria-oom.html','Memoria y OOM'],'mantenimiento-delta':['mantenimiento-delta.html','Mantenimiento Delta'],azure:['azure.html','Azure']};
+  const repaso=t=>[].concat(t).filter(x=>TABNAME[x]).map(x=>`<a href="${TABNAME[x][0]}">${TABNAME[x][1]}</a>`).join(', ');
+  const KEY='spl-casos-respuestas-v1', FKEY='spl-casos-filtro';
+  const store={get(k){try{return localStorage.getItem(k);}catch(e){return null;}},set(k,v){try{localStorage.setItem(k,v);}catch(e){}},del(k){try{localStorage.removeItem(k);}catch(e){}}};
+  let saved={};
+  try{const v=JSON.parse(store.get(KEY)||'{}'); if(v&&typeof v==='object') saved=v;}catch(e){saved={};}
   const csAns={};
+  const list=document.getElementById('cs-list'), scoreEl=document.getElementById('cs-score');
   function csScore(){const n=Object.keys(csAns).length,ok=Object.values(csAns).filter(Boolean).length;
-    document.getElementById('cs-score').innerHTML=`<span class="pill ${ok===n?'ok':'bad'}">${ok} / ${n}</span>aciertos de ${n} respondidos · ${CASES.length-n} pendientes`;}
-  const TABNAME={aqe:'<a href="aqe.html">AQE</a>',remedios:'<a href="remedios.html">Remedios</a>',stages:'<a href="stages.html">Stages y waves</a>',lc:'<a href="liquid-clustering.html">Liquid clustering</a>'};
-  document.getElementById('cs-list').innerHTML=CASES.map((k,i)=>`
-    <article class="case" id="cs-${i}">
-      <div class="cn">Caso ${i+1} de ${CASES.length}</div>
+    if(scoreEl) scoreEl.innerHTML=`<span class="pill ${ok===n?'ok':'bad'}">${ok} / ${n}</span>aciertos de ${n} respondidos · ${CASES.length-n} pendientes`;}
+  function render(){
+    list.innerHTML=CASES.map((k,i)=>`
+    <article class="case" id="cs-${i}" data-sec="${k.sec}">
+      <div class="cn">Caso ${i+1} de ${CASES.length}<span class="cs-sec">${SECS[k.sec]}</span></div>
       <h4>${k.t}</h4>
       <p>${k.ctx}</p>
       <div class="ev">${k.ev}</div>
@@ -738,20 +881,41 @@ OPTIMIZE eventos;   <span class="c">-- o predictive optimization si es managed d
       <div class="opts">${k.o.map((o,j)=>`<button type="button" data-case="${i}" data-opt="${j}"><b>${'ABCD'[j]}</b><span>${o[0]}</span></button>`).join('')}</div>
       <div class="expl" hidden></div>
     </article>`).join('');
-  document.getElementById('cs-list').addEventListener('click',e=>{
-    const b=e.target.closest('button[data-case]'); if(!b) return;
-    const i=+b.dataset.case, j=+b.dataset.opt, k=CASES[i];
-    if(i in csAns) return;
+  }
+  function answer(i,j){
+    const k=CASES[i]; if(!k||i in csAns||!(j>=0&&j<k.o.length)) return;
     csAns[i]=(j===k.c);
     const card=document.getElementById('cs-'+i);
     card.querySelectorAll('button[data-case]').forEach(x=>{const jj=+x.dataset.opt; x.disabled=true;
       x.classList.add(jj===k.c?'right':(jj===j?'wrong':'dim'));
       const w=document.createElement('span'); w.className='why'; w.innerHTML=k.o[jj][1]; x.appendChild(w);});
     const ex=card.querySelector('.expl'); ex.hidden=false;
-    ex.innerHTML=`<p><span class="pill ${csAns[i]?'ok':'bad'}">${csAns[i]?'BIEN':'NO'}</span>${csAns[i]?'Elegiste la correcta.':'La correcta es la '+'ABCD'[k.c]+'.'}</p>${k.ex}<p class="tag">Fuente: ${k.src} · Repaso: ${TABNAME[k.tab]}</p>`;
-    csScore();
+    ex.innerHTML=`<p><span class="pill ${csAns[i]?'ok':'bad'}">${csAns[i]?'BIEN':'NO'}</span>${csAns[i]?'Elegiste la correcta.':'La correcta es la '+'ABCD'[k.c]+'.'}</p>${k.ex}<p class="tag">Fuente: ${k.src} · Repaso: ${repaso(k.tab)}</p>`;
+  }
+  function restore(){CASES.forEach((k,i)=>{if(Object.prototype.hasOwnProperty.call(saved,k.id)) answer(i,+saved[k.id]);}); csScore();}
+  list.addEventListener('click',e=>{
+    const b=e.target.closest('button[data-case]'); if(!b) return;
+    const i=+b.dataset.case, j=+b.dataset.opt;
+    if(i in csAns) return;
+    answer(i,j); saved[CASES[i].id]=j; store.set(KEY,JSON.stringify(saved)); csScore();
   });
-  csScore();
+  /* filtro por sección */
+  const fil=document.getElementById('cs-filter');
+  let cur=store.get(FKEY)||'all';
+  const secs=[...new Set(CASES.map(k=>k.sec))].sort((a,b)=>a-b);
+  if(cur!=='all'&&!secs.includes(+cur)) cur='all';
+  function applyFilter(){
+    list.querySelectorAll('.case').forEach(c=>{c.hidden=!(cur==='all'||c.dataset.sec===String(cur));});
+    if(fil) fil.querySelectorAll('button[data-sec]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.sec===String(cur))));
+  }
+  if(fil){
+    fil.innerHTML=`<span class="lab">Sección del examen:</span><button type="button" data-sec="all" aria-pressed="false">Todos (${CASES.length})</button>`+
+      secs.map(s=>`<button type="button" data-sec="${s}" aria-pressed="false">${SECS[s]} (${CASES.filter(k=>k.sec===s).length})</button>`).join('');
+    fil.addEventListener('click',e=>{const b=e.target.closest('button[data-sec]'); if(!b) return; cur=b.dataset.sec; store.set(FKEY,cur); applyFilter();});
+  }
+  const rs=document.getElementById('cs-reset');
+  if(rs) rs.addEventListener('click',()=>{saved={}; store.del(KEY); Object.keys(csAns).forEach(k=>delete csAns[k]); render(); applyFilter(); csScore();});
+  render(); restore(); applyFilter();
   } catch (e) { console.error('7. casos', e); } }
 
   /* ---------- 0a-3. línea de tiempo del job ---------- */

@@ -1,0 +1,160 @@
+---
+layout: default
+slug: azure
+title: "Azure Databricks"
+description: "Elegir la familia de VM, spot u on-demand y autoscaling en el compute clásico de Azure Databricks, con lo que dice la doc oficial."
+extra_js: ["/assets/js/azure.js"]
+extra_css: ["/assets/css/azure.css"]
+---
+
+    <h2>Azure Databricks: qué VM, spot o no, y cuánto escalar</h2>
+    <p class="src">Fuentes: <a href="https://learn.microsoft.com/azure/databricks/compute/configure" target="_blank" rel="noopener">Compute configuration reference</a>, <a href="https://learn.microsoft.com/azure/databricks/compute/cluster-config-best-practices" target="_blank" rel="noopener">Classic compute configuration best practices</a>, <a href="https://learn.microsoft.com/azure/databricks/lakehouse-architecture/cost-optimization/best-practices" target="_blank" rel="noopener">Best practices for cost optimization</a>, <a href="https://learn.microsoft.com/azure/databricks/optimizations/disk-cache" target="_blank" rel="noopener">Disk cache</a>, <a href="https://learn.microsoft.com/azure/databricks/compute/photon" target="_blank" rel="noopener">Photon</a>, <a href="https://learn.microsoft.com/azure/databricks/spark/conf" target="_blank" rel="noopener">Spark configuration</a>, <a href="https://learn.microsoft.com/azure/databricks/compute/clusters-manage" target="_blank" rel="noopener">Manage classic compute</a>, <a href="https://learn.microsoft.com/azure/well-architected/service-guides/azure-databricks" target="_blank" rel="noopener">Well-Architected: Azure Databricks</a> y <a href="https://learn.microsoft.com/azure/virtual-machines/sizes/overview" target="_blank" rel="noopener">Sizes for virtual machines in Azure</a>. Las páginas de Databricks tienen equivalente en docs.databricks.com (por ejemplo <a href="https://docs.databricks.com/aws/en/compute/configure" target="_blank" rel="noopener">Compute configuration reference</a>), pero los detalles de VM, spot y discos de esta página son propios de Azure.</p>
+
+    <h3><span class="k">Qué problema resuelve</span>El mismo código, otra factura</h3>
+    <p>Un job con spill tarda 40 minutos en una VM de propósito general y 15 en una con el doble de memoria por core. Un streaming 24/7 en spot se queda sin workers en plena tarde. Un cluster con <code>spark.dynamicAllocation.enabled</code> heredado de un Spark on-premise pierde nodos sin motivo. En el compute clásico de Azure Databricks, cada nodo es una VM de Azure y tú eliges su familia, si es spot y cómo escala. Esas tres decisiones pesan tanto como el código.</p>
+    <p class="note"><b>Antes de elegir VM:</b> para la mayoría de cargas nuevas, la doc recomienda serverless, que no requiere configurar nada. Todo lo de esta página aplica cuando tu carga corre en compute clásico (all-purpose o job compute), porque no es compatible con serverless o porque así lo decidiste.</p>
+
+    <p class="def">Un compute clásico tiene <b>un driver y cero o más workers</b>, cada uno en una VM de Azure. Azure Databricks corre <b>un executor por worker</b>, así que executor y worker son lo mismo aquí. La <b>familia</b> de la VM fija la proporción de CPU, memoria y disco local: memory optimized, compute optimized, storage optimized, GPU o propósito general.</p>
+
+    <h3><span class="k">Idea mental</span>Tres recursos y un cuello de botella</h3>
+    <p>Piensa cada worker como una mesa de trabajo con tres cosas: manos (cores), mesa (memoria) y un estante al lado (disco local). Si la tarea no cabe en la mesa, los papeles van al estante y todo se vuelve lento: eso es el spill. Si la tarea es puro cálculo, sobran mesa y estante y faltan manos. Si consultas una y otra vez los mismos papeles, conviene un estante grande y rápido cerca. Elegir familia es elegir cuál de las tres cosas compras de más.</p>
+
+    <h3><span class="k">Por dentro · 1</span>Las familias, con la regla de la doc</h3>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Familia</th><th>Series de Azure</th><th>Qué tiene de más</th><th>Regla de Databricks</th></tr></thead>
+      <tbody>
+        <tr><td><b>Memory optimized</b></td><td>E (por ejemplo Easv7, Edsv5); la guía Well-Architected menciona también M</td><td>Alta proporción de memoria por core. Edsv5: hasta 104 vCPU y 672 GiB de RAM.</td><td>ML, shuffle pesado y spill.</td></tr>
+        <tr><td><b>Compute optimized</b></td><td>F (por ejemplo Fadsv7, que trae disco local)</td><td>Alta proporción CPU por memoria.</td><td>Structured Streaming y jobs de mantenimiento (<code>OPTIMIZE</code>, <code>VACUUM</code>).</td></tr>
+        <tr><td><b>Storage optimized</b></td><td>L (por ejemplo Lsv3, Lasv3)</td><td>Disco NVMe local de alto throughput. Lsv3: 8 GiB por vCPU y un NVMe de 1,92 TB por cada 8 vCPU.</td><td>Cargas que se benefician de caché: análisis ad-hoc e interactivo.</td></tr>
+        <tr><td>GPU optimized</td><td class="c">no detallado aquí</td><td>GPU.</td><td>Solo ML y DL con librerías aceleradas por GPU.</td></tr>
+        <tr><td>General purpose</td><td class="c">no detallado aquí</td><td>Equilibrio.</td><td>Sin requisitos específicos.</td></tr>
+      </tbody>
+    </table></div>
+    <p class="c">Columna "Regla de Databricks": <a href="https://learn.microsoft.com/azure/databricks/lakehouse-architecture/cost-optimization/best-practices#use-the-right-instance-type" target="_blank" rel="noopener">Use the right instance type</a>. Series y especificaciones: páginas de las familias <a href="https://learn.microsoft.com/azure/virtual-machines/sizes/memory-optimized/e-family" target="_blank" rel="noopener">E</a>, <a href="https://learn.microsoft.com/azure/virtual-machines/sizes/compute-optimized/f-family" target="_blank" rel="noopener">F</a> y <a href="https://learn.microsoft.com/azure/virtual-machines/sizes/storage-optimized/l-family" target="_blank" rel="noopener">L</a>. La doc de Databricks también recomienda usar la generación más reciente de cada familia.</p>
+    <p>El tamaño importa además de la familia. La doc lo resume en tres totales: cores de executor (paralelismo máximo), memoria de executor (cuánto cabe antes del spill) y disco local (para spill de shuffle y caché). Dos workers de 16 cores y 128 GB suman lo mismo que ocho de 4 cores y 32 GB, pero no se comportan igual: para ETL complejo con joins y uniones, la doc recomienda <b>menos workers y más grandes</b>, porque así se mueve menos dato en el shuffle.</p>
+
+    <h3><span class="k">Elige el tipo de VM</span>Recomendador con citas</h3>
+    <p>Elige la carga y las restricciones. Cada recomendación muestra la página de la doc de la que sale. Donde la doc no lo dice y es una deducción, aparece marcado.</p>
+    <div class="console" id="az-tool">
+      <div class="ttl">Elige el tipo de VM · compute clásico en Azure</div>
+      <div class="chips" role="group" aria-label="Carga" id="az-w">
+        <span class="lab">Carga:</span>
+        <button type="button" data-az-w="spill" aria-pressed="true">Shuffle pesado / spill</button>
+        <button type="button" data-az-w="stream" aria-pressed="false">Structured Streaming</button>
+        <button type="button" data-az-w="maint" aria-pressed="false">OPTIMIZE / VACUUM</button>
+        <button type="button" data-az-w="adhoc" aria-pressed="false">Ad-hoc con caché</button>
+        <button type="button" data-az-w="ml" aria-pressed="false">Machine learning</button>
+      </div>
+      <div class="chips" role="group" aria-label="SLA" id="az-sla">
+        <span class="lab">SLA:</span>
+        <button type="button" data-az-sla="strict" aria-pressed="true">Estricto</button>
+        <button type="button" data-az-sla="lax" aria-pressed="false">Puede tardar más</button>
+      </div>
+      <div class="chips" role="group" aria-label="Presupuesto" id="az-bud">
+        <span class="lab">Presupuesto:</span>
+        <button type="button" data-az-bud="tight" aria-pressed="false">Ajustado</button>
+        <button type="button" data-az-bud="normal" aria-pressed="true">Normal</button>
+      </div>
+      <div class="az-out" id="az-out" aria-live="polite"></div>
+    </div>
+
+    <h3><span class="k">Del síntoma a la familia</span>Cómo se conecta con el resto del sitio</h3>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Síntoma (dónde se ve)</th><th>Familia</th><th>Matiz</th></tr></thead>
+      <tbody>
+        <tr><td>Spill en un stage<br><span class="c"><a href="diagnostico.html">Diagnóstico</a></span></td><td>Memory optimized</td><td>Más memoria por executor reduce lo que se derrama. La doc lo dice para ETL complejo: si ves mucho spill u OOM, sube la memoria de las instancias.</td></tr>
+        <tr><td>Skew: una task mucho más lenta<br><span class="c"><a href="aqe.html">AQE</a>, <a href="remedios.html">Remedios</a></span></td><td>Ninguna lo arregla</td><td>La task caliente sigue siendo una sola. Una VM más grande la hace un poco menos lenta, pero el remedio es AQE o salting.</td></tr>
+        <tr><td>Shuffle pesado<br><span class="c"><a href="shuffle.html">Shuffle</a></span></td><td>Memory optimized, menos workers más grandes</td><td>Menos nodos implica menos datos cruzando la red.</td></tr>
+        <tr><td><code>OPTIMIZE</code> y <code>VACUUM</code> lentos<br><span class="c"><a href="mantenimiento-delta.html">Mantenimiento de Delta</a></span></td><td>Compute optimized con SSD</td><td>En tablas managed de UC, predictive optimization los corre en serverless y no necesitas cluster.</td></tr>
+        <tr><td>Mismas tablas leídas una y otra vez<br><span class="c"><code>read_io_cache_percent</code> en <code>system.query.history</code></span></td><td>Storage optimized</td><td>Disk cache en workers con SSD.</td></tr>
+        <tr><td>Muchos archivos pequeños<br><span class="c"><a href="liquid-clustering.html">Liquid clustering</a></span></td><td>No es un problema de VM</td><td>Compacta con <code>OPTIMIZE</code> o deja que lo haga predictive optimization.</td></tr>
+        <tr><td><code>collect()</code> grande en el driver<br><span class="c">Errores de memoria del driver</span></td><td>Driver más grande</td><td>La doc sugiere un driver con más memoria si vas a traer muchos datos al notebook.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3><span class="k">Por dentro · 2</span>Spot VMs: qué pasa cuando Azure las reclama</h3>
+    <ul>
+      <li><b>El driver siempre es on-demand.</b> Con la casilla Spot instances, la primera instancia es on-demand y las siguientes son spot. La doc de costos lo recomienda así: el driver nunca en spot. Tampoco uses un pool de spot como tipo de driver.</li>
+      <li><b>Eviction.</b> Si Azure desaloja workers, Databricks intenta conseguir spot nuevas. Si no hay, pone <b>on-demand</b> en su lugar. Ese reemplazo solo cubre spot que ya estaban adquiridas y corriendo: las que fallan durante el arranque no se reemplazan solas.</li>
+      <li><b>Al escalar,</b> los nodos nuevos también se piden como spot.</li>
+      <li><b>Cuándo sí:</b> la doc recomienda spot para cargas con requisitos de latencia laxos, donde es aceptable tardar más porque se perdió algún worker.</li>
+      <li><b>En la API</b> (<code>azure_attributes</code>): <code>first_on_demand</code> fija cuántos nodos iniciales son on-demand; <code>availability</code> acepta <code>SPOT_AZURE</code>, <code>ON_DEMAND_AZURE</code> o <code>SPOT_WITH_FALLBACK_AZURE</code>; <code>spot_bid_max_price = -1</code> significa que la VM no se desaloja por precio (solo por capacidad): pagas el precio spot del momento, como mucho el de una VM estándar (<a href="https://learn.microsoft.com/azure/virtual-machines/spot-vms#eviction-policy" target="_blank" rel="noopener">Azure Spot VMs · Eviction policy</a>; <a href="https://docs.databricks.com/aws/en/dev-tools/bundles/resources#instance_pool" target="_blank" rel="noopener">Bundle resources · instance_pool</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/dev-tools/bundles/resources#instance_pool" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
+      <li><b>Capacity reservation groups</b> garantizan capacidad de un tamaño de VM, pero exigen on-demand y un workspace con VNet propia. No se combinan con spot.</li>
+    </ul>
+
+    <h3><span class="k">Por dentro · 3</span>Autoscaling y discos</h3>
+    <div class="tblwrap"><table>
+      <thead><tr><th></th><th>Optimized autoscaling</th><th>Standard autoscaling</th></tr></thead>
+      <tbody>
+        <tr><td>Quién lo tiene</td><td>Workspaces en plan Premium</td><td>Workspaces en plan Standard</td></tr>
+        <tr><td>Subida</td><td>De mínimo a máximo en 2 pasos como mucho</td><td>Empieza con 8 nodos y sube de forma exponencial</td></tr>
+        <tr><td>Bajada</td><td>Puede bajar aunque el cluster no esté ocioso, mirando el estado de los archivos de shuffle. Job compute: si está infrautilizado los últimos 40 s. All-purpose: 150 s.</td><td>Cuando el 90 % de los nodos lleva 10 minutos sin trabajo y el cluster lleva al menos 30 s ocioso. Baja de forma exponencial, empezando por 1 nodo.</td></tr>
+      </tbody>
+    </table></div>
+    <ul>
+      <li><b>No actives <code>spark.dynamicAllocation.enabled</code></b> en compute con autoscaling de Databricks. La doc lo lista como propiedad no soportada en compute clásico y advierte de decisiones de escalado en conflicto, executors que entran y salen, errores <code>NODES_LOST</code> y tasks que nunca arrancan. Usa el autoscaling de Databricks.</li>
+      <li><b>Streaming:</b> el autoscaling tiene limitaciones para reducir el cluster en Structured Streaming. La página de <a href="https://learn.microsoft.com/azure/databricks/structured-streaming/production" target="_blank" rel="noopener">producción de Structured Streaming</a> pide no activarlo en jobs de streaming y correrlos en job compute. Si necesitas escalar, la doc recomienda Lakeflow Spark Declarative Pipelines con <a href="https://learn.microsoft.com/azure/databricks/ldp/auto-scaling" target="_blank" rel="noopener">enhanced autoscaling</a>.</li>
+      <li><b><code>spark.databricks.aggressiveWindowDownS</code></b> controla cada cuántos segundos decide bajar (máximo 600). Subirlo hace que baje más despacio.</li>
+      <li><b>Autoscaling local storage:</b> activado en todo el compute de Azure Databricks. Si a un worker le queda poco disco, Databricks le conecta otro managed disk, hasta <b>5 TB por VM</b> contando el disco inicial. Los discos solo se sueltan cuando la VM vuelve a Azure, así que conviene combinarlo con autoscaling o auto termination. Te salva de quedarte sin disco por spill; no hace que el spill sea rápido.</li>
+    </ul>
+
+    <h3><span class="k">Por dentro · 4</span>Disk cache y Photon</h3>
+    <ul>
+      <li><b>Disk cache</b> (antes Delta cache o DBIO cache) copia los archivos Parquet remotos al disco local de los workers en un formato intermedio rápido, en la primera lectura. Funciona con tablas Delta en ABFS. La forma recomendada de usarlo es elegir un tipo de worker <b>con volúmenes SSD</b>: esos vienen activados y configurados, y la caché usa como mucho la mitad del SSD local. Se controla con <code>spark.databricks.io.cache.enabled</code>.</li>
+      <li><b>Disk cache y Spark cache son distintos.</b> El disk cache es automático, vive en archivos locales y se invalida solo cuando cambian los archivos. <code>cache()</code>/<code>persist()</code> es manual y guarda bloques en memoria. En SQL warehouses y DBR 14.2+, <code>CACHE SELECT</code> se ignora.</li>
+      <li><b>Photon</b> viene activado por defecto en all-purpose y job compute (casilla Use Photon Acceleration). Por API hay que pedirlo con <code>runtime_engine = PHOTON</code>. Las instancias con Photon consumen DBU a otra tarifa. Ayuda más en joins, agregaciones y scans grandes; no mejora queries de menos de dos segundos, no soporta UDF ni RDD, y en streaming solo cubre consultas stateless. Predictive I/O y dynamic file pruning en <code>MERGE</code>/<code>UPDATE</code>/<code>DELETE</code> lo requieren.</li>
+    </ul>
+    <div class="verify"><b>Verifica:</b> que la serie L sea la mejor opción para disk cache es una <b>deducción</b>. La doc de Databricks dice "worker con volúmenes SSD" y "storage optimized" para caché; la doc de Azure dice que la serie L trae NVMe local. No encontré una página de Databricks que nombre la serie L para disk cache. Revisa en el desplegable de tu workspace qué tipos aparecen como acelerados para caché.</div>
+
+    <h3><span class="k">Monitoreo en Azure</span>Métricas fuera de Databricks</h3>
+    <ul>
+      <li><b>Pestaña Metrics del compute:</b> métricas de hardware cada minuto en all-purpose y job compute (CPU, memoria, swap, disco libre, red, nodos activos). La misma información a nivel de nodo está en <code>system.compute.node_timeline</code> (90 días).</li>
+      <li><b>Azure Monitor:</b> puedes configurar el compute para que envíe métricas a un <b>Log Analytics workspace</b>. Si tu workspace usa VNet propia con NSG que niegan la salida, necesitas una regla de salida para el service tag <code>AzureMonitor</code>. En bundles, <code>azure_attributes.log_analytics_info</code> tiene <code>log_analytics_workspace_id</code> y <code>log_analytics_primary_key</code>.</li>
+      <li><b>Logs de diagnóstico:</b> la guía Well-Architected recomienda enviar los logs de diagnóstico del workspace (clusters, jobs, notebooks, Unity Catalog…) a Log Analytics y montar alertas de Azure Monitor sobre ellos.</li>
+      <li><b>Costo en Azure:</b> los tags del compute llegan a las VM, a los discos y a los logs de uso de Databricks, y se pueden analizar en Azure Cost Management. En compute que sale de un pool, los tags personalizados solo van a los reportes de DBU.</li>
+    </ul>
+    <div class="verify"><b>Verifica</b> el procedimiento exacto para enviar métricas de compute a Log Analytics. La página de Databricks dice que es posible y menciona la regla de NSG, pero no trae los pasos.</div>
+
+    <h3><span class="k">Cómo se usa</span>Un job compute con spot y fallback</h3>
+    <p>Job compute para un ETL con joins grandes que puede tardar algo más si pierde workers. Memory optimized, autoscaling, driver on-demand y workers spot con fallback a on-demand (Clusters API):</p>
+<pre><code>{
+  "spark_version": "&lt;versión LTS más reciente&gt;",
+  "node_type_id": "Standard_E16ds_v5",
+  "driver_node_type_id": "Standard_E16ds_v5",
+  "autoscale": { "min_workers": 2, "max_workers": 8 },
+  "runtime_engine": "PHOTON",
+  "azure_attributes": {
+    "first_on_demand": 1,
+    "availability": "SPOT_WITH_FALLBACK_AZURE",
+    "spot_bid_max_price": -1
+  }
+}</code></pre>
+    <p>Lo que <b>no</b> lleva: <code>spark.dynamicAllocation.*</code> ni <code>spark.executor.memory</code>. La doc pide no fijar configuraciones de Spark en la definición del compute, porque anulan optimizaciones que Databricks ya trae.</p>
+    <div class="verify"><b>Verifica</b> que <code>Standard_E16ds_v5</code> esté disponible en tu región y en el desplegable de tu workspace. El nombre sigue la serie Edsv5 de la doc de Azure, pero la lista de tipos soportados depende de cada workspace.</div>
+
+    <h3><span class="k">Cuándo usarlo</span>Y cuándo no</h3>
+    <ul>
+      <li><b>Serverless primero.</b> Si la carga es compatible, no eliges VM ni spot.</li>
+      <li><b>SQL interactivo:</b> un SQL warehouse es el motor más eficiente en costo según la doc; no armes un all-purpose para eso.</li>
+      <li><b>Jobs en job compute,</b> no en all-purpose: cuestan bastante menos y cada job puede tener su propio compute.</li>
+      <li><b>Spot sí</b> en batch que tolera retrasos. <b>Spot no</b> cuando el SLA es estricto, ni para el driver.</li>
+      <li><b>Un analista solo:</b> la doc sugiere single node con una VM grande, storage optimized con disk cache.</li>
+      <li><b>Pools:</b> reducen el arranque y el tiempo de escalado. No cobran DBU por instancias ociosas, pero Azure sí cobra las VM.</li>
+    </ul>
+
+    <h3><span class="k">Con qué se confunde</span></h3>
+    <ul>
+      <li><b>Autoscaling de Databricks y dynamic allocation de Spark.</b> El primero agrega y quita VMs y gestiona los executors; el segundo no está soportado en compute clásico de Databricks.</li>
+      <li><b>Autoscaling local storage y disk cache.</b> El primero agrega managed disks cuando falta espacio (útil para spill). El segundo usa el SSD local para cachear Parquet. Un disco grande no convierte una VM en "acelerada para caché".</li>
+      <li><b>Spot con fallback y capacity reservation.</b> El fallback cambia spot por on-demand si no hay spot. La reserva asegura capacidad de un tamaño concreto y solo funciona con on-demand.</li>
+      <li><b>Photon y serverless.</b> Photon es el motor de ejecución; también existe en compute clásico. Serverless es quién administra las VM.</li>
+    </ul>
+
+    <h3><span class="k">Qué pasaría si</span></h3>
+    <ul>
+      <li><b>Pones el driver en un pool de spot:</b> si Azure lo reclama, pierdes la sesión entera. La doc lo desaconseja.</li>
+      <li><b>Mantienes <code>spark.dynamicAllocation.enabled=true</code> de una migración:</b> riesgo de <code>NODES_LOST</code> y tasks que no arrancan. Quítalo y usa min/max workers.</li>
+      <li><b>Subes de 4 a 16 workers para un stage con skew:</b> pagas cuatro veces más y la task caliente sigue sola.</li>
+      <li><b>Corres <code>VACUUM</code> de una tabla enorme con muchos workers pequeños:</b> la fase de borrado ocurre solo en el driver. La doc sugiere 1 a 4 workers de 8 cores y un driver de 8 a 32 cores, más grande si hay OOM.</li>
+      <li><b>Una spot falla al arrancar:</b> no se reemplaza sola. Y si Azure termina instancias, el compute puede quedar por debajo del mínimo de workers mientras Databricks reintenta aprovisionarlas.</li>
+    </ul>

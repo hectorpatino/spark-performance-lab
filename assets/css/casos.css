@@ -1,0 +1,11 @@
+/* Casos de diagnóstico: filtro por sección, etiqueta y reinicio */
+.cs-filter{margin:1rem 0 .4rem}
+.cs-bar{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;margin:.6rem 0 0}
+.cs-bar .score{flex:1 1 16rem;margin:0}
+.cs-reset{flex:0 0 auto;font:600 .88rem var(--f-body);padding:.5rem .9rem;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.cs-reset:hover{border-color:var(--muted)}
+.cs-note{font-size:.82rem;margin:.45rem 0 1.2rem}
+.case .cn{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem .6rem}
+.case .cs-sec{display:inline-block;font:600 .72rem/1.5 var(--f-body);padding:.08rem .55rem;border-radius:999px;background:var(--accent-soft);color:var(--accent);letter-spacing:.01em}
+.case[hidden]{display:none}
+.case .ev ul,.expl ul{padding-left:1.2rem}

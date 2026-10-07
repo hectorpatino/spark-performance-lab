@@ -1,0 +1,29 @@
+/* Mantenimiento de Delta: archivos del simulador y lista de tareas */
+.md-files{margin:.8rem 0 .3rem;display:grid;gap:.6rem}
+.md-grp p,.md-vers p{margin:0 0 .3rem;font-size:.78rem;color:var(--muted)}
+.md-row{display:flex;flex-wrap:wrap;align-items:flex-end;gap:4px;min-height:1.6rem}
+.md-empty{font-size:.8rem;color:var(--muted)}
+.md-f{position:relative;width:2.15rem;border-radius:4px;background:var(--cool);overflow:hidden;display:flex;align-items:flex-end;justify-content:center;flex:0 0 auto}
+.md-f span{position:relative;z-index:1;font:600 .62rem/1.3 var(--f-mono);color:var(--surface);padding-bottom:2px;white-space:nowrap}
+.md-f i{position:absolute;left:0;right:0;bottom:0;min-height:4px;background:var(--hot);opacity:.9}
+.md-f.new{box-shadow:0 0 0 2px var(--ok)}
+.md-f.old{background:transparent;border:1px dashed var(--muted)}
+.md-f.old span{color:var(--muted)}
+.md-f.gone{background:transparent;border:1px dashed var(--hot)}
+.md-f.gone span{color:var(--hot);font-size:.8rem}
+.md-vers{margin-top:.7rem}
+.md-v{display:inline-flex;flex-direction:column;font:.68rem/1.35 var(--f-mono);border:1px solid var(--line);border-radius:6px;padding:.2rem .4rem;color:var(--ink);background:var(--bg)}
+.md-v b{font-weight:600}
+.md-v em{font-style:normal;color:var(--muted);font-size:.64rem}
+.md-v.cur{border-color:var(--cool)}
+.md-v.ok em{color:var(--ok)}
+.md-v.exp,.md-v.gone{opacity:.6}
+.md-v.gone em{color:var(--hot)}
+.md-v.gone b{text-decoration:line-through}
+.md-tasks{display:grid;gap:.5rem;margin-top:.8rem}
+.md-task{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:.55rem .7rem}
+.md-task-h{display:flex;align-items:baseline;flex-wrap:wrap;gap:.2rem;font-size:.9rem}
+.md-task p{margin:.25rem 0 0;font-size:.85rem;color:var(--muted)}
+.pill.warn{background:color-mix(in srgb,var(--warn) 20%,transparent);color:var(--warn)}
+.legend span.md-old::before{background:transparent;border:1px dashed var(--muted)}
+.doc p code,.doc li code,.doc td code{overflow-wrap:anywhere}

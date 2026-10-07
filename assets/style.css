@@ -378,3 +378,8 @@ pre.has-copy{position:relative;padding-right:4.6rem}
 .search-res mark{background:color-mix(in srgb,var(--warn) 30%,transparent);color:inherit;border-radius:2px}
 .search-res .hint{padding:.8rem;color:var(--muted);font-size:.9rem}
 @media (max-width:1023.98px){.sidebar .search-field{display:none}}
+
+/* bloque de descarga de notebook */
+.nb-dl{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .9rem;margin:1.2rem 0;padding:.8rem 1rem;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:.92rem}
+.nb-dl a.btn{display:inline-block;text-decoration:none;font-weight:600;padding:.45rem .85rem;border-radius:8px;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);white-space:nowrap}
+.nb-dl span{flex:1 1 16rem;min-width:0;color:var(--muted)}

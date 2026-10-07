@@ -1,0 +1,96 @@
+/* Página "Leer el Spark UI": Spark UI navegable y tablas propias. */
+
+/* barra superior del simulador */
+.sui-intro{font-size:.9rem;margin:.1rem 0 .7rem}
+.sui-bar{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .8rem;margin:.2rem 0 .1rem;font-size:.84rem}
+.sui-bar button{font:500 .82rem var(--f-body);padding:.32rem .7rem;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
+.sui-bar button:hover:not(:disabled){border-color:var(--muted)}
+.sui-bar button:disabled{opacity:.45;cursor:default}
+.sui-bar #sui-where{color:var(--muted);font-family:var(--f-mono);font-size:.78rem;min-width:0;overflow-wrap:anywhere}
+.sui-count{margin-left:auto;font-weight:600;color:var(--ink)}
+
+/* disposición: marco + panel de pistas. Lado a lado solo si el panel es ancho. */
+.sui-grid{container-type:inline-size;display:grid;gap:.2rem}
+.sui-app{min-width:0}
+.sui-side{display:grid;gap:.7rem;margin-top:.3rem}
+@container (min-width:560px){.sui-side{grid-template-columns:minmax(0,15rem) minmax(0,1fr)}.sui-clues{order:-1}}
+.sui-clues,.sui-note{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:.7rem .85rem;min-width:0}
+.sui-clues h4{margin:0 0 .45rem;font:600 .86rem var(--f-body);color:var(--ink)}
+.sui-clues ul{list-style:none;margin:0;padding:0;font-size:.84rem}
+.sui-clues li{position:relative;padding-left:1.45rem;margin:.32rem 0;color:var(--muted);line-height:1.35}
+.sui-clues li::before{content:"";position:absolute;left:0;top:.1rem;width:.9rem;height:.9rem;border:1.5px solid var(--line);border-radius:3px}
+.sui-clues li.done{color:var(--ink)}
+.sui-clues li.done::before{content:"✓";border-color:var(--ok);background:color-mix(in srgb,var(--ok) 22%,transparent);color:var(--ok);font:700 .7rem/.9rem var(--f-body);text-align:center}
+.sui-clues li.flash{animation:sui-flash 1.2s ease-out}
+@keyframes sui-flash{from{background:color-mix(in srgb,var(--ok) 25%,transparent)}to{background:transparent}}
+@media (prefers-reduced-motion:reduce){.sui-clues li.flash{animation:none}}
+.sui-clues .sui-reset{margin-top:.5rem;font:500 .76rem var(--f-body);padding:.2rem .55rem;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer}
+.sui-note{font-size:.88rem;color:var(--ink)}
+.sui-note p{margin:.35rem 0 0}
+.sui-note .c{margin:0}
+
+/* elementos interactivos dentro del marco claro */
+.ui-frame .ui-top button.ui-tab{font:12px "Helvetica Neue",Helvetica,Arial,sans-serif;color:#555;padding:.15rem 0;border:0;border-bottom:2px solid transparent;background:none;cursor:pointer;flex:0 0 auto}
+.ui-frame .ui-top button.ui-tab:hover{color:#111}
+.ui-frame .ui-top button.ui-tab.on{color:#111;font-weight:600;border-bottom-color:#4A8BC9}
+.ui-frame button.ui-a{background:none;border:0;padding:0;font:inherit;color:#0088CC;cursor:pointer;text-align:left}
+.ui-frame button.ui-a:hover{text-decoration:underline}
+.ui-frame button.ui-link{display:block;background:none;border:0;padding:0;font:12.5px "Helvetica Neue",Helvetica,Arial,sans-serif;color:#0088CC;cursor:pointer;margin:.3rem 0}
+.ui-frame button.ui-link:hover{text-decoration:underline}
+.ui-frame .ui-link[aria-expanded="false"]::before{content:"▸ "}
+.ui-frame button.sui-th{background:none;border:0;padding:0;font:inherit;font-weight:700;color:#0088CC;cursor:pointer;white-space:nowrap}
+.ui-frame .ui-fake{color:#0088CC}
+.ui-frame .ui-small{font-size:11.5px;color:#666;margin:.25rem 0 .4rem;max-width:none}
+.ui-frame .ui-empty{color:#777;text-align:center}
+.ui-frame td.err{white-space:normal;min-width:16rem;max-width:26rem;font-size:11.5px}
+.ui-frame td.gcred{background:#F6C6C3!important}
+.ui-frame tr.sk td{color:#999}
+.ui-frame :focus-visible{outline:2px solid #0088CC;outline-offset:1px}
+
+/* evidencias que se pueden inspeccionar */
+.ui-frame .ev{cursor:pointer;text-decoration:underline dotted #C9302C;text-underline-offset:3px;text-decoration-thickness:1.5px;border-radius:2px}
+.ui-frame .ev:hover{background:#FFF1D6}
+.ui-frame .ev.seen{background:#FFF4DE}
+.ui-frame div.ev,.ui-frame .sq-n.ev{text-decoration:none;outline:1.5px dotted #C9302C;outline-offset:2px}
+
+/* barra de progreso de tasks */
+.ui-frame .sui-prog{position:relative;display:block;min-width:9.5rem;height:17px;border:1px solid #BBB;border-radius:3px;background:#F5F5F5;overflow:hidden}
+.ui-frame .sui-prog span{position:absolute;inset:0 auto 0 0;background:#C3EBFF}
+.ui-frame .sui-prog em{position:relative;display:block;font-style:normal;font-size:11px;line-height:15px;text-align:center;color:#222;white-space:nowrap}
+
+/* SVG de las líneas de tiempo: desplazamiento horizontal en pantallas estrechas */
+.ui-frame .sui-svgwrap{overflow-x:auto;margin:.2rem 0 .5rem}
+.ui-frame .sui-svgwrap svg{min-width:520px}
+.ui-frame .sui-svg [data-nav],.ui-frame .sui-svg [data-note]{cursor:pointer}
+.ui-frame .sui-svg [data-nav]:hover rect,.ui-frame .sui-svg [data-note]:hover rect{filter:brightness(.94)}
+
+/* DAG del job: stages saltados en gris */
+.ui-frame .dv-stage.sk{border-color:#D6D6D6}
+.ui-frame .dv-stage.sk>.lbl{color:#999}
+.ui-frame .dv-stage.sk .dv-scope{background:#EEE;border-color:#D6D6D6;color:#888}
+.ui-frame .dv-stage.sk .dv-scope .dot{background:#AAA}
+
+/* plan SQL con dos ramas que se unen en el join */
+.ui-frame .sui-plan{display:grid;grid-template-columns:repeat(2,minmax(15rem,1fr));gap:1rem;min-width:32rem}
+.ui-frame .sui-br{display:flex;flex-direction:column;align-items:center;gap:1.1rem}
+.ui-frame .sui-br>*{position:relative;width:100%}
+.ui-frame .sui-br>*+*::before{content:"";position:absolute;left:50%;top:calc(-1.1rem - 1px);height:1.1rem;border-left:1.5px solid #444}
+.ui-frame .sui-br .sq-cl{min-width:0}
+.ui-frame .sui-br .sq-n{min-width:0}
+.ui-frame .sui-plan .sq-n div{font-size:10.5px}
+.ui-frame .sui-merge{height:1.1rem;margin:0 25%;border:1.5px solid #444;border-top:0;min-width:16rem}
+.ui-frame .sui-plan+.sui-merge+.sq{min-width:32rem;padding-top:1.1rem;position:relative}
+.ui-frame .sui-plan+.sui-merge+.sq::before{content:"";position:absolute;left:50%;top:0;height:1.1rem;border-left:1.5px solid #444}
+
+/* pregunta final */
+.sui-quiz{margin-top:1.1rem;border-top:1px solid var(--line);padding-top:.9rem}
+.sui-quiz .q{font-weight:600;margin:0 0 .5rem}
+.sui-quiz .expl a{color:var(--accent)}
+
+/* tablas de la página */
+.err-tbl td:first-child code{white-space:normal}
+
+/* tablas algo más compactas que en otras recreaciones: aquí hay muchas columnas */
+.sui .ui-tbl{font-size:11px}
+.sui .ui-tbl th,.sui .ui-tbl td{padding:.22rem .4rem;font-size:11px}
+.ui-frame .sui-br>.sui-fill{flex:1 1 auto;min-height:0;background:linear-gradient(#444,#444) center/1.5px 100% no-repeat}

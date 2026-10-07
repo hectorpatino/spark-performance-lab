@@ -1,0 +1,9 @@
+/* Memoria y OOM */
+svg .mx-res{fill:var(--muted);opacity:.55}
+svg .mx-exe{fill:var(--cool)}
+svg .mx-ok{fill:var(--ok)}
+svg .mx-free{fill:var(--line)}
+#mx-sim .grid2,#dr-sim .grid2{grid-template-columns:repeat(auto-fit,minmax(13rem,1fr))}
+#mx-sim input[type=range]:disabled{opacity:.5}
+#mx-legend span.dash::before{border-color:var(--warn)}
+#mx-sim .grid2,#dr-sim .grid2{grid-template-columns:repeat(auto-fit,minmax(15rem,1fr))}

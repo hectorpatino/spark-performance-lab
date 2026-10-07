@@ -1,6 +1,6 @@
 # Spark Performance Lab
 
-Manual de estudio para diagnosticar jobs lentos en Databricks y Apache Spark: jobs, stages y waves, shuffle, skew, spill, AQE, salting y liquid clustering. Cada página tiene simuladores interactivos y cita la documentación oficial en la que se basa.
+Manual de estudio para diagnosticar jobs lentos en Databricks y Apache Spark, en compute clásico y en serverless: stages y waves, shuffle, joins, Spark UI, query profile, system tables, skew, spill, AQE, memoria y OOM, liquid clustering, mantenimiento de Delta y Azure Databricks. Cada página tiene simuladores interactivos, recreaciones de las pantallas reales y cita la documentación oficial (docs.databricks.com y su equivalente en learn.microsoft.com/azure/databricks).
 
 Sitio: https://hectorpatino.github.io/spark-performance-lab/
 
@@ -16,7 +16,13 @@ _data/pages.yml      orden del menú y de anterior/siguiente
 _layouts/default.html
 _includes/           nav.html, pager.html, footer.html
 assets/style.css     estilos compartidos (tema claro y oscuro)
-assets/app.js        simuladores; cada uno se activa si su elemento existe en la página
+assets/app.js        simuladores base y recreaciones del Spark UI (expone window.SPL)
+assets/js/, css/     JS y CSS propios de cada página (front matter extra_js / extra_css)
+assets/site.js       menú, índice por página, buscador, tema, glosario, copiar, progreso
+assets/glossary.json términos con definición al pasar el cursor
+search.json          índice del buscador generado por Jekyll
+notebooks/           notebooks en formato source de Databricks para importar
+.github/workflows/   revisión semanal de enlaces externos (lychee)
 *.html               una página por tema, con front matter
 ```
 

@@ -1,22 +1,208 @@
 [
-  {"t": ["task", "tasks"], "d": "Unidad de trabajo que se envía a un executor. Cada task procesa una partición."},
-  {"t": ["stage", "stages"], "d": "Grupo de tasks dentro de un job. Cada shuffle corta un stage nuevo."},
-  {"t": ["job"], "d": "Cálculo paralelo que Spark lanza cuando llamas a una acción como write, count o collect."},
-  {"t": ["wave", "waves"], "d": "Ronda de tasks que corren a la vez: tasks ÷ cores. No es un término oficial de Spark ni una configuración."},
-  {"t": ["executor", "executors"], "d": "Proceso en un worker que ejecuta tasks y guarda datos en memoria o disco. Databricks corre un executor por worker."},
-  {"t": ["shuffle"], "d": "Redistribución de las filas entre particiones para agruparlas de otra forma. Copia datos entre executors: escribe a disco, serializa y usa la red."},
-  {"t": ["spill"], "d": "Spark se queda sin memoria de ejecución y mueve datos a disco. Es caro: serializa, escribe y vuelve a leer."},
-  {"t": ["skew"], "d": "Datos desbalanceados: una o pocas tasks reciben muchas más filas y tardan mucho más que el resto."},
-  {"t": ["Exchange"], "d": "Nodo del plan donde ocurre un shuffle. Es la frontera entre dos stages."},
-  {"t": ["AQE"], "d": "Adaptive Query Execution: re-optimiza la query mientras se ejecuta, con los tamaños reales de cada shuffle. Activado por defecto."},
-  {"t": ["broadcast join", "broadcast"], "d": "Join que copia la tabla pequeña entera a cada executor, así la tabla grande no hace shuffle."},
-  {"t": ["sort-merge join", "sort-merge"], "d": "Join que reparte los dos lados por la clave con un shuffle, los ordena y luego los une."},
-  {"t": ["partición", "particiones"], "d": "Trozo de los datos que procesa una task. Particiones de shuffle: spark.sql.shuffle.partitions."},
-  {"t": ["data skipping"], "d": "Descartar archivos sin leerlos, comparando el filtro con las estadísticas mín/máx guardadas por archivo."},
-  {"t": ["liquid clustering"], "d": "Técnica de organización de los datos que reemplaza al particionado y a ZORDER. Las claves se pueden cambiar sin reescribir lo existente."},
-  {"t": ["predictive optimization"], "d": "Ejecuta OPTIMIZE, VACUUM y ANALYZE de forma automática en las tablas managed de Unity Catalog."},
-  {"t": ["query profile"], "d": "Vista de Databricks con los operadores de una query, su tiempo, memoria y filas. En serverless reemplaza al Spark UI."},
-  {"t": ["Photon"], "d": "Motor de ejecución vectorizado de Databricks, compatible con las APIs de Spark."},
-  {"t": ["WholeStageCodegen"], "d": "Bloque del plan donde Spark fusiona varios operadores en un único código generado."},
-  {"t": ["serverless"], "d": "Compute que Databricks gestiona por ti. No tiene Spark UI y solo permite fijar unas pocas propiedades de Spark."}
+  {
+    "t": [
+      "task",
+      "tasks"
+    ],
+    "d": "Unidad de trabajo que se envía a un executor. Cada task procesa una partición."
+  },
+  {
+    "t": [
+      "stage",
+      "stages"
+    ],
+    "d": "Grupo de tasks dentro de un job. Cada shuffle corta un stage nuevo."
+  },
+  {
+    "t": [
+      "job"
+    ],
+    "d": "Cálculo paralelo que Spark lanza cuando llamas a una acción como write, count o collect."
+  },
+  {
+    "t": [
+      "wave",
+      "waves"
+    ],
+    "d": "Ronda de tasks que corren a la vez: tasks ÷ cores. No es un término oficial de Spark ni una configuración."
+  },
+  {
+    "t": [
+      "executor",
+      "executors"
+    ],
+    "d": "Proceso en un worker que ejecuta tasks y guarda datos en memoria o disco. Databricks corre un executor por worker."
+  },
+  {
+    "t": [
+      "shuffle"
+    ],
+    "d": "Redistribución de las filas entre particiones para agruparlas de otra forma. Copia datos entre executors: escribe a disco, serializa y usa la red."
+  },
+  {
+    "t": [
+      "spill"
+    ],
+    "d": "Spark se queda sin memoria de ejecución y mueve datos a disco. Es caro: serializa, escribe y vuelve a leer."
+  },
+  {
+    "t": [
+      "skew"
+    ],
+    "d": "Datos desbalanceados: una o pocas tasks reciben muchas más filas y tardan mucho más que el resto."
+  },
+  {
+    "t": [
+      "Exchange"
+    ],
+    "d": "Nodo del plan donde ocurre un shuffle. Es la frontera entre dos stages."
+  },
+  {
+    "t": [
+      "AQE"
+    ],
+    "d": "Adaptive Query Execution: re-optimiza la query mientras se ejecuta, con los tamaños reales de cada shuffle. Activado por defecto."
+  },
+  {
+    "t": [
+      "broadcast join",
+      "broadcast"
+    ],
+    "d": "Join que copia la tabla pequeña entera a cada executor, así la tabla grande no hace shuffle."
+  },
+  {
+    "t": [
+      "sort-merge join",
+      "sort-merge"
+    ],
+    "d": "Join que reparte los dos lados por la clave con un shuffle, los ordena y luego los une."
+  },
+  {
+    "t": [
+      "partición",
+      "particiones"
+    ],
+    "d": "Trozo de los datos que procesa una task. Particiones de shuffle: spark.sql.shuffle.partitions."
+  },
+  {
+    "t": [
+      "data skipping"
+    ],
+    "d": "Descartar archivos sin leerlos, comparando el filtro con las estadísticas mín/máx guardadas por archivo."
+  },
+  {
+    "t": [
+      "liquid clustering"
+    ],
+    "d": "Técnica de organización de los datos que reemplaza al particionado y a ZORDER. Las claves se pueden cambiar sin reescribir lo existente."
+  },
+  {
+    "t": [
+      "predictive optimization"
+    ],
+    "d": "Ejecuta OPTIMIZE, VACUUM y ANALYZE de forma automática en las tablas managed de Unity Catalog."
+  },
+  {
+    "t": [
+      "query profile"
+    ],
+    "d": "Vista de Databricks con los operadores de una query, su tiempo, memoria y filas. En serverless reemplaza al Spark UI."
+  },
+  {
+    "t": [
+      "Photon"
+    ],
+    "d": "Motor de ejecución vectorizado de Databricks, compatible con las APIs de Spark."
+  },
+  {
+    "t": [
+      "WholeStageCodegen"
+    ],
+    "d": "Bloque del plan donde Spark fusiona varios operadores en un único código generado."
+  },
+  {
+    "t": [
+      "serverless"
+    ],
+    "d": "Compute que Databricks gestiona por ti. No tiene Spark UI y solo permite fijar unas pocas propiedades de Spark."
+  },
+  {
+    "t": [
+      "Spark UI"
+    ],
+    "d": "Interfaz web de la aplicación Spark en un compute clásico, con pestañas Jobs, Stages, SQL / DataFrame y Executors. No existe en serverless."
+  },
+  {
+    "t": [
+      "Event Timeline"
+    ],
+    "d": "Vista del Spark UI con los executors añadidos o retirados y los jobs o stages en el tiempo. En la página del stage parte cada task en 7 fases."
+  },
+  {
+    "t": [
+      "shuffle hash join"
+    ],
+    "d": "Join que hace shuffle de los dos lados y construye en cada task una tabla hash en memoria con el lado más pequeño."
+  },
+  {
+    "t": [
+      "broadcast nested loop join",
+      "nested loop"
+    ],
+    "d": "Join que copia un lado a cada executor y compara cada fila con todas las del otro lado. Se usa para joins sin condición de igualdad."
+  },
+  {
+    "t": [
+      "exploding join"
+    ],
+    "d": "Join que produce muchas más filas de las que lee. Databricks lo señala con la insight EXPLODING_JOIN; suele indicar una condición de join incompleta."
+  },
+  {
+    "t": [
+      "OOM"
+    ],
+    "d": "Out of memory: el driver o un executor necesita memoria que no tiene y no puede liberar. A diferencia del spill, la task falla."
+  },
+  {
+    "t": [
+      "FetchFailed"
+    ],
+    "d": "Una task que lee un shuffle no pudo traer bloques de un executor que ya no existe; Spark vuelve a ejecutar el stage anterior."
+  },
+  {
+    "t": [
+      "deletion vectors"
+    ],
+    "d": "Marcan en metadatos las filas borradas o cambiadas por DELETE, UPDATE o MERGE en lugar de reescribir el archivo Parquet."
+  },
+  {
+    "t": [
+      "system tables"
+    ],
+    "d": "Tablas de solo lectura del catálogo system de Unity Catalog con datos operativos de la cuenta: facturación, queries, compute, jobs y auditoría."
+  },
+  {
+    "t": [
+      "performance insights"
+    ],
+    "d": "Recomendaciones con nombre que Databricks devuelve para una query, como DATA_SPILL o EXPLODING_JOIN."
+  },
+  {
+    "t": [
+      "disk cache"
+    ],
+    "d": "Copia los archivos Parquet remotos al SSD local de los workers en la primera lectura. Antes se llamaba Delta cache."
+  },
+  {
+    "t": [
+      "spot"
+    ],
+    "d": "VM de capacidad sobrante, más barata, que Azure puede desalojar. En Databricks el driver siempre es on-demand."
+  },
+  {
+    "t": [
+      "VACUUM"
+    ],
+    "d": "Borra los archivos que la tabla ya no referencia y que superan la retención (7 días por defecto). También limita el time travel."
+  }
 ]

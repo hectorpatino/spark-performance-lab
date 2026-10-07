@@ -1,0 +1,21 @@
+/* Estrategias de join */
+svg .jf{fill:none;opacity:.85;stroke-linecap:round}
+svg .jf.hot{stroke:var(--hot);stroke-dasharray:5 4;animation:jn-dash 1.4s linear infinite}
+svg .jf.cool{stroke:var(--cool);stroke-dasharray:6 4;animation:jn-dash 1.1s linear infinite}
+svg .jf.loc{stroke:var(--muted);opacity:.55}
+svg .jf.dim{opacity:.18;animation:none}
+@keyframes jn-dash{to{stroke-dashoffset:-18}}
+@media (prefers-reduced-motion:reduce){svg .jf.hot,svg .jf.cool{animation:none}}
+
+/* DAG de un join en la recreación del Spark UI: dos columnas que bajan a un nodo */
+.jn-dag{display:flex;flex-direction:column;align-items:center;gap:1.1rem;margin:.4rem 0 .6rem}
+.jn-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;width:100%;align-items:start}
+.jn-col{align-items:stretch}
+.jn-col .sq-n{min-width:0}
+.jn-join{position:relative;width:min(19rem,100%)}
+.jn-join::before{content:"";position:absolute;left:25%;right:25%;top:calc(-1.1rem - 1px);height:1.1rem;border:1.5px solid #444;border-bottom:0;border-radius:4px 4px 0 0}
+.jn-node{min-width:0;width:100%}
+.jn-hl{color:#C9302C;font-weight:700}
+.jn-ins{display:flex;flex-wrap:wrap;gap:.2rem .6rem;align-items:baseline;border:1px solid #F0C36D;background:#FFF8E6;border-radius:6px;padding:.4rem .6rem;margin:.6rem 0 .2rem;font-size:12px;color:#5a4300}
+.jn-ins b{font-size:12px}
+#js-sim .grid2,#ex-sim .grid2{grid-template-columns:repeat(auto-fit,minmax(13rem,1fr))}

@@ -1,0 +1,218 @@
+---
+layout: default
+slug: joins
+title: "Estrategias de join"
+description: "Broadcast, shuffle hash, sort-merge y nested loop: cómo elige Spark la estrategia de un join, qué cambia AQE en runtime y cómo se ve en el plan."
+extra_js: ["/assets/js/joins.js"]
+extra_css: ["/assets/css/joins.css"]
+---
+
+    <h2>Estrategias de join: quién se mueve y cuánto</h2>
+    <p class="src">Fuentes: <a href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#optimizing-the-join-strategy" target="_blank" rel="noopener">Apache Spark · Optimizing the join strategy</a> y <a href="https://spark.apache.org/docs/latest/sql-ref-syntax-qry-select-hints.html#join-hints" target="_blank" rel="noopener">Join hints</a> · <a href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank" rel="noopener">AQE</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/aqe" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-hints" target="_blank" rel="noopener">Hints</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/sql/language-manual/sql-ref-syntax-qry-select-hints" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/optimizations/range-join" target="_blank" rel="noopener">Range join optimization</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/range-join" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/slow-spark-stage-low-io" target="_blank" rel="noopener">Slow Spark stage with little I/O</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/slow-spark-stage-low-io" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/sql/user/queries/performance-insights" target="_blank" rel="noopener">Query performance insights</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/sql/user/queries/performance-insights" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a></p>
+    <div class="nb-dl"><a class="btn" href="notebooks/shuffle-y-joins.py" download="shuffle-y-joins.py">Descargar notebook</a><span>Notebook con experimentos de broadcast frente a sort-merge, hints y el plan de AQE. Impórtalo en Databricks desde <b>Workspace</b> → clic derecho en una carpeta → <b>Import</b> → <b>File</b> (<a href="https://docs.databricks.com/aws/en/notebooks/notebook-export-import" target="_blank" rel="noopener">fuente</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/notebooks/notebook-export-import" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</span></div>
+
+    <h3><span class="k">Qué problema resuelve</span>Las filas con la misma clave tienen que encontrarse</h3>
+    <p>Para unir <code>ventas</code> con <code>clientes</code> por <code>cliente_id</code>, cada fila de ventas tiene que estar en la misma task que la fila de su cliente. Al leer, eso casi nunca pasa: cada task tiene un trozo de archivos cualquiera. Spark tiene dos formas de arreglarlo. Puede repartir las <b>dos</b> tablas por la clave (un <a href="shuffle.html">shuffle</a> de cada lado), o puede copiar la tabla pequeña <b>entera</b> a cada executor y dejar la grande donde está (un broadcast).</p>
+    <p>La elección cambia el coste por órdenes de magnitud. En el examen aparece en la sección 3 (joins eficientes sobre datos grandes) y en la sección 6 (usar el query profile para encontrar tipos de join ineficientes).</p>
+
+    <h3><span class="k">Definición corta</span>Cinco estrategias físicas</h3>
+    <p class="def">La <b>estrategia de join</b> es el algoritmo físico que Spark elige para ejecutar un join lógico. Aparece como el nombre del nodo en el plan: <code>BroadcastHashJoin</code>, <code>ShuffledHashJoin</code>, <code>SortMergeJoin</code>, <code>BroadcastNestedLoopJoin</code> o <code>CartesianProduct</code>.</p>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Estrategia (nodo)</th><th>Qué se mueve</th><th>Necesita igualdad</th><th>Riesgo típico</th></tr></thead>
+      <tbody>
+        <tr><td><code>BroadcastHashJoin</code></td><td>El lado pequeño se copia a todos los executors. El grande no hace shuffle.</td><td class="yes">Sí</td><td>Un broadcast demasiado grande: memoria del driver y de cada executor</td></tr>
+        <tr><td><code>ShuffledHashJoin</code></td><td>Shuffle de los dos lados. Cada task arma una tabla hash con su parte del lado <i>build</i>.</td><td class="yes">Sí</td><td>La tabla hash de una partición grande no cabe en memoria</td></tr>
+        <tr><td><code>SortMergeJoin</code></td><td>Shuffle de los dos lados y orden por la clave en cada task.</td><td class="yes">Sí (claves ordenables)</td><td>Shuffle y sort caros, pero el sort puede hacer spill</td></tr>
+        <tr><td><code>BroadcastNestedLoopJoin</code></td><td>Un lado se copia a todos. Cada fila se compara con cada fila del otro lado.</td><td class="no">No</td><td>Filas izq × filas der comparaciones</td></tr>
+        <tr><td><code>CartesianProduct</code></td><td>Cada partición de un lado se combina con cada partición del otro.</td><td class="no">No (solo INNER / CROSS)</td><td>Igual de caro que el anterior, sin broadcast</td></tr>
+      </tbody>
+    </table></div>
+    <p><b>El lado <i>build</i></b> es el que Spark carga en memoria (la tabla hash o la copia del broadcast). El otro lado, el <i>stream</i>, pasa fila a fila. Que un lado pueda ser build depende del tipo de join:</p>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Join</th><th>Broadcast del lado izquierdo</th><th>Broadcast del lado derecho</th><th>Shuffle hash (build)</th></tr></thead>
+      <tbody>
+        <tr><td><code>INNER</code></td><td class="yes">Sí</td><td class="yes">Sí</td><td>Cualquier lado</td></tr>
+        <tr><td><code>LEFT OUTER</code></td><td class="no">No</td><td class="yes">Sí</td><td>Cualquier lado</td></tr>
+        <tr><td><code>RIGHT OUTER</code></td><td class="yes">Sí</td><td class="no">No</td><td>Cualquier lado</td></tr>
+        <tr><td><code>LEFT SEMI</code> / <code>LEFT ANTI</code></td><td class="no">No</td><td class="yes">Sí</td><td>Solo el derecho</td></tr>
+        <tr><td><code>FULL OUTER</code></td><td class="no">No</td><td class="no">No</td><td>Cualquier lado</td></tr>
+      </tbody>
+    </table></div>
+    <p>Regla para recordarlo: se puede hacer broadcast del lado "opcional", nunca del lado que conserva todas sus filas. En un <code>LEFT JOIN</code> Spark tiene que devolver cada fila de la izquierda aunque no tenga pareja, y eso no se puede decidir si la izquierda está copiada en todos los executors.</p>
+    <div class="verify"><b>Verifícalo.</b> La doc de Databricks confirma el caso del <code>LEFT OUTER</code> ("the left relation of a LEFT OUTER JOIN cannot be broadcast", FAQ de AQE). El resto de la tabla sale del código de Apache Spark (<code>canBuildBroadcastLeft</code>, <code>canBuildBroadcastRight</code> y las equivalentes de shuffle hash en <code>joins.scala</code>), no de una página de docs. Compruébalo con <code>df.explain()</code> en tu runtime.</div>
+
+    <h3><span class="k">Idea mental</span>Cruzar una lista corta con un archivo enorme</h3>
+    <p>Tienes que marcar, en 400 cajas de facturas repartidas en 8 oficinas, el nombre de cada cliente. La lista de clientes cabe en una hoja.</p>
+    <ul>
+      <li><b>Broadcast:</b> fotocopias la hoja y mandas una copia a cada oficina. Las cajas no se mueven.</li>
+      <li><b>Sort-merge:</b> la lista de clientes es tan grande como las facturas. Mandas facturas y clientes de la A a la C a la oficina 1, de la D a la F a la 2, y así. Cada oficina ordena sus dos montones y los recorre a la vez.</li>
+      <li><b>Nested loop:</b> no hay un campo para emparejar (por ejemplo, "la factura cae entre la fecha de alta y la de baja"). Cada oficina compara cada factura con cada cliente.</li>
+    </ul>
+
+    <h3><span class="k">Cómo funciona por dentro</span>Cómo decide Spark</h3>
+    <p>El plan se decide antes de ejecutar, con <b>estadísticas</b> (tamaño estimado de cada lado). Sin hints, para un join con igualdad (equi-join), el orden es este:</p>
+    <ol class="steps">
+      <li><b>¿Algún lado cabe en <code>spark.sql.autoBroadcastJoinThreshold</code>?</b> El default de Spark es 10 MB. Si cabe y el tipo de join permite construir ese lado, sale <code>BroadcastHashJoin</code>. Si caben los dos, gana el más pequeño.</li>
+      <li><b>Si no, <code>SortMergeJoin</code>.</b> Spark prefiere sort-merge sobre shuffle hash por defecto (<code>spark.sql.join.preferSortMergeJoin</code>). Shuffle hash queda para cuando lo pides con un hint o cuando AQE lo decide.</li>
+      <li><b>Sin igualdad</b> (solo <code>&lt;</code>, <code>BETWEEN</code>, <code>OR</code>…): <code>BroadcastNestedLoopJoin</code> si un lado cabe en el umbral. Si no cabe ninguno, <code>CartesianProduct</code> para INNER y, para los demás tipos, <code>BroadcastNestedLoopJoin</code> de todas formas, con un lado grande en broadcast.</li>
+    </ol>
+    <div class="verify"><b>Verifícalo.</b> El orden de los pasos 2 y 3 y el caso de "broadcast forzado" de un lado grande vienen del código de Spark (<code>JoinSelection</code> en <code>SparkStrategies.scala</code>), no de la doc. La doc de Spark solo menciona <code>preferSortMergeJoin</code> de pasada. Databricks no documenta otro valor del umbral estático; este simulador asume los 10 MB de Spark.</div>
+
+    <p><b>Con hints.</b> <code>BROADCAST</code>, <code>MERGE</code>, <code>SHUFFLE_HASH</code> y <code>SHUFFLE_REPLICATE_NL</code> piden una estrategia. Si los dos lados tienen hints distintos, la prioridad es <code>BROADCAST</code> &gt; <code>MERGE</code> &gt; <code>SHUFFLE_HASH</code> &gt; <code>SHUFFLE_REPLICATE_NL</code>. El lado con <code>BROADCAST</code> se copia aunque supere <code>autoBroadcastJoinThreshold</code>. La doc avisa de que Spark no garantiza usar el hint: si la estrategia no soporta ese tipo de join, la ignora.</p>
+
+    <p><b>En runtime, AQE.</b> Cuando termina un shuffle, Databricks ya conoce el tamaño real de cada lado. Si uno queda por debajo de <code>spark.databricks.adaptive.autoBroadcastJoinThreshold</code> (default 30 MB), AQE cambia el <code>SortMergeJoin</code> por un <code>BroadcastHashJoin</code>. Es menos eficiente que planearlo así desde el principio, porque los dos shuffles ya se escribieron. Aun así ahorra el sort de los dos lados y, según la doc de Spark, lee el shuffle en local en vez de por red. En Apache Spark el equivalente es <code>spark.sql.adaptive.autoBroadcastJoinThreshold</code>, con el mismo valor que el umbral estático.</p>
+
+    <div class="console" id="js-sim">
+      <div class="ttl">Selector de estrategia · ventas JOIN clientes · 4 executors</div>
+      <div class="grid2">
+        <div class="ctrl">
+          <label for="js-l">ventas (izq), estimado <output id="js-l-o"></output></label>
+          <input type="range" id="js-l" min="0" max="70" step="1" value="57">
+        </div>
+        <div class="ctrl">
+          <label for="js-r">clientes (der), estimado <output id="js-r-o"></output></label>
+          <input type="range" id="js-r" min="0" max="70" step="1" value="17">
+        </div>
+      </div>
+      <div class="ctrl">
+        <label for="js-real">Lo que llega de verdad al join, tras filtros <output id="js-real-o"></output></label>
+        <input type="range" id="js-real" min="1" max="100" step="1" value="40">
+      </div>
+      <div class="chips" role="group" aria-label="Tipo de join" id="js-jt"><span class="lab">Join:</span>
+        <button type="button" data-v="INNER" aria-pressed="false">INNER</button>
+        <button type="button" data-v="LEFT" aria-pressed="true">LEFT</button>
+        <button type="button" data-v="RIGHT" aria-pressed="false">RIGHT</button>
+        <button type="button" data-v="FULL" aria-pressed="false">FULL</button>
+      </div>
+      <div class="chips" role="group" aria-label="Condición" id="js-eq"><span class="lab">Condición:</span>
+        <button type="button" data-v="eq" aria-pressed="true">Igualdad (cliente_id = cliente_id)</button>
+        <button type="button" data-v="range" aria-pressed="false">Rango (BETWEEN)</button>
+      </div>
+      <div class="chips" role="group" aria-label="Hint" id="js-hint"><span class="lab">Hint:</span>
+        <button type="button" data-v="none" aria-pressed="true">Ninguno</button>
+        <button type="button" data-v="BROADCAST" aria-pressed="false">BROADCAST</button>
+        <button type="button" data-v="MERGE" aria-pressed="false">MERGE</button>
+        <button type="button" data-v="SHUFFLE_HASH" aria-pressed="false">SHUFFLE_HASH</button>
+      </div>
+      <div class="chips" role="group" aria-label="Lado del hint" id="js-side"><span class="lab">Hint sobre:</span>
+        <button type="button" data-v="L" aria-pressed="false">ventas (izq)</button>
+        <button type="button" data-v="R" aria-pressed="true">clientes (der)</button>
+      </div>
+      <label class="switch" for="js-aqe"><input type="checkbox" id="js-aqe" checked> AQE activado (lo normal en Databricks)</label>
+      <pre><code id="js-sql"></code></pre>
+      <svg class="chart" id="js-chart" viewBox="0 0 360 236" role="img" aria-label="Movimiento de datos del join"></svg>
+      <div class="legend"><span style="--sw:var(--hot)">shuffle (los dos lados viajan por la clave)</span><span style="--sw:var(--cool)">broadcast (copia entera a cada executor)</span><span style="--sw:var(--muted)">lectura local, sin moverse</span></div>
+      <div class="stats" id="js-stats"></div>
+      <div class="verdict" id="js-verdict" aria-live="polite"></div>
+      <div id="js-ui"></div>
+    </div>
+    <p class="c" style="font-size:.88rem">Los tamaños, el número de executors y los bytes son ilustrativos. Prueba esto:</p>
+    <ul>
+      <li>Con los valores iniciales, el plan estático es <code>SortMergeJoin</code> (50 MB no cabe en 10 MB) y AQE lo convierte en runtime, porque solo llegan 20 MB. Apaga AQE y mira cómo los dos lados hacen shuffle completo.</li>
+      <li>Pon <code>BROADCAST</code> sobre <code>clientes</code>. El shuffle de <code>ventas</code> desaparece desde el plan inicial. Por eso la doc de Databricks sigue recomendando el hint cuando conoces la query.</li>
+      <li>Cambia a <code>FULL</code>. Ningún broadcast es posible, ni con hint ni con AQE.</li>
+      <li>Pon <code>BROADCAST</code> sobre <code>ventas</code> en un <code>LEFT</code>. Spark ignora el hint.</li>
+      <li>Cambia la condición a rango con dos tablas grandes. Mira el número de comparaciones.</li>
+    </ul>
+
+    <h3><span class="k">Cómo se usa</span>Hints, umbrales y cómo comprobarlo</h3>
+    <pre><code><span class="c"># DataFrame: broadcast explícito de la dimensión pequeña</span>
+from pyspark.sql.functions import broadcast
+ventas.join(broadcast(clientes), "cliente_id", "left")
+
+<span class="c"># Lo mismo con .hint(); sirve también para "merge" y "shuffle_hash"</span>
+ventas.join(clientes.hint("broadcast"), "cliente_id", "left")</code></pre>
+    <pre><code>-- SQL: el hint va en el SELECT y nombra la tabla o su alias
+SELECT /*+ BROADCAST(c) */ v.*, c.segmento
+FROM ventas v
+LEFT JOIN clientes c ON v.cliente_id = c.cliente_id;
+
+-- Desactivar el broadcast automático (compute clásico)
+SET spark.sql.autoBroadcastJoinThreshold = -1;</code></pre>
+    <p><b>Para comprobar qué pasó</b>, mira el plan después de ejecutar. <code>EXPLAIN</code> en SQL no ejecuta la query, así que solo muestra el plan inicial, sin lo que hizo AQE (ver <a href="aqe.html">AQE</a>). En el plan final busca:</p>
+    <ul>
+      <li>El nombre del nodo de join y su <i>build side</i> (<code>BuildRight</code>, <code>BuildLeft</code>).</li>
+      <li>Si el nodo es distinto entre <i>Initial Plan</i> y <i>Final Plan</i>, AQE cambió la estrategia. La doc de Databricks lo describe así: nodos de join físicos distintos entre el plan inicial y el final.</li>
+      <li>En la pestaña SQL / DataFrame del <a href="spark-ui.html">Spark UI</a>, el nodo <code>BroadcastExchange</code> trae las métricas <code>data size</code> y <code>time to collect</code>. Los nodos de join traen <code>number of output rows</code>, y <code>ShuffledHashJoin</code> además <code>data size of build side</code> (métricas de la doc del web UI de Spark).</li>
+      <li>En el <a href="query-profile.html">query profile</a> (serverless y SQL warehouses) el operador se llama Join. Cambia la métrica del DAG a <b>Rows</b> o <b>Memory peak</b> para ver cuánto produce y cuánto ocupa. Si Databricks eligió un broadcast por el historial de queries parecidas, aparece la aceleración <code>HISTORY_BASED_JOIN_STRATEGY</code> en Performance insights.</li>
+    </ul>
+    <p class="note"><b>En serverless</b> no puedes cambiar <code>autoBroadcastJoinThreshold</code>: solo se pueden fijar seis propiedades de Spark, y esta no está. Lo que sí funciona es el hint, en SQL o con <code>broadcast()</code>. El <code>sc.broadcast()</code> de RDD no, porque serverless solo soporta las APIs de Spark Connect (<a href="https://docs.databricks.com/aws/en/spark/conf#serverless" target="_blank" rel="noopener">Spark confs en serverless</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/spark/conf#configure-spark-properties-for-serverless-notebooks-and-jobs" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/compute/serverless/limitations" target="_blank" rel="noopener">limitaciones</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/serverless/limitations" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</p>
+
+    <h3><span class="k">Cuando el join multiplica filas</span>Exploding joins</h3>
+    <p>Si una clave aparece 30 veces a la izquierda y 40 a la derecha, el join produce 1.200 filas para esa clave. Pocas filas entran al nodo y muchas más salen. La guía del Spark UI de Databricks lo llama <i>exploding join</i> y lo lista entre las causas de un stage lento con poco I/O. El query profile lo marca con el insight <code>EXPLODING_JOIN</code> ("the join produces significantly more rows than it reads"). La recomendación de la doc es decidir qué subconjunto necesitas y luego cambiar la condición del join o reducir las filas de entrada de los dos lados.</p>
+    <p>Cambiar de estrategia no lo arregla: un broadcast evita el shuffle de entrada, pero las filas de salida son las mismas. Lo ves en el <a href="casos.html">caso "Un join que multiplica filas"</a>.</p>
+
+    <div class="console" id="ex-sim">
+      <div class="ttl">Exploding join · claves que coinciden y duplicados por clave</div>
+      <div class="ctrl">
+        <label for="ex-k">Claves distintas que coinciden <output id="ex-k-o"></output></label>
+        <input type="range" id="ex-k" min="30" max="80" step="1" value="60">
+      </div>
+      <div class="grid2">
+        <div class="ctrl">
+          <label for="ex-dl">Filas por clave, izquierda <output id="ex-dl-o"></output></label>
+          <input type="range" id="ex-dl" min="0" max="30" step="1" value="10">
+        </div>
+        <div class="ctrl">
+          <label for="ex-dr">Filas por clave, derecha <output id="ex-dr-o"></output></label>
+          <input type="range" id="ex-dr" min="0" max="30" step="1" value="0">
+        </div>
+      </div>
+      <svg class="chart" id="ex-chart" viewBox="0 0 360 150" role="img" aria-label="Filas de entrada y de salida del join, escala logarítmica"></svg>
+      <div class="stats" id="ex-stats"></div>
+      <div class="verdict" id="ex-verdict" aria-live="polite"></div>
+      <div id="ex-ui"></div>
+    </div>
+    <p class="c" style="font-size:.88rem">Supone 120 bytes por fila de cada lado y un sort-merge join. El aviso a partir de 10× la entrada es un umbral del simulador; la doc no da un número para <code>EXPLODING_JOIN</code>.</p>
+
+    <h3><span class="k">Joins sin igualdad</span>Range joins</h3>
+    <p>Un join por rango (un punto dentro de un intervalo, o dos intervalos que se solapan) no tiene clave de igualdad. Sin ayuda termina en nested loop o en producto cartesiano. La guía del Spark UI dice que estos joins son muy caros y que confirmes que es lo que querías.</p>
+    <p>Databricks tiene una <b>range join optimization</b>. Divide el dominio del rango en <i>bins</i> de igual tamaño y solo compara filas que caen en los mismos bins. Aplica si se cumplen estas condiciones:</p>
+    <ul>
+      <li>La condición se puede leer como punto en intervalo o solapamiento de intervalos.</li>
+      <li>Los valores son numéricos, <code>DATE</code> o <code>TIMESTAMP</code>, todos del mismo tipo.</li>
+      <li>Es <code>INNER</code>, o <code>LEFT OUTER</code> con el punto a la izquierda, o <code>RIGHT OUTER</code> con el punto a la derecha.</li>
+      <li>Tiene un bin size, derivado solo o puesto por ti.</li>
+    </ul>
+    <p>En Databricks SQL la optimización es automática: detecta los range joins y deriva el bin size muestreando la tabla de intervalos (<code>spark.databricks.optimizer.autoRangeJoin.enabled</code>). En los demás compute la pides con un hint o con una configuración de sesión:</p>
+    <pre><code>-- bin size 60: para TIMESTAMP se interpreta en segundos; para DATE, en días
+SELECT /*+ RANGE_JOIN(m, 60) */ *
+FROM eventos e JOIN minutos m
+  ON e.ts &gt;= m.inicio AND e.ts &lt; m.fin;
+
+-- o para todos los range joins de la sesión
+SET spark.databricks.optimizer.rangeJoin.binSize = 60;</code></pre>
+    <p>Para elegir el bin size, la doc recomienda partir del <b>máximo</b> entre el percentil 90 de la longitud de los intervalos, el percentil 99 dividido por 10 y el percentil 99.9 dividido por 100, y ajustar desde ahí (<a href="https://docs.databricks.com/aws/en/optimizations/range-join#choose-the-bin-size" target="_blank" rel="noopener">Choose the bin size</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/range-join#choose-the-bin-size" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</p>
+
+    <h3><span class="k">Cuándo usar cada una</span>Guía rápida</h3>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Situación</th><th>Qué hacer</th></tr></thead>
+      <tbody>
+        <tr><td>Hecho grande con una dimensión de pocos MB a unos cientos de MB</td><td>Hint <code>BROADCAST</code> sobre la dimensión, si el tipo de join lo permite</td></tr>
+        <tr><td>Las dos tablas son grandes</td><td>Deja el <code>SortMergeJoin</code>. Revisa skew (AQE lo maneja en SMJ y shuffle hash) y el número de particiones</td></tr>
+        <tr><td>No sabes cuánto quedará tras los filtros</td><td>Deja que AQE decida en runtime; mantén las estadísticas al día (<code>ANALYZE TABLE</code> o predictive optimization)</td></tr>
+        <tr><td>Condición por rango de fechas o de valores</td><td>Range join optimization (automática en Databricks SQL, hint en el resto)</td></tr>
+        <tr><td><code>FULL OUTER JOIN</code> con una tabla pequeña</td><td>Ningún broadcast aplica. Considera dividir en un <code>LEFT</code> más las filas sin pareja del otro lado, si el volumen lo justifica</td></tr>
+        <tr><td>Muchos joins y agregaciones encadenados</td><td>La doc de Databricks sugiere unir primero las tablas pequeñas y guardar resultados intermedios si el optimizador se atasca</td></tr>
+      </tbody>
+    </table></div>
+    <p class="c" style="font-size:.88rem">Las dos últimas filas vienen de <a href="https://docs.databricks.com/aws/en/transform/optimize-joins" target="_blank" rel="noopener">Optimize join performance</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/transform/optimize-joins" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, que además dice que el compute con Photon "always selects the best join type". La idea del <code>FULL</code> partido en dos es mía, no de la doc.</p>
+
+    <h3><span class="k">Con qué se confunde</span></h3>
+    <ul>
+      <li><b>Broadcast join vs variable broadcast.</b> <code>broadcast(df)</code> es un hint de join. <code>sc.broadcast(obj)</code> es una variable de RDD para mandar un objeto a las tasks. Son mecanismos distintos, y el segundo no existe en serverless.</li>
+      <li><b>Umbral estático vs umbral de AQE.</b> 10 MB (<code>spark.sql.autoBroadcastJoinThreshold</code>) decide el plan inicial con estadísticas. 30 MB (<code>spark.databricks.adaptive.autoBroadcastJoinThreshold</code>) decide el cambio en runtime con tamaños reales. Ninguno es 100 MB, aunque algunos tutoriales lo digan.</li>
+      <li><b>Tamaño en disco vs tamaño en memoria.</b> Las estadísticas hablan del tamaño de la tabla, pero el broadcast ocupa su tamaño descomprimido en memoria. Una tabla de 700 MB en Parquet puede no caber (ver el <a href="casos.html">caso del driver que se cae en un broadcast</a>).</li>
+      <li><b>Skew vs exploding join.</b> El skew es una partición mucho más grande que las demás; AQE la parte. El exploding join produce demasiadas filas en todas; ningún reparto lo arregla.</li>
+      <li><b><code>SHUFFLE_REPLICATE_NL</code> vs nested loop con broadcast.</b> El hint pide <code>CartesianProduct</code>, sin broadcast. <code>BroadcastNestedLoopJoin</code> aparece cuando un lado se puede copiar.</li>
+      <li><b>Skew join hint.</b> Para skew, la doc de Databricks recomienda AQE sobre el hint <code>SKEW</code> (ver <a href="skew-hints.html">Skew hints</a>).</li>
+    </ul>
+
+    <h3><span class="k">Qué pasaría si</span></h3>
+    <ul>
+      <li><b>Subes <code>autoBroadcastJoinThreshold</code> a 2 GB</b> para "evitar shuffles": tablas que en memoria ocupan mucho más se copian a todos los executors y pasan por el driver. Es el camino típico a un OOM (ver <a href="memoria-oom.html">Memoria y OOM</a>).</li>
+      <li><b>Pones <code>BROADCAST(ventas)</code> en <code>ventas LEFT JOIN clientes</code>:</b> el lado izquierdo de un LEFT no se puede copiar. Spark ignora el hint, lo registra en el log del driver y sigue con su elección.</li>
+      <li><b>Las estadísticas están viejas:</b> Spark cree que la dimensión pesa 2 GB y planea sort-merge. AQE puede corregirlo en runtime, pero después de hacer los dos shuffles. Actualiza estadísticas con <code>ANALYZE TABLE</code> o deja que predictive optimization lo haga en tablas managed de UC.</li>
+      <li><b>Escribes <code>ON a.id = b.id OR a.email = b.email</code>:</b> con un <code>OR</code> no hay clave de igualdad única. El plan cae en nested loop. Suele ser mejor hacer dos joins y unirlos.</li>
+      <li><b>Pones <code>MERGE</code> y AQE está activado:</b> AQE respeta los hints igual que el optimizador estático, así que no lo cambiará a broadcast.</li>
+    </ul>
