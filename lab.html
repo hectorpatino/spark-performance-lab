@@ -8,9 +8,9 @@ description: "Provocar skew en Free Edition y arreglarlo."
     <h2>Lab: provocar skew y verlo</h2>
     <p class="src">Base: notebook oficial <a href="https://docs.databricks.com/aws/en/notebooks/source/aqe-demo.html" target="_blank" rel="noopener">AQE Demo</a> (crea una tabla <code>sales</code> donde el item 100 está en el 80% de las ventas).</p>
 
-    <div class="note"><b>Antes de empezar.</b> El notebook original desactiva y ajusta configs de AQE para comparar antes y después. En serverless (y Free Edition es serverless) solo se pueden cambiar unas pocas propiedades: <code>spark.sql.shuffle.partitions</code>, <code>spark.sql.files.maxPartitionBytes</code>, <code>spark.sql.ansi.enabled</code>, <code>spark.sql.session.timeZone</code>, <code>spark.sql.legacy.timeParserPolicy</code> y <code>spark.databricks.execution.timeout</code> (<a href="https://docs.databricks.com/aws/en/spark/conf" target="_blank" rel="noopener">fuente</a>). Por eso adapté el lab: no apagamos AQE, sino que buscamos un caso donde AQE <b>no</b> te salva y lo arreglamos a mano.</div>
+    <div class="note"><b>Antes de empezar.</b> El notebook original desactiva y ajusta configs de AQE para comparar antes y después. En serverless (y Free Edition es serverless) solo se pueden cambiar unas pocas propiedades: <code>spark.sql.shuffle.partitions</code>, <code>spark.sql.files.maxPartitionBytes</code>, <code>spark.sql.ansi.enabled</code>, <code>spark.sql.session.timeZone</code>, <code>spark.sql.legacy.timeParserPolicy</code> y <code>spark.databricks.execution.timeout</code> (<a href="https://docs.databricks.com/aws/en/spark/conf" target="_blank" rel="noopener">fuente</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/spark/conf" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>). Por eso adapté el lab: no apagamos AQE, sino que buscamos un caso donde AQE <b>no</b> te salva y lo arreglamos a mano.</div>
 
-    <div class="verify">No pude leer el contenido celda por celda del notebook original (la página no devolvió el código). Lo que sigue es mi adaptación con la misma idea de datos. <b>Verifica</b> los nombres exactos de los botones del query profile en tu workspace.</div>
+    <div class="verify">No pude leer el contenido celda por celda del notebook original (la página no devolvió el código). Lo que sigue es mi adaptación con la misma idea de datos. Para ver el perfil en serverless: en la celda pulsa <b>See performance</b>, elige la instrucción y luego <b>See query profile</b> (<a href="https://learn.microsoft.com/azure/databricks/compute/serverless/notebooks#view-query-insights" target="_blank" rel="noopener">doc de Azure Databricks</a>).</div>
 
     <ol class="steps">
       <li>
@@ -35,7 +35,7 @@ sales = (spark.range(20_000_000)
 <pre><code>w = Window.partitionBy("product_id").orderBy("amount")
 running = sales.withColumn("acumulado", F.sum("amount").over(w))
 running.agg(F.max("acumulado")).collect()</code></pre>
-        Abre el query profile de esa celda. Busca el operador de ventana / sort y compara el tiempo de la tarea más lenta con el resto.
+        Abre el query profile de esa celda (See performance → See query profile). Busca el operador de ventana / sort y compara el tiempo de la tarea más lenta con el resto.
       </li>
       <li>
         <b>Contraste: una agregación combinable no sufre igual.</b> <code>max</code> se calcula primero dentro de cada partición y luego se combina (agregación parcial). Antes del shuffle, la clave caliente ya está reducida a una fila por partición.

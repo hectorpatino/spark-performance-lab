@@ -6,7 +6,7 @@ description: "Organizar los archivos para que el data skipping funcione."
 ---
 
     <h2>Liquid clustering: ordenar los archivos para leer menos</h2>
-    <p class="src">Fuentes: <a href="https://docs.databricks.com/aws/en/delta/clustering" target="_blank" rel="noopener">Use liquid clustering for tables</a>, <a href="https://docs.databricks.com/aws/en/delta/data-skipping" target="_blank" rel="noopener">Data skipping</a>, <a href="https://docs.databricks.com/aws/en/tables/partitions" target="_blank" rel="noopener">When to partition tables</a> y <a href="https://docs.databricks.com/aws/en/optimizations/predictive-optimization" target="_blank" rel="noopener">Predictive optimization</a>.</p>
+    <p class="src">Fuentes: <a href="https://docs.databricks.com/aws/en/tables/clustering" target="_blank" rel="noopener">Use liquid clustering for tables</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/clustering" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/data-skipping" target="_blank" rel="noopener">Data skipping</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/data-skipping" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/partitions" target="_blank" rel="noopener">When to partition tables</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/partitions" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> y <a href="https://docs.databricks.com/aws/en/optimizations/predictive-optimization" target="_blank" rel="noopener">Predictive optimization</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/predictive-optimization" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
 
     <h3><span class="k">Qué problema resuelve</span>Leer archivos que no tienen nada de lo que buscas</h3>
     <p>Lanzas <code>WHERE cliente_id = 4217</code> sobre una tabla de 500 GB y Databricks lee casi todo. Las filas de ese cliente están repartidas por todos los archivos, así que ninguno se puede descartar. Antes se resolvía con particiones o con <code>ZORDER</code>. Las dos tienen problemas: el particionado se rompe con columnas de muchos valores o desbalanceadas, y cambiar la columna obliga a reescribir la tabla.</p>
@@ -37,6 +37,7 @@ description: "Organizar los archivos para que el data skipping funcione."
       <svg class="chart" id="lc-chart" viewBox="0 0 360 230" role="img" aria-label="Rangos de archivos y filtro"></svg>
       <div class="legend"><span style="--sw:var(--hot)">archivo leído</span><span style="--sw:color-mix(in srgb,var(--cool) 35%,transparent)">archivo saltado</span><span style="--sw:var(--ink)">filtro</span></div>
       <div class="verdict" id="lc-verdict"></div>
+      <div id="lc-ui"></div>
     </div>
     <p>Fíjate en tres cosas:</p>
     <ul>

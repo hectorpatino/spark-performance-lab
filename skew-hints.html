@@ -6,7 +6,7 @@ description: "El enfoque antiguo con /*+ SKEW */ y por qué ya no hace falta."
 ---
 
     <h2>Skew hints: el enfoque antiguo</h2>
-    <p class="src">Fuente: <a href="https://docs.databricks.com/aws/en/archive/legacy/skew-join" target="_blank" rel="noopener">docs.databricks.com/…/archive/legacy/skew-join</a> (página archivada, puede no actualizarse)</p>
+    <p class="src">Fuente: <a href="https://docs.databricks.com/aws/en/archive/legacy/skew-join" target="_blank" rel="noopener">docs.databricks.com/…/archive/legacy/skew-join</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/archive/legacy/skew-join" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> (página archivada, puede no actualizarse)</p>
 
     <h3><span class="k">Por qué estudiarlo</span>Para reconocerlo, no para usarlo</h3>
     <p>La página dice que los skew hints no son necesarios porque Databricks maneja el skew por defecto con AQE, siempre que <code>spark.sql.adaptive.skewJoin.enabled</code> sea true (el default). Lo verás en código heredado y en preguntas que buscan que elijas AQE.</p>

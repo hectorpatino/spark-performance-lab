@@ -6,7 +6,7 @@ description: "Adaptive Query Execution: qué arregla solo y dónde no actúa."
 ---
 
     <h2>AQE: el arreglo automático y sus límites</h2>
-    <p class="src">Fuente: <a href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank" rel="noopener">docs.databricks.com/aws/en/optimizations/aqe</a></p>
+    <p class="src">Fuente: <a href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank" rel="noopener">docs.databricks.com/aws/en/optimizations/aqe</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/aqe" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a></p>
 
     <h3><span class="k">Qué problema resuelve</span>El plan se decide con estadísticas que pueden estar mal</h3>
     <p>Antes de ejecutar, Spark estima tamaños. Esas estimaciones fallan si no hay estadísticas, si están viejas o si estás en mitad de una query compleja. Al terminar cada shuffle o broadcast exchange (un <i>query stage</i>), Databricks ya conoce los tamaños reales. AQE aprovecha ese momento para re-planificar el resto de la query.</p>
@@ -37,6 +37,7 @@ tamaño &gt; skewedPartitionThresholdInBytes   <span class="c">-- default 256MB<
       </div>
       <svg class="chart" id="s2-chart" viewBox="0 0 360 200" role="img" aria-label="Tamaño de particiones"></svg>
       <div class="verdict" id="s2-verdict"></div>
+      <div id="s2-ui"></div>
     </div>
     <p>Pon el factor en 4 y la partición en 250 MB. Supera 4× la mediana, pero no llega al umbral de 256 MB, así que AQE no la toca aunque en el Spark UI sí se vea como skew. Esa es una respuesta típica a "¿por qué AQE no detectó mi skew?".</p>
 
@@ -67,7 +68,7 @@ tamaño &gt; skewedPartitionThresholdInBytes   <span class="c">-- default 256MB<
     <ul>
       <li>Nodo raíz <code>AdaptiveSparkPlan</code>: <code>isFinalPlan=false</code> mientras corre y <code>true</code> al terminar.</li>
       <li>Skew manejado: nodo <code>SortMergeJoin</code> con <code>isSkew</code> en true.</li>
-      <li>Particiones unidas: <code>CustomShuffleReader</code> con <code>Coalesced</code>.</li>
+      <li>Particiones unidas: <code>CustomShuffleReader</code> con <code>Coalesced</code>, según la doc. En planes de Spark 3.2 y posteriores el mismo nodo aparece como <code>AQEShuffleRead</code> (esto no lo confirma la doc de Databricks; compruébalo en el plan de tu runtime).</li>
       <li><code>EXPLAIN</code> en SQL no ejecuta la query, así que nunca muestra el plan final de AQE. Usa el plan del Spark UI o <code>df.explain()</code> después de ejecutar.</li>
     </ul>
 

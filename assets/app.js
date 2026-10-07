@@ -4,6 +4,25 @@
   const q=(arr,p)=>{const s=[...arr].sort((a,b)=>a-b);const i=(s.length-1)*p;const lo=Math.floor(i),hi=Math.ceil(i);return s[lo]+(s[hi]-s[lo])*(i-lo);};
   const fmtT=s=>s>=60?Math.floor(s/60)+' min '+String(Math.round(s%60)).padStart(2,'0')+' s':s.toFixed(1)+' s';
   function tickMax(v){for(const c of [1,2,4,5,8,10,15,20,25,50,100]){if(4*c>=v)return 4*c;}return niceMax(v);}
+
+  /* ---------- recreaciones del Spark UI: helpers ---------- */
+  const UI={
+    bytes(b){const u=['B','KiB','MiB','GiB','TiB'];let i=0;while(b>=1024&&i<u.length-1){b/=1024;i++;}return (i?b.toFixed(1):Math.round(b))+' '+u[i];},
+    dur(s){return s<1?Math.round(s*1000)+' ms':s<60?s.toFixed(1)+' s':(s/60).toFixed(1)+' min';},
+    rec(n){return Math.round(n).toLocaleString('en-US');},
+    clock(s){const t=36000+Math.floor(s);const h=Math.floor(t/3600),m=Math.floor(t%3600/60),x=t%60;return [h,m,x].map(v=>String(v).padStart(2,'0')).join(':');},
+    frame(tab,body,cap){const tabs=['Jobs','Stages','Storage','Environment','Executors','SQL / DataFrame'];
+      return `<div class="ui-frame"><div class="ui-top"><b>Spark UI</b>${tabs.map(t=>`<span class="${t===tab?'on':''}">${t}</span>`).join('')}</div><div class="ui-body">${body}</div></div><p class="ui-cap">${cap||'Recreación ilustrativa de la pantalla real, con los datos del simulador.'}</p>`;},
+    quant(arr){return [0,.25,.5,.75,1].map(p=>q(arr,p));},
+    summary(n,rows){
+      return `<h6>Summary Metrics for ${n} Completed Tasks</h6><table class="ui-tbl"><thead><tr><th>Metric</th><th>Min</th><th>25th percentile</th><th>Median</th><th>75th percentile</th><th>Max</th></tr></thead><tbody>`+
+        rows.map(r=>{const [nm,arr,f,hl,arr2,f2]=r; const v=UI.quant(arr), v2=arr2?UI.quant(arr2):null;
+          return `<tr><td>${nm}</td>${v.map((x,i)=>`<td class="${hl&&i===4&&v[4]>1.5*v[3]?'hl':''}">${f(x)}${v2?' / '+f2(v2[i]):''}</td>`).join('')}</tr>`;}).join('')+`</tbody></table>`;},
+    PH:[['Scheduler Delay','#80B1D3'],['Task Deserialization Time','#FB8072'],['Shuffle Read Time','#FDB462'],['Executor Computing Time','#B3DE69'],['Shuffle Write Time','#FFED6F'],['Result Serialization Time','#BC80BD'],['Getting Result Time','#8DD3C7']],
+    legend(items){return `<div class="ui-legend">${items.map(([n,c,b])=>`<span style="--c:${c};--b:${b||c}">${n}</span>`).join('')}</div>`;},
+    axis(svg,L,R,y0,y1,xmax,xs){for(let i=0;i<=4;i++){const v=xmax*i/4,x=xs(v);svg.appendChild(el('line',{x1:x,x2:x,y1:y0,y2:y1,style:'stroke:#E5E5E5;stroke-width:1'}));svg.appendChild(el('text',{x,y:y1+12,'text-anchor':i===4?'end':'middle',style:'fill:#666;font-size:9.5px'},UI.clock(v)));}}
+  };
+  function viewToggle(groupId,onChange){const g=document.getElementById(groupId); if(!g) return; g.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{g.querySelectorAll('[data-view]').forEach(x=>x.setAttribute('aria-pressed',x===b)); onChange(b.dataset.view);}));}
   function niceMax(v){const p=Math.pow(10,Math.floor(Math.log10(v)));for(const m of [1,2,2.5,5,10]){if(m*p>=v)return m*p;}return 10*p;}
   function axes(svg,W,H,L,B,T,max,fmt){
     for(let i=0;i<=4;i++){const v=max*i/4;const y=H-B-(H-B-T)*i/4;
@@ -37,12 +56,20 @@
     });
     const st={min:Math.min(...dur),p25:q(dur,.25),med:q(dur,.5),p75:q(dur,.75),max:Math.max(...dur)};
     const rows=tasks.map(t=>t.rows), spills=tasks.map(t=>t.spill);
-    const t1=document.getElementById('s1-table');
-    const cells=(arr,f,isDur)=>{const o={min:Math.min(...arr),p25:q(arr,.25),med:q(arr,.5),p75:q(arr,.75),max:Math.max(...arr)};return ['min','p25','med','p75','max'].map(k=>`<td class="num${k==='max'&&isDur&&o.max>1.5*o.p75?' maxcell':''}">${f(o[k])}</td>`).join('');};
-    t1.innerHTML=`<thead><tr><th>Métrica</th><th class="num">Min</th><th class="num">25th</th><th class="num">Median</th><th class="num">75th</th><th class="num">Max</th></tr></thead>
-    <tbody><tr><td>Duration</td>${cells(dur,fmtT,true)}</tr>
-    <tr><td>Shuffle read (M filas)</td>${cells(rows,v=>v.toFixed(1))}</tr>
-    <tr><td>Spill (disk)</td>${cells(spills,v=>v>0?v.toFixed(1)+' GB':'0')}</tr></tbody>`;
+    const RB=60, bytes=tasks.map(t=>t.rows*1e6*RB), recs=tasks.map(t=>t.rows*1e6), gc=tasks.map(t=>t.comp*0.02+t.extra*0.15);
+    const sDisk=tasks.map(t=>t.spill*0.5*1024**3), sMem=sDisk.map(b=>b*3.2), anySpill=sDisk.some(b=>b>0);
+    const sum=a=>a.reduce((x,y)=>x+y,0);
+    const rows1=[['Duration',dur,UI.dur,true],['GC Time',gc,UI.dur],['Shuffle Read Size / Records',bytes,UI.bytes,false,recs,UI.rec]];
+    if(anySpill){rows1.push(['Spill (memory)',sMem,UI.bytes],['Spill (disk)',sDisk,UI.bytes]);}
+    const order=tasks.map((t,i)=>i).sort((a,b)=>dur[b]-dur[a]).slice(0,5);
+    const host=i=>'10.139.64.'+(11+i%4);
+    const tbl=`<h6>Tasks (${N})</h6><table class="ui-tbl"><thead><tr><th>Index</th><th>Task ID</th><th>Attempt</th><th>Status</th><th>Executor ID</th><th>Host</th><th>Duration ▾</th><th>GC Time</th><th>Shuffle Read Size / Records</th><th>Spill (Memory)</th><th>Spill (Disk)</th></tr></thead><tbody>`+
+      order.map(i=>`<tr><td>${i}</td><td>${812+i}</td><td>0</td><td>SUCCESS</td><td>${i%4}</td><td>${host(i)}</td><td class="${i===HOT&&h>0&&dur[i]>1.5*q(dur,.75)?'hl':''}">${UI.dur(dur[i])}</td><td>${UI.dur(gc[i])}</td><td>${UI.bytes(bytes[i])} / ${UI.rec(recs[i])}</td><td>${UI.bytes(sMem[i])}</td><td>${UI.bytes(sDisk[i])}</td></tr>`).join('')+
+      `<tr><td colspan="11" style="color:#777">… ${N-5} tasks más (ordenado por Duration, de mayor a menor)</td></tr></tbody></table>`;
+    document.getElementById('s1-ui').innerHTML=UI.frame('Stages',
+      `<h5>Details for Stage 7 (Attempt 0)</h5><ul class="ui-kv"><li><b>Total Time Across All Tasks:</b> ${UI.dur(sum(dur))}</li><li><b>Shuffle Read Size / Records:</b> ${UI.bytes(sum(bytes))} / ${UI.rec(sum(recs))}</li>${anySpill?`<li><b>Spill (Memory):</b> ${UI.bytes(sum(sMem))}</li><li><b>Spill (Disk):</b> ${UI.bytes(sum(sDisk))}</li>`:''}<li><b>Associated Job Ids:</b> 4</li></ul>
+       <div class="ui-link">DAG Visualization</div><div class="ui-link">Show Additional Metrics</div><div class="ui-link">Event Timeline</div>`+UI.summary(N,rows1)+tbl,
+      'Recreación de la página del stage. Las filas Spill solo aparecen cuando el stage tiene spill, como en la UI real. En la tabla Tasks, ordenar por Duration lleva directo a la task caliente.');
     const totalSpill=spills.reduce((a,b)=>a+b,0), ratio=st.max/st.p75;
     const totalRows=TOTAL;
     document.getElementById('s1-verdict').innerHTML=
@@ -86,6 +113,20 @@
       `<div>${c1?'<span class="pill ok">✓</span>':'<span class="pill bad">✗</span>'}${hot} MB &gt; ${fac} × ${Math.round(med)} MB = ${Math.round(facLine)} MB</div>
        <div>${c2?'<span class="pill ok">✓</span>':'<span class="pill bad">✗</span>'}${hot} MB &gt; umbral ${thr} MB</div>
        <div><b>${skew?'AQE la parte en ≈ '+Math.ceil(hot/target)+' sub-tareas (estimación).':'AQE no la marca como skewed: no cumple las dos condiciones.'}</b></div>`;
+    const rd=skew?'AQEShuffleRead skewed':'AQEShuffleRead coalesced';
+    document.getElementById('s2-ui').innerHTML=UI.frame('SQL / DataFrame',`<h5>Details for Query 12</h5><div class="ui-link">Details</div><pre><code>== Physical Plan ==
+AdaptiveSparkPlan isFinalPlan=true
++- == Final Plan ==
+   SortMergeJoin [cliente_id], [cliente_id], Inner${skew?', <b style="color:#C9302C">isSkew=true</b>':''}
+   :- Sort [cliente_id ASC NULLS FIRST]
+   :  +- ${rd}
+   :     +- ShuffleQueryStage 0
+   :        +- Exchange hashpartitioning(cliente_id, 200)
+   +- Sort [cliente_id ASC NULLS FIRST]
+      +- ${rd}
+         +- ShuffleQueryStage 1
+            +- Exchange hashpartitioning(cliente_id, 200)</code></pre>`,
+      'Recreación del plan final. La doc de Databricks dice que el skew manejado se ve como <code>SortMergeJoin</code> con <code>isSkew</code> en true; el nombre del nodo de lectura (<code>AQEShuffleRead</code>, antes <code>CustomShuffleReader</code>) y el texto exacto varían según la versión.');
   }
   [s2h,s2f,s2t].forEach(x=>x.addEventListener('input',draw2)); draw2();
 
@@ -247,6 +288,13 @@
     if(empty>0) v.push(`<div><span class="pill bad">VACÍAS</span>${empty.toLocaleString('es')} reduce tasks no reciben nada (hay menos claves que particiones). AQE las une tras el shuffle.</div>`);
     if(E===1) v.push(`<div><span class="pill ok">LOCAL</span>Con un solo executor no hay lectura remota.</div>`);
     document.getElementById('sw-verdict').innerHTML=v.join('');
+    const per=bytes/M, outK=Math.min(K,totalRows);
+    const mm=x=>`${UI.bytes(x)} (${UI.bytes(per*0.92)}, ${UI.bytes(per)}, ${UI.bytes(per*1.08)})`;
+    document.getElementById('sw-ui').innerHTML=UI.frame('SQL / DataFrame',`<h5>Details for Query 3</h5><div class="sq">
+      <div class="sq-cl"><div class="lbl">WholeStageCodegen (1)</div><div class="sq-n"><b>Scan parquet ventas</b><div>number of output rows: ${UI.rec(totalRows)}</div></div>${partial?`<div class="sq-n"><b>HashAggregate</b><div>number of output rows: ${UI.rec(recW)}</div><div>spill size total (min, med, max): 0.0 B (0.0 B, 0.0 B, 0.0 B)</div></div>`:''}</div>
+      <div class="sq-n ex"><b>Exchange</b><div>shuffle records written: ${UI.rec(recW)}</div><div>shuffle bytes written total (min, med, max): ${mm(bytes)}</div><div>local bytes read total: ${UI.bytes(loc)}</div><div>remote bytes read total: ${UI.bytes(rem)}</div></div>
+      <div class="sq-cl"><div class="lbl">WholeStageCodegen (2)</div><div class="sq-n"><b>HashAggregate</b><div>number of output rows: ${UI.rec(outK)}</div></div></div></div>`,
+      'Recreación del plan en la pestaña SQL / DataFrame. Compara <i>number of output rows</i> del primer HashAggregate con el del Scan: así se comprueba la agregación parcial en la UI real.'+(partial?'':' Sin agregación parcial, el Exchange recibe todas las filas del Scan.'));
   }
   [swP,swM,swK,swR,swE].forEach(x=>x.addEventListener('input',drawSw)); swP.addEventListener('change',drawSw); drawSw();
 
@@ -297,14 +345,30 @@ A.join(broadcast(B_peq), "cliente_id") \\
         {n:'Stage 3',ops:['Sort','Write'],tasks:'200 tasks'}]}],
       info:'<b>Tres stages, dos shuffles.</b> El groupBy reparte por hash de la clave. El orderBy global vuelve a repartir, esta vez por <b>rangos</b> de <code>count</code>, para que cada task ordene su tramo. Cada Exchange añade una frontera de stage.'}
   };
+  function scopes(ops,cg){
+    const out=[]; let buf=[];
+    const flush=()=>{ if(buf.length){ out.push({l:'WholeStageCodegen ('+(++cg.n)+')',s:buf.join(', ')}); buf=[]; } };
+    ops.forEach(o=>{
+      if(/^Exchange/.test(o)){flush(); out.push({l:'Exchange'});}
+      else if(/^Scan/.test(o)){flush(); out.push({l:'Scan parquet '+o.replace(/^Scan\s*/,'')});}
+      else if(/^BroadcastExchange/.test(o)){flush(); out.push({l:'BroadcastExchange'});}
+      else if(/^Write/.test(o)){flush(); out.push({l:'WriteFiles'});}
+      else buf.push(o.replace(/ \(.*\)$/,''));
+    }); flush(); return out;
+  }
   function drawDag(k){
     const q=Q[k]; document.getElementById('dag-code').textContent=q.code;
-    let h='';
-    q.jobs.forEach(j=>{h+=`<div class="job">${j.label}</div>`;
-      j.stages.forEach(s=>{
-        if(s.sep){h+=`<div class="sep" aria-hidden="true">${s.sep}<br>→</div>`;return;}
-        h+=`<div class="stg"><h4>${s.n}<span>${s.tasks.split(' ')[0]} tasks</span></h4>${s.ops.map(o=>`<div class="op${/Exchange · (write|read|hash|range)/.test(o)?' ex':''}${/Broadcast/.test(o)?' bc':''}">${o}</div>`).join('')}<div class="tk">${s.tasks}</div></div>`;});});
-    document.getElementById('dag-out').innerHTML=h;
+    const cg={n:0}; let body='';
+    q.jobs.forEach((j,ji)=>{
+      body+=`<div class="dv-job">${j.label}</div>`;
+      j.stages.forEach(st=>{
+        if(st.sep){ body+=`<div class="dv-edge" aria-hidden="true">→</div>`; return; }
+        body+=`<div class="dv-stage"><div class="lbl">${st.n}<small>${st.tasks.split(' ')[0]} tasks</small></div>${scopes(st.ops,cg).map(x=>`<div class="dv-scope">${x.l}${x.s?`<small>${x.s}</small>`:''}<span class="dot"></span></div>`).join('')}</div>`;
+      });
+    });
+    const out=document.getElementById('dag-out'); out.classList.remove('dag');
+    out.innerHTML=UI.frame('Jobs',`<h5>Details for Job 3</h5><div class="ui-link">DAG Visualization</div><div class="dv">${body}</div>`,
+      'Recreación de la DAG Visualization: cada caja rosada es un stage, cada caja azul un bloque de operaciones (dentro de WholeStageCodegen van fusionadas) y cada punto un RDD. En la UI real los stages saltados salen en gris.');
     document.getElementById('dag-info').innerHTML=q.info;
   }
   document.querySelectorAll('[data-q]').forEach(b=>b.addEventListener('click',()=>{
@@ -316,7 +380,7 @@ A.join(broadcast(B_peq), "cliente_id") \\
   /* ---------- 0a-2. waves ---------- */
   if (document.getElementById('wv-n')) { try {
   const wvN=document.getElementById('wv-n'), wvC=document.getElementById('wv-c');
-  let wvSkew='none';
+  let wvSkew='none', wvView='concept';
   const WORK=512, OVH=0.5, WCLS=['p0','p3','p1','p2'];
   const stageTime=(n,c)=>Math.ceil(n/c)*(WORK/n+OVH);
   function simulate(n,c,skew){
@@ -368,6 +432,7 @@ A.join(broadcast(B_peq), "cliente_id") \\
     if(OVH/sim.t>0.25) v.push(`<div><span class="pill bad">TASKS DIMINUTAS</span>El arranque fijo es el ${Math.round(OVH/sim.t*100)}% de cada task.</div>`);
     if(wvSkew!=='none') v.push(`<div><span class="pill bad">TASK LENTA</span>${wvSkew==='last'?'Llega al final: todo el stage espera por ella.':'Empieza pronto: el resto se reparte en los otros cores y parte del retraso se esconde.'}</div>`);
     document.getElementById('wv-verdict').innerHTML=v.join('');
+    if(wvView==='ui') drawWvUI(sim,n,c);
     // sawtooth
     const s2=document.getElementById('wv-saw'); s2.textContent='';
     const SL=40,SR=356,ST=8,SB=22,SH=170;
@@ -384,6 +449,26 @@ A.join(broadcast(B_peq), "cliente_id") \\
     s2.appendChild(el('circle',{cx:sx(n),cy:sy(stageTime(n,c)),r:4,style:'fill:var(--hot);stroke:var(--surface);stroke-width:1.5'}));
     s2.appendChild(el('text',{x:SR,y:ST+8,'text-anchor':'end',class:'tick'},'tasks →'));
   }
+  function drawWvUI(sim,n,c){
+    const E=Math.max(1,c/4), LH=c>16?9:13, L=92, R=512, T=8, H=T+c*LH+22, xmax=tickMax(sim.end*1.01), xs=v=>L+(R-L)*v/xmax;
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.setAttribute('viewBox',`0 0 520 ${H}`); svg.style.minWidth='520px';
+    UI.axis(svg,L,R,T,H-22,xmax,xs);
+    for(let e=0;e<E;e++){ const y=T+e*4*LH;
+      svg.appendChild(el('rect',{x:0,y,width:R,height:4*LH,style:`fill:${e%2?'#FAFAFA':'#FFFFFF'}`}));
+      svg.appendChild(el('line',{x1:0,x2:R,y1:y,y2:y,style:'stroke:#DDD'}));
+      svg.appendChild(el('text',{x:4,y:y+2*LH+3,style:'fill:#333;font-size:9.5px'},`${e} / 10.139.64.${11+e}`)); }
+    UI.axis(svg,L,R,T,H-22,xmax,xs);
+    sim.tasks.forEach(k=>{
+      const work=Math.max(k.d-0.6,0.05), ph=[0.15,0.2,work*0.12,work*0.78,work*0.10,0.05,0.10];
+      let x=xs(k.s); const y=T+k.core*LH+1, hgt=LH-2;
+      ph.forEach((d,i)=>{ const w=(xs(k.s+k.d)-xs(k.s))*d/ph.reduce((a,b)=>a+b,0); svg.appendChild(el('rect',{x,y,width:Math.max(w,0.3),height:hgt,style:`fill:${UI.PH[i][1]}`})); x+=w; });
+      if(k.slow) svg.appendChild(el('rect',{x:xs(k.s),y,width:xs(k.s+k.d)-xs(k.s),height:hgt,style:'fill:none;stroke:#C9302C;stroke-width:1'}));
+    });
+    const box=document.getElementById('wv-ui'); box.innerHTML=UI.frame('Stages',`<h5>Details for Stage 5 (Attempt 0)</h5><div class="ui-link">Event Timeline</div><div style="font-size:12px;margin:.2rem 0">☐ Enable zooming &nbsp;&nbsp; Tasks: ${n}. 1 Pages.</div>${UI.legend(UI.PH.map(p=>[p[0],p[1]]))}<div id="wv-ui-svg"></div>`,
+      'Recreación del Event Timeline del stage: una fila por task agrupada por executor (aquí 4 cores por executor) y cada barra partida en las 7 fases que muestra la UI. Si las tasks son diminutas, la barra deja de ser verde: el tiempo se va en fases que no son cómputo.');
+    box.querySelector('#wv-ui-svg').appendChild(svg);
+  }
+  viewToggle('wv-view',v=>{ wvView=v; document.getElementById('wv-concept').hidden=(v==='ui'); document.getElementById('wv-ui').hidden=(v!=='ui'); drawWv(); });
   [wvN,wvC].forEach(x=>x.addEventListener('input',drawWv));
   document.querySelectorAll('[data-skew]').forEach(b=>b.addEventListener('click',()=>{
     wvSkew=b.dataset.skew; document.querySelectorAll('[data-skew]').forEach(x=>x.setAttribute('aria-pressed',x===b)); drawWv();}));
@@ -427,6 +512,12 @@ A.join(broadcast(B_peq), "cliente_id") \\
       c1:'OPTIMIZE agrupó las filas por cliente_id: cada archivo cubre un tramo de clientes y todas las fechas.',
       c2:'Con dos claves, cada archivo cubre un bloque de clientes y de fechas. Ningún filtro queda perfecto, pero los dos saltan la mayoría.'};
     document.getElementById('lc-verdict').innerHTML=`<div><span class="pill ${n<=4?'ok':'bad'}">${n} / 16</span>archivos leídos · <b>${Math.round(n/16*100)}%</b> de la tabla · ${16-n} saltados por estadísticas mín/máx</div><div class="c">${notes[lcLay]}</div>`;
+    const TOT=20e6, scanRows=TOT*n/16, outRows=lcQ==='cli'?TOT/10000:lcQ==='fec'?TOT/30:TOT/300000;
+    document.getElementById('lc-ui').innerHTML=UI.frame('SQL / DataFrame',`<h5>Details for Query 8</h5><div class="sq">
+      <div class="sq-cl"><div class="lbl">WholeStageCodegen (1)</div>
+        <div class="sq-n"><b>Scan parquet ventas_lc</b><div>number of files read: ${n}</div><div>number of files pruned: ${16-n}</div><div>size of files read: ${UI.bytes(n*256*1024**2)}</div><div>number of output rows: ${UI.rec(scanRows)}</div></div>
+        <div class="sq-n"><b>Filter</b><div>number of output rows: ${UI.rec(outRows)}</div></div></div></div>`,
+      'Recreación del nodo de scan. Fíjate en que el Filter devuelve las mismas filas siempre: lo que cambia con el clustering es cuánto lee el Scan. Los nombres exactos de las métricas de archivos pueden variar según el runtime; compruébalos en tu workspace.');
   }
   document.querySelectorAll('[data-lay]').forEach(b=>b.addEventListener('click',()=>{lcLay=b.dataset.lay;document.querySelectorAll('[data-lay]').forEach(x=>x.setAttribute('aria-pressed',x===b));drawLc();}));
   document.querySelectorAll('[data-lq]').forEach(b=>b.addEventListener('click',()=>{lcQ=b.dataset.lq;document.querySelectorAll('[data-lq]').forEach(x=>x.setAttribute('aria-pressed',x===b));drawLc();}));
@@ -501,11 +592,11 @@ A.join(broadcast(B_peq), "cliente_id") \\
   /* ---------- 7. casos ---------- */
   if (document.getElementById('cs-list')) { try {
   const SM=(rows)=>`<div class="tblwrap"><table><thead><tr><th>Summary Metrics</th><th class="num">Min</th><th class="num">25th</th><th class="num">Median</th><th class="num">75th</th><th class="num">Max</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r[0]}</td>${r.slice(1).map(c=>`<td class="num">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-  const A=(href,txt)=>`<a href="${href}" target="_blank" rel="noopener">${txt}</a>`;
+  const A=(href,txt)=>{const m=href.match(/^https:\/\/docs\.databricks\.com\/aws\/en\/(.*)$/);const az=m?' <a class="az" href="https://learn.microsoft.com/azure/databricks/'+m[1].replace(/^delta\/(clustering|data-skipping)/,'tables/$1')+'" target="_blank" rel="noopener">Azure</a>':'';return `<a href="${href}" target="_blank" rel="noopener">${txt}</a>`+az;};
   const D_AQE='https://docs.databricks.com/aws/en/optimizations/aqe', D_SKEW='https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-page',
         D_LONG='https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage', D_LOWIO='https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/slow-spark-stage-low-io',
         D_IO='https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io', D_GUIDE='https://www.databricks.com/discover/pages/optimize-data-workloads-guide',
-        D_PART='https://docs.databricks.com/aws/en/tables/partitions', D_LC='https://docs.databricks.com/aws/en/delta/clustering', D_SCONF='https://docs.databricks.com/aws/en/spark/conf';
+        D_PART='https://docs.databricks.com/aws/en/tables/partitions', D_LC='https://docs.databricks.com/aws/en/tables/clustering', D_SCONF='https://docs.databricks.com/aws/en/spark/conf';
   const CASES=[
     {t:'Un LEFT JOIN que no termina',
      ctx:'Un job nocturno que tardaba 6 minutos ahora tarda más de 20. Nadie cambió el código. AQE está activado (el default).',
@@ -557,7 +648,7 @@ df.withColumn("saldo", F.sum("monto").over(w))</code></pre><p>Stage del cálculo
 
     {t:'Un join que multiplica filas',
      ctx:'Un join entre ventas y promociones termina con spill en todos los stages siguientes y una tabla de salida 40 veces más grande de lo esperado.',
-     ev:`<p>Pestaña SQL, nodo <code>SortMergeJoin</code>:</p><div class="tblwrap"><table><tbody><tr><td>Entrada ventas</td><td class="num">120 M filas</td></tr><tr><td>Entrada promociones</td><td class="num">2 M filas</td></tr><tr><td>rows output</td><td class="num">4.800 M filas</td></tr></tbody></table></div><pre><code>ventas.join(promociones, "producto_id")</code></pre>`,
+     ev:`<p>Pestaña SQL / DataFrame, nodo <code>SortMergeJoin</code>:</p><div class="tblwrap"><table><tbody><tr><td>Entrada ventas</td><td class="num">120 M filas</td></tr><tr><td>Entrada promociones</td><td class="num">2 M filas</td></tr><tr><td>rows output</td><td class="num">4.800 M filas</td></tr></tbody></table></div><pre><code>ventas.join(promociones, "producto_id")</code></pre>`,
      q:'¿Cuál es la causa raíz y la primera acción?',
      o:[['Skew: dejar que AQE lo parta.','Partir el skew no reduce las filas de salida. El problema es cuántas filas produce el join, no cómo se reparten.'],
         ['Hacer broadcast de promociones.','Ahorra el shuffle de ventas, pero el join sigue produciendo 4.800 M filas.'],
@@ -671,7 +762,7 @@ OPTIMIZE eventos;   <span class="c">-- o predictive optimization si es managed d
     bhj:[{id:1,n:8,d:2,deps:[],note:'broadcast'},{id:2,n:80,d:4.5,deps:[1]}],
     aggsort:[{id:1,n:80,d:4,deps:[]},{id:2,n:200,d:1.5,deps:[1]},{id:3,n:200,d:1.2,deps:[2]}]
   };
-  let jtKey='narrow'; const jtC=document.getElementById('jt-c');
+  let jtKey='narrow', jtView='concept'; const jtC=document.getElementById('jt-c');
   function simJob(stages,C){
     const st=stages.map(s=>Object.assign({},s,{left:s.n,ready:!s.deps.length,start:null,end:null}));
     const queue=[]; st.forEach(s=>{if(s.ready) for(let i=0;i<s.n;i++) queue.push(s);});
@@ -703,7 +794,30 @@ OPTIMIZE eventos;   <span class="c">-- o predictive optimization si es managed d
     });
     const par=r.st.filter(s=>!s.deps.length); if(par.length>1) v.push(`<div>Los Stages ${par.map(s=>s.id).join(' y ')} no dependen entre sí: el Stage ${par[1].id} arranca en cuanto quedan cores libres (en ${par[1].start.toFixed(1)} s), sin esperar a que el ${par[0].id} termine. Con el scheduler por defecto (FIFO), las tasks se lanzan en el orden en que quedaron listas.</div>`);
     document.getElementById('jt-verdict').innerHTML=v.join('');
+    if(jtView==='ui') drawJtUI(r,C);
   }
+  function drawJtUI(r,C){
+    const E=C/8, L=70, R=512, xmax=tickMax(r.end*1.04), xs=v=>L+(R-L)*v/xmax;
+    const rows=[]; const st=r.st.map(s=>{let row=0; while(rows[row]!==undefined && rows[row]>s.start-1e-9) row++; rows[row]=s.end; return Object.assign({row},s);});
+    const nRows=Math.max(1,rows.length), exH=46, stH=8+nRows*24, H=exH+stH+26;
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg'); svg.setAttribute('viewBox',`0 0 520 ${H}`); svg.style.minWidth='520px';
+    svg.appendChild(el('rect',{x:0,y:0,width:R,height:exH,style:'fill:#FAFAFA'}));
+    svg.appendChild(el('line',{x1:0,x2:R,y1:exH,y2:exH,style:'stroke:#DDD'}));
+    svg.appendChild(el('text',{x:4,y:16,style:'fill:#333;font-size:10px;font-weight:600'},'Executors'));
+    svg.appendChild(el('text',{x:4,y:exH+18,style:'fill:#333;font-size:10px;font-weight:600'},'Stages'));
+    UI.axis(svg,L,R,0,H-26,xmax,xs);
+    const evs=['Executor driver added'].concat([...Array(Math.min(E,2)).keys()].map(i=>`Executor ${i} added`)).concat(E>2?[`… ${E-2} más`]:[]);
+    evs.forEach((t,i)=>{ const x=xs(0)+4+i*108, y=6+(i%2)*16; svg.appendChild(el('rect',{x,y,width:104,height:14,rx:2,style:'fill:#A0DFFF;stroke:#3EC0FF'})); svg.appendChild(el('text',{x:x+4,y:y+10,style:'fill:#222;font-size:9px'},t)); svg.appendChild(el('line',{x1:x+2,x2:x+2,y1:y+14,y2:exH-2,style:'stroke:#3EC0FF'})); });
+    st.forEach(s=>{ const x=xs(s.start), w=Math.max(xs(s.end)-x,3), y=exH+8+s.row*24;
+      svg.appendChild(el('rect',{x,y,width:w,height:18,rx:4,style:'fill:#A0DFFF;stroke:#3EC0FF'}));
+      const lbl=`Stage ${s.id}: ${s.n} tasks${s.note?' (broadcast)':''}`; const inside=w>lbl.length*5.2+8;
+      svg.appendChild(el('text',{x:inside?x+5:x+w+4,y:y+12.5,style:'fill:#222;font-size:9.5px'},lbl)); });
+    const box=document.getElementById('jt-ui');
+    box.innerHTML=UI.frame('Jobs',`<h5>Details for Job 3</h5><div class="ui-link">Event Timeline</div><div style="font-size:12px;margin:.2rem 0">☐ Enable zooming</div>${UI.legend([['Executor added','#A0DFFF','#3EC0FF'],['Executor removed','#FFA1B0','#FF4D6D'],['Stage completed','#A0DFFF','#3EC0FF'],['Stage failed','#FFA1B0','#FF4D6D'],['Stage active','#A2FCC0','#36F572']])}<div id="jt-ui-svg"></div>`,
+      'Recreación del Event Timeline de la página del job: un carril con los executors añadidos o retirados y otro con una barra por stage, de su inicio a su fin. La UI no muestra cores; para ver tasks hay que entrar en el stage.');
+    box.querySelector('#jt-ui-svg').appendChild(svg);
+  }
+  viewToggle('jt-view',v=>{ jtView=v; document.getElementById('jt-concept').hidden=(v==='ui'); document.getElementById('jt-ui').hidden=(v!=='ui'); drawJt(); });
   jtC.addEventListener('input',drawJt);
   document.querySelectorAll('[data-q]').forEach(b=>b.addEventListener('click',()=>{jtKey=b.dataset.q; drawJt();}));
   drawJt();

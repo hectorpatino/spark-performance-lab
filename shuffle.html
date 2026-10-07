@@ -6,7 +6,7 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
 ---
 
     <h2>Shuffle: mover filas entre máquinas</h2>
-    <p class="src">Fuentes: <a href="https://spark.apache.org/docs/latest/rdd-programming-guide.html#shuffle-operations" target="_blank" rel="noopener">Apache Spark · Shuffle operations</a> y <a href="https://spark.apache.org/docs/latest/web-ui.html" target="_blank" rel="noopener">Apache Spark · Web UI</a>. Son documentación oficial de Apache Spark, no de docs.databricks.com; Databricks da este concepto por sabido. La recomendación de Databricks para shuffle alto viene de <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener">Spark stage high I/O</a>.</p>
+    <p class="src">Fuentes: <a href="https://spark.apache.org/docs/latest/rdd-programming-guide.html#shuffle-operations" target="_blank" rel="noopener">Apache Spark · Shuffle operations</a> y <a href="https://spark.apache.org/docs/latest/web-ui.html" target="_blank" rel="noopener">Apache Spark · Web UI</a>. Son documentación oficial de Apache Spark, no de docs.databricks.com; Databricks da este concepto por sabido. La recomendación de Databricks para shuffle alto viene de <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener">Spark stage high I/O</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
 
     <h3><span class="k">Qué problema resuelve</span>Las filas de una clave están desperdigadas</h3>
     <p>Cuando lees una tabla, cada tarea recibe un trozo de archivos tal como cayeron en el storage. Si quieres agrupar por <code>cliente_id</code>, las filas del cliente 7 están en muchas tareas y en varias máquinas. Para sumarlas, alguien tiene que juntarlas en un mismo sitio. La doc de Spark lo describe como una operación <i>all-to-all</i>: cada tarea puede tener filas para cualquier otra.</p>
@@ -73,6 +73,7 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
       <div class="legend"><span style="--sw:var(--p0)">shuffle write</span><span style="--sw:var(--cool)">read local</span><span style="--sw:var(--hot)">read remoto</span></div>
       <div class="tblwrap"><table id="sw-table"></table></div>
       <div class="verdict" id="sw-verdict"></div>
+      <div id="sw-ui"></div>
     </div>
     <p>Prueba esto:</p>
     <ul>
@@ -83,7 +84,7 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
     </ul>
 
     <h3><span class="k">Dónde verlo</span>Métricas del Spark UI</h3>
-    <p>El mismo shuffle aparece dos veces: como <b>write</b> en el stage que lo produce y como <b>read</b> en el stage siguiente. Definiciones según la doc de Spark:</p>
+    <p>El mismo shuffle aparece dos veces: como <b>write</b> en el stage que lo produce y como <b>read</b> en el stage siguiente. Definiciones según la doc de Spark. La doc dice "Shuffle spill (memory/disk)", pero en la tabla Summary Metrics del Spark UI aparecen como <i>Spill (memory)</i> y <i>Spill (disk)</i>:</p>
     <div class="tblwrap"><table>
       <thead><tr><th>Métrica</th><th>Qué mide</th><th>Qué mirar</th></tr></thead>
       <tbody>
@@ -92,11 +93,11 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
         <tr><td>Shuffle Read Size / Records</td><td>Bytes leídos en total, sumando locales y remotos</td><td>Min vs Max por tarea: la señal de skew</td></tr>
         <tr><td>Shuffle Remote Reads</td><td>Bytes leídos de otros executors</td><td>La parte que viaja por red</td></tr>
         <tr><td>Shuffle Read Fetch Wait Time</td><td>Tiempo que las tareas estuvieron bloqueadas esperando datos remotos</td><td>Alto: la red o los executors remotos son el cuello</td></tr>
-        <tr><td>Shuffle spill (memory)</td><td>Tamaño de los datos volcados, en su forma deserializada en memoria</td><td>Siempre mayor que el de disco; no es un error</td></tr>
-        <tr><td>Shuffle spill (disk)</td><td>Tamaño de esos mismos datos, serializados en disco</td><td>Cualquier valor &gt; 0 merece revisión</td></tr>
+        <tr><td>Spill (memory)</td><td>Tamaño de los datos volcados, en su forma deserializada en memoria</td><td>Siempre mayor que el de disco; no es un error</td></tr>
+        <tr><td>Spill (disk)</td><td>Tamaño de esos mismos datos, serializados en disco</td><td>Cualquier valor &gt; 0 merece revisión</td></tr>
       </tbody>
     </table></div>
-    <p>En la pestaña SQL, el nodo <code>Exchange</code> trae las mismas ideas: <i>shuffle bytes written</i>, <i>shuffle records written</i>, <i>shuffle write time</i>, <i>remote bytes read</i>, <i>local bytes read</i>, <i>fetch wait time</i> y <i>data size</i>.</p>
+    <p>En la pestaña SQL / DataFrame, el nodo <code>Exchange</code> trae las mismas ideas: <i>shuffle bytes written</i>, <i>shuffle records written</i>, <i>shuffle write time</i>, <i>remote bytes read</i>, <i>local bytes read</i>, <i>fetch wait time</i> y <i>data size</i>.</p>
     <div class="verify">En serverless (Free Edition) no hay Spark UI; usas el query profile. No confirmé en la doc qué nombre exacto tiene cada una de estas métricas en el query profile. <b>Verifícalo</b> abriendo el perfil de una query con <code>groupBy</code> en tu workspace.</div>
 
     <h3><span class="k">Cuándo hay shuffle y cuándo no</span></h3>

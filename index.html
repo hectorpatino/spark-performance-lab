@@ -14,7 +14,7 @@ description: "Manual para diagnosticar jobs lentos en Databricks y Apache Spark:
 <ol class="flow">
   <li><a href="stages.html"><b>¿Cuántas tasks tiene el stage frente a los cores?</b><span>Una sola task, menos tasks que cores o una última wave casi vacía.</span><em>Stages y waves</em></a></li>
   <li><a href="diagnostico.html"><b>¿Hay spill?</b><span>Si aparece en todas las tasks, las particiones son grandes. Si aparece solo en una, mira el skew.</span><em>Diagnóstico y Remedios</em></a></li>
-  <li><a href="aqe.html"><b>¿Hay skew?</b><span>El máximo de Duration supera al percentil 75 en más de un 50%. Comprueba si AQE pudo partirlo.</span><em>AQE y Remedios</em></a></li>
+  <li><a href="diagnostico.html"><b>¿Hay skew?</b><span>El máximo de Duration supera al percentil 75 en más de un 50%. Comprueba si AQE pudo partirlo.</span><em>Diagnóstico y AQE</em></a></li>
   <li><a href="liquid-clustering.html"><b>¿El scan lee de más?</b><span>Decenas de miles de archivos pequeños, o casi todos los archivos para un filtro selectivo.</span><em>Liquid clustering</em></a></li>
   <li><a href="casos.html"><b>¿Un join produce muchas más filas de las que entran?</b><span>Mira <i>rows output</i> en el nodo de join del plan.</span><em>Casos, caso 4</em></a></li>
 </ol>
