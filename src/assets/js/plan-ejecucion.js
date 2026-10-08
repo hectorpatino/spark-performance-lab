@@ -43,19 +43,19 @@
       lin.forEach((x, n) => {
         const last = n === lin.length - 1;
         if (x.op === 'filter' || x.op === 'select') cur.ops.push(OPS[x.op].plan);
-        else if (x.op === 'groupBy') { cur.ops.push('HashAggregate (parcial)'); cut('Exchange', p => open(['HashAggregate (final)'], sp, [p], `spark.sql.shuffle.partitions = ${sp}`)); }
+        else if (x.op === 'groupBy') { cur.ops.push('HashAggregate (parcial)'); cut('Exchange', p => open(['HashAggregate (final)'], sp, [p], 'una por partición del shuffle (<code>spark.sql.shuffle.partitions</code> = ' + sp + ')')); }
         else if (x.op === 'join') {
           cur.ops.push('Exchange'); stages.push(cur);
           const a = cur.id, b = open(['Scan clientes', 'Exchange'], B_FILES, [], `una por archivo de clientes (${B_FILES})`);
           stages.push(b);
-          cur = open(['Sort', 'SortMergeJoin'], sp, [a, b.id], `spark.sql.shuffle.partitions = ${sp}`);
+          cur = open(['Sort', 'SortMergeJoin'], sp, [a, b.id], 'una por partición del shuffle (<code>spark.sql.shuffle.partitions</code> = ' + sp + ')');
         }
         else if (x.op === 'orderBy') {
           if (last && s === 'show') { cur.ops.push('TakeOrderedAndProject'); notes.push('<code>orderBy</code> seguido de <code>show()</code> no hace shuffle: Spark lo cambia por <code>TakeOrderedAndProject</code>, que saca el top de cada partición y lo junta en el driver.'); }
-          else { cut('Exchange (rangos)', p => open(['Sort'], sp, [p], `spark.sql.shuffle.partitions = ${sp}`)); notes.push('Por el <code>orderBy</code>, antes de este job verás en el Spark UI un job corto de <b>muestreo</b>: Spark lee una muestra para decidir los rangos de cada partición.'); }
+          else { cut('Exchange (rangos)', p => open(['Sort'], sp, [p], 'una por partición del shuffle (<code>spark.sql.shuffle.partitions</code> = ' + sp + ')')); notes.push('Por el <code>orderBy</code>, antes de este job verás en el Spark UI un job corto de <b>muestreo</b>: Spark lee una muestra para decidir los rangos de cada partición.'); }
         }
       });
-      if (s === 'count') { cur.ops.push('HashAggregate (parcial)'); cut('Exchange (1 partición)', p => open(['HashAggregate (final)'], 1, [p], '<code>count()</code> junta los conteos parciales en una sola partición')); notes.push('<code>count()</code> añade su propio stage de <b>1 task</b>: cada task cuenta su partición y una última task suma los conteos.'); }
+      if (s === 'count') { cur.ops.push('HashAggregate (parcial)'); cut('Exchange (1 partición)', p => open(['HashAggregate (final)'], 1, [p], '<code>count()</code> junta los conteos parciales en una sola partición, así que hay una sola task')); }
       else if (s === 'write') cur.ops.push('WriteFiles');
       else if (s === 'collect') { cur.ops.push('Collect → driver'); notes.push('<code>collect()</code> trae todas las filas al driver. Con datos grandes, ahí empieza un OOM del driver.'); }
       else if (s === 'show') { cur.ops.push('CollectLimit 21'); if (!cur.ops.includes('TakeOrderedAndProject')) { cur.tasks = 1; cur.why = '<code>show()</code> lee primero 1 partición y solo pide más si no le alcanzan las 21 filas'; } }
@@ -152,7 +152,12 @@
     if (!sel) { info.innerHTML = 'Hay transformaciones, pero ninguna acción. Spark solo ha anotado el plan: <b>no ha lanzado ningún job</b>. Añade <code>count()</code>, <code>show()</code>, <code>collect()</code> o <code>write</code>.'; return; }
     if (sel.t === 'job') {
       const j = app.jobs[sel.id], ex = j.stages.length - 1;
-      let h = `<p><b>Job ${j.id}</b> lo lanza <code>${esc(OPS[j.action].code)}</code>. Su <b>plan lógico</b> es todo el linaje hasta esa acción: <code>${j.plan.join(' › ')}</code>. Catalyst lo optimiza, elige un plan físico y el scheduler lo corta en <b>${j.stages.length} stage${j.stages.length > 1 ? 's' : ''}</b>${ex ? `, uno más por cada Exchange (${ex})` : ' porque no hay ningún Exchange'}. En total, ${j.stages.reduce((a, s) => a + s.tasks, 0)} tasks.</p>`;
+      let h = `<p><b>Job ${j.id}</b> lo lanza <code>${esc(OPS[j.action].code)}</code>. Su <b>plan lógico</b> es todo el linaje hasta esa acción: <code>${j.plan.join(' › ')}</code>. Catalyst lo optimiza, elige un plan físico y el scheduler lo corta en <b>${j.stages.length} stage${j.stages.length > 1 ? 's' : ''}</b>${ex ? `, uno más por cada Exchange (${ex})` : ' porque no hay ningún Exchange'}. </p>`;
+      const tot = j.stages.reduce((a, s) => a + s.tasks, 0);
+      h += j.stages.length > 1
+        ? `<p><b>${tot} tasks</b>, que se suman stage por stage:</p><ul>${j.stages.map(st => `<li><b>${st.tasks}</b> del Stage ${st.id}: ${st.why}</li>`).join('')}</ul>`
+        : `<p><b>${tot} task${tot > 1 ? 's' : ''}</b>: ${j.stages[0].why}.</p>`;
+      if (j.stages.some(st => st.tasks === app.sp && /shuffle\.partitions/.test(st.why))) h += `<p><code>spark.sql.shuffle.partitions</code> decide en cuántas particiones se reparten los datos en un shuffle (por un <code>groupBy</code>, un <code>join</code> o un <code>orderBy</code>). Cada partición es una task del stage que lee ese shuffle. Spark usa 200 por defecto; con AQE, que une particiones pequeñas, el Spark UI puede mostrar menos.</p>`;
       if (j.id > 0) h += `<p>Igual que el Job 0, empieza leyendo ventas desde cero: sin <code>cache()</code>, cada acción recalcula su linaje entero. Si el shuffle de un job anterior sirve, el Spark UI muestra esos stages como <i>skipped</i>.</p>`;
       j.notes.forEach(n => { h += `<p>${n}</p>`; });
       info.innerHTML = h;

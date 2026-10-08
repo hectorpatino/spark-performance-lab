@@ -5,3 +5,6 @@ vendor/
 .bundle/
 __pycache__/
 .DS_Store
+
+# Salidas de Playwright (logs de consola, snapshots .yml, capturas)
+.playwright-mcp/

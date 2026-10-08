@@ -62,6 +62,7 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
         <div class="ctrl"><label for="tr-f">Archivos de ventas <output id="tr-f-o"></output></label><input type="range" id="tr-f" min="1" max="200" step="1" value="3"></div>
         <div class="ctrl"><label for="tr-p">shuffle.partitions <output id="tr-p-o"></output></label><input type="range" id="tr-p" min="1" max="200" step="1" value="4"></div>
       </div>
+      <p class="sub" style="font-size:.8rem;color:var(--muted);margin:.1rem 0 .4rem"><b>Archivos de ventas</b> fija las tasks del stage que lee la tabla: una por archivo. <b>shuffle.partitions</b> fija las tasks de cada stage que viene después de un shuffle (<code>groupBy</code>, <code>join</code>, <code>orderBy</code>): una por partición.</p>
       <div class="stats" id="tr-stats"></div>
       <div class="chips" role="group" aria-label="Reproducción"><button type="button" id="tr-play" aria-pressed="false">Ejecutar el notebook</button></div>
       <svg class="chart" id="tr-svg" viewBox="0 0 360 120" role="img" aria-label="Árbol de la aplicación: jobs, stages y tasks"></svg>
