@@ -24,19 +24,24 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
           <code>select</code>) procesan cada partición por su cuenta. Las <b>wide</b>
           (<code>groupBy</code>, <code>orderBy</code>, un <code>join</code> sin broadcast) necesitan
           filas que están en otras particiones, así que obligan a un <a
-          href="shuffle.html">shuffle</a>: redistribuir los datos entre executors.</li>
+          href="shuffle.html">shuffle</a>: redistribuir los datos entre executors. Con cada wide
+          termina un stage y empieza otro.</li>
         <li>El plan lógico de un job es su linaje: la cadena de transformaciones desde la lectura
-          hasta la acción. Catalyst, el optimizador de Spark SQL, lo mejora y elige un plan físico,
-          que ves con <code>explain()</code>.</li>
-        <li>En el plan físico, cada shuffle aparece como un nodo <code>Exchange</code>, y ahí
-          termina un stage y empieza otro. Las narrow que van seguidas se ejecutan juntas dentro del
-          mismo stage.</li>
+          hasta la acción. Catalyst, el optimizador de Spark SQL, lo mejora y elige un plan físico.
+          Puedes ver los dos antes de ejecutar con <a href="#explain"><code>explain()</code></a>:
+          sin argumentos muestra solo el físico; con <code>explain(True)</code>, también el
+          lógico.</li>
+        <li>En el plan físico, cada <a href="shuffle.html">shuffle</a> aparece como un nodo
+          <code>Exchange</code>: ahí está el corte entre stages. Las narrow que van seguidas se
+          ejecutan juntas dentro del mismo stage.</li>
         <li>Cada partición es una task. Los cores no cambian cuántas tasks hay, solo cuántas corren
           a la vez.</li>
         <li>Sin <code>cache()</code>, cada acción recalcula su linaje desde la lectura.</li>
       </ul>
       <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> para saber cuántos stages tendrá
-        un job, cuenta los <code>Exchange</code> de su plan físico y súmale uno.</p>
+        un job, cuenta los <code>Exchange</code> de shuffle de su plan físico y súmale uno. El uno
+        sale de que cada <code>Exchange</code> es un corte, y los cortes dejan siempre un trozo más:
+        con un corte salen dos stages; con dos, tres.</p>
     </div>
 
     <h3><span class="k">Qué problema resuelve</span>Saber de dónde sale cada fila del Spark UI</h3>
@@ -66,11 +71,11 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
           partición</b></td><td>Una por partición del stage</td></tr>
         <tr><td><b>Plan lógico</b></td><td>Qué hay que calcular, sin decir cómo: el linaje de
           transformaciones desde la lectura hasta la acción. Catalyst lo analiza y lo optimiza (por
-          ejemplo, empuja los filtros hacia la lectura)</td><td>Tu código, al llegar a una
-          acción</td></tr>
+          ejemplo, empuja los filtros hacia la lectura). Lo ves con
+          <code>explain(True)</code></td><td>Tu código, al llegar a una acción</td></tr>
         <tr><td><b>Plan físico</b></td><td>Cómo se calcula: operadores concretos como
           <code>HashAggregate</code>, <code>SortMergeJoin</code> o <code>Exchange</code>. Es lo que
-          muestra <code>explain()</code></td><td>Catalyst, a partir del plan lógico
+          muestra <code>explain()</code> sin argumentos</td><td>Catalyst, a partir del plan lógico
           optimizado</td></tr>
       </tbody>
     </table></div>
@@ -91,7 +96,10 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
         <button type="button" data-op="show">show()</button>
         <button type="button" data-op="collect">collect()</button>
         <button type="button" data-op="write">write</button>
-        <button type="button" id="tr-undo" style="margin-left:.4rem">Quitar última</button>
+      </div>
+      <div class="chips" role="group" aria-label="Editar el notebook">
+        <span class="lab">Editar:</span>
+        <button type="button" id="tr-undo">Quitar última línea</button>
         <button type="button" id="tr-reset">Reiniciar</button>
       </div>
       <pre id="tr-code" style="margin:.6rem 0"></pre>
@@ -129,7 +137,7 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
         y el Job 1 vuelve a leer A desde cero porque no hay <code>cache()</code>.</li>
       <li>Fíjate en el <code>count()</code>: no es "gratis". Añade un stage de <b>1 task</b> que
         suma los conteos de las demás.</li>
-      <li>Quita todas las acciones con <b>Quitar última</b>. Sin acciones no hay ningún job: las
+      <li>Quita todas las acciones con <b>Quitar última línea</b>. Sin acciones no hay ningún job: las
         transformaciones solo anotan el plan.</li>
       <li>Añade <code>join clientes</code> y una acción. Salen dos stages de lectura (ventas y
         clientes) que corren <b>a la vez</b>, y el join espera a los dos.</li>
@@ -190,21 +198,59 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
     <p>Qué pasa después, cuando esas tasks se reparten entre los cores, está en <a
       href="stages.html">Tasks, cores y waves</a>.</p>
 
-    <h3><span class="k">Cómo se usa</span>Ejemplo que puedes correr</h3>
+    <h3 id="explain"><span class="k">Cómo se usa</span>Leer el plan con explain()</h3>
+    <p><code>explain()</code> imprime el plan de un DataFrame sin ejecutarlo: no lanza ningún job.
+      Sirve para saber cuántos stages tendrá un job antes de correrlo.</p>
 <pre><code>df  = spark.range(0, 50_000_000, numPartitions=40)
 agg = df.groupBy((df.id % 1000).alias("k")).count()
 
-agg.explain()   <span class="c"># cada Exchange del plan es una frontera de stage</span>
+agg.explain()   <span class="c"># imprime el plan físico; no ejecuta nada</span>
 agg.collect()   <span class="c"># la acción: aquí se lanza el job</span></code></pre>
-    <p>En el plan verás <code>HashAggregate</code> (parcial), <code>Exchange hashpartitioning(k,
-      …)</code> y otro <code>HashAggregate</code> (final). Son dos stages: el primero con 40 tasks y
-      el segundo con las particiones del shuffle (o menos, si AQE las une).</p>
+    <p>La salida tiene esta forma (abreviada; los nombres exactos cambian con la versión y con
+      Photon):</p>
+<pre><code>== Physical Plan ==
+AdaptiveSparkPlan isFinalPlan=false
++- HashAggregate(keys=[k], functions=[count(1)])
+   +- Exchange hashpartitioning(k, 200)
+      +- HashAggregate(keys=[k], functions=[partial_count(1)])
+         +- Project [(id % 1000) AS k]
+            +- Range (0, 50000000, step=1, splits=40)</code></pre>
+    <ul>
+      <li><b>Se lee de abajo arriba.</b> Abajo está la lectura (<code>Range</code>, o
+        <code>Scan</code> con una tabla) y arriba el resultado. Los datos suben por el árbol.</li>
+      <li><b>Cada <code>Exchange</code> de shuffle es una frontera de stage.</b> Aquí hay uno, así
+        que son dos stages: el de abajo con 40 tasks (las 40 particiones de entrada) y el de arriba
+        con 200, el número que aparece en <code>hashpartitioning(k, 200)</code>.</li>
+      <li><b><code>BroadcastExchange</code> no es un shuffle.</b> Copia la tabla pequeña a cada
+        executor y no corta el stage del lado grande. Si en un join ves
+        <code>BroadcastHashJoin</code>, no hay shuffle; si ves <code>SortMergeJoin</code>, hay un
+        <code>Exchange</code> en cada lado (ver <a href="joins.html">Joins</a>).</li>
+      <li><b><code>AdaptiveSparkPlan isFinalPlan=false</code></b> quiere decir que es el plan
+        inicial: AQE puede cambiarlo al ejecutar, por ejemplo uniendo esas 200 particiones en menos.
+        El plan final está en la pestaña SQL / DataFrame del Spark UI o en el query profile (ver <a
+        href="aqe.html">AQE</a>).</li>
+    </ul>
     <p>Usa <code>collect()</code> y no <code>count()</code> como acción: <code>count()</code>
-      agregaría su propio stage de 1 task para sumar los conteos, como viste en el árbol de arriba.
-      Para ver los dos planes, el lógico optimizado y el físico, usa <code>agg.explain(True)</code>
-      o <code>agg.explain("formatted")</code>. Con AQE, el plan definitivo solo se conoce al
-      ejecutar: míralo en la pestaña SQL / DataFrame del Spark UI o en el query profile (ver <a
-      href="aqe.html">AQE</a>).</p>
+      agregaría su propio stage de 1 task para sumar los conteos, como viste en el árbol de
+      arriba.</p>
+    <p><code>explain()</code> acepta un modo. En SQL es lo mismo con <code>EXPLAIN [EXTENDED |
+      CODEGEN | COST | FORMATTED] &lt;query&gt;</code>.</p>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Modo</th><th>Qué imprime</th><th>Para qué</th></tr></thead>
+      <tbody>
+        <tr><td><code>explain()</code><br><code>"simple"</code></td><td>Solo el plan
+          físico</td><td>Contar <code>Exchange</code> y ver qué join eligió</td></tr>
+        <tr><td><code>explain(True)</code><br><code>"extended"</code></td><td>Los planes lógicos
+          (parseado, analizado, optimizado) y el físico</td><td>Ver qué cambió el optimizador, por
+          ejemplo un filtro que bajó hasta la lectura</td></tr>
+        <tr><td><code>"formatted"</code></td><td>Un esquema del plan físico y, debajo, el detalle de
+          cada nodo</td><td>Planes largos: el árbol queda corto y legible</td></tr>
+        <tr><td><code>"cost"</code></td><td>El plan lógico con estadísticas, si las hay</td><td>Ver
+          los tamaños que el optimizador estima</td></tr>
+        <tr><td><code>"codegen"</code></td><td>El plan físico y el código generado, si lo
+          hay</td><td>Rara vez hace falta</td></tr>
+      </tbody>
+    </table></div>
 
     <h3 class="solo"><span class="k">Con qué se confunde</span></h3>
     <ul>
@@ -244,6 +290,8 @@ agg.collect()   <span class="c"># la acción: aquí se lanza el job</span></code
       title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
       href="https://www.databricks.com/glossary/catalyst-optimizer" target="_blank"
       rel="noopener">Databricks · Catalyst optimizer (glosario)</a>, <a
+      href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.explain.html"
+      target="_blank" rel="noopener">PySpark · DataFrame.explain</a>, <a
       href="https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-explain"
       target="_blank" rel="noopener">Databricks · EXPLAIN</a> <a class="az"
       href="https://learn.microsoft.com/azure/databricks/sql/language-manual/sql-ref-syntax-qry-explain"
