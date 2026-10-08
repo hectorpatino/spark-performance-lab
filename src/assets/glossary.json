@@ -17,7 +17,14 @@
     "t": [
       "job"
     ],
-    "d": "Cálculo paralelo que Spark lanza cuando llamas a una acción como write, count o collect."
+    "d": "Cálculo paralelo que Spark lanza cuando llamas a una acción como write, count o collect. Con AQE, una sola acción puede dar varios jobs."
+  },
+  {
+    "t": [
+      "acción",
+      "acciones"
+    ],
+    "d": "Operación que devuelve un resultado al driver (count, collect, show) o escribe datos (write). Es lo único que lanza jobs: en principio uno por acción, pero con AQE suele dar varios, uno por query stage."
   },
   {
     "t": [

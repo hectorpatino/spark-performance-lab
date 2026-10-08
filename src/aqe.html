@@ -138,25 +138,65 @@ tamaño &gt; skewedPartitionThresholdInBytes   <span class="c">-- default 256MB<
         AQE. Usa el plan del Spark UI o <code>df.explain()</code> después de ejecutar.</li>
     </ul>
 
+    <h3 id="una-accion-dos-jobs"><span class="k">Señal en el Spark UI</span>Una acción, dos
+      jobs</h3>
+    <p>Un <code>count()</code> después de un <code>filter</code> es una sola acción, pero el Spark
+      UI suele mostrar dos jobs:</p>
+<pre><code>ventas = spark.read.table("ventas").filter("PHYSICAL_BOXES > 0")
+ventas.count()
+
+<span class="c"># Lo que muestra el Spark UI</span>
+Job 14   Stage 23   22/22 tasks
+Job 15   Stage 24    0/22 tasks   skipped
+         Stage 25     1/1 task</code></pre>
+    <p>El count es una agregación con un shuffle en medio: <code>partial_count</code> en cada
+      partición de lectura, un <code>Exchange SinglePartition</code> y el <code>count</code> final
+      en una sola task. Ese shuffle es una query stage, y sus estadísticas reales solo existen cuando
+      termina. Por eso la ejecución se parte:</p>
+    <ol>
+      <li><b>Job 14.</b> Ejecuta el lado map del shuffle: lee, filtra, cuenta por partición y
+        escribe la salida del shuffle (22 tasks).</li>
+      <li>AQE vuelve a optimizar el resto del plan con lo que midió.</li>
+      <li><b>Job 15.</b> Ejecuta el stage final (1 task). Su stage padre aparece como
+        <i>skipped</i> porque los archivos de shuffle del Job 14 se conservan y se reutilizan. No se
+        vuelve a leer la tabla.</li>
+    </ol>
+    <p>El trabajo real son 23 tasks, igual que sin AQE. Al leer el UI, cuenta solo los stages que
+      no están skipped.</p>
+    <p class="c">La doc de Databricks dice que AQE vuelve a optimizar al final de cada query stage,
+      pero no explica cómo se reparten en jobs. El reparto de arriba es lo que se observa en el Spark
+      UI. Para comprobarlo en un cluster clásico, pon
+      <code>spark.databricks.optimizer.adaptive.enabled</code> en false y repite el
+      <code>count()</code>: deberías ver un solo job con dos stages.</p>
+
     <h3><span class="k">Configs que conviene reconocer</span>Defaults según la doc</h3>
     <div class="tblwrap"><table>
-      <thead><tr><th>Config</th><th class="num">Default</th></tr></thead>
+      <thead><tr><th>Config</th><th>Origen</th><th class="num">Default</th></tr></thead>
       <tbody>
-        <tr><td><code>spark.databricks.optimizer.adaptive.enabled</code> (activa AQE)</td><td
+        <tr><td><code>spark.databricks.optimizer.adaptive.enabled</code> (activa AQE)</td>
+          <td>Databricks</td><td class="num">true</td></tr>
+        <tr><td><code>spark.sql.adaptive.skewJoin.enabled</code></td><td>Spark</td><td
           class="num">true</td></tr>
-        <tr><td><code>spark.sql.adaptive.skewJoin.enabled</code></td><td class="num">true</td></tr>
-        <tr><td><code>spark.sql.adaptive.skewJoin.skewedPartitionFactor</code></td><td
-          class="num">5</td></tr>
-        <tr><td><code>spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes</code></td><td
-          class="num">256MB</td></tr>
+        <tr><td><code>spark.sql.adaptive.skewJoin.skewedPartitionFactor</code></td><td>Spark</td>
+          <td class="num">5</td></tr>
+        <tr><td><code>spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes</code></td>
+          <td>Spark</td><td class="num">256MB</td></tr>
         <tr><td><code>spark.sql.adaptive.advisoryPartitionSizeInBytes</code> (objetivo al unir
-          particiones)</td><td class="num">64MB</td></tr>
+          particiones)</td><td>Spark</td><td class="num">64MB</td></tr>
         <tr><td><code>spark.databricks.adaptive.autoBroadcastJoinThreshold</code> (broadcast en
-          runtime)</td><td class="num">30MB</td></tr>
+          runtime)</td><td>Databricks</td><td class="num">30MB</td></tr>
         <tr><td><code>spark.sql.shuffle.partitions</code> (<code>auto</code> activa auto-optimized
-          shuffle)</td><td class="num">200</td></tr>
+          shuffle)</td><td>Spark; <code>auto</code> es de Databricks</td><td
+          class="num">200</td></tr>
       </tbody>
     </table></div>
+    <p class="c">AQE es de Apache Spark y está activo por defecto desde Spark 3.2.0. Databricks lo
+      trae activado y le añade configs propias con prefijo <code>spark.databricks.*</code>. Sus
+      equivalentes en Spark son <code>spark.sql.adaptive.enabled</code> (true) y
+      <code>spark.sql.adaptive.autoBroadcastJoinThreshold</code>, que si no se define toma el
+      umbral estático <code>spark.sql.autoBroadcastJoinThreshold</code> (10 MB) (<a
+      href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#adaptive-query-execution"
+      target="_blank" rel="noopener">Apache Spark · Adaptive Query Execution</a>).</p>
     <p class="c">En serverless solo puedes cambiar <code>spark.sql.shuffle.partitions</code> de esta
       tabla, y allí su default ya es <code>auto</code> (<a
       href="https://docs.databricks.com/aws/en/spark/conf#serverless" target="_blank"
@@ -220,4 +260,11 @@ SELECT /*+ SKEW('orders', ('o_custId', 'o_storeRegionId'), ((0, 1001), (1, 1002)
       rel="noopener">Skew join optimization using skew hints</a> <a class="az"
       href="https://learn.microsoft.com/azure/databricks/archive/legacy/skew-join" target="_blank"
       rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>
-      (página archivada)</p>
+      (página archivada) · <a
+      href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#adaptive-query-execution"
+      target="_blank" rel="noopener">Apache Spark · Adaptive Query Execution</a> · <a
+      href="https://spark.apache.org/docs/latest/web-ui.html#jobs-tab"
+      target="_blank" rel="noopener">Apache Spark · Web UI</a> (stages <i>skipped</i>) · <a
+      href="https://spark.apache.org/docs/latest/rdd-programming-guide.html#performance-impact"
+      target="_blank" rel="noopener">Apache Spark · Shuffle, performance impact</a> (archivos de
+      shuffle que se conservan)</p>

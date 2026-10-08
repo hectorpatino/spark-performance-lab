@@ -67,7 +67,8 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
           viva</td><td>Crear la <code>SparkSession</code> (en Databricks, al arrancar el
           compute)</td></tr>
         <tr><td><b>Job</b></td><td>Todo lo que Spark ejecuta para responder a una
-          <b>acción</b></td><td>Cada acción</td></tr>
+          <b>acción</b></td><td>Cada acción. Con AQE, una acción puede repartirse en varios jobs
+          (<a href="aqe.html#una-accion-dos-jobs">ejemplo</a>)</td></tr>
         <tr><td><b>Stage</b></td><td>Un tramo del job que se calcula sin shuffle</td><td>Cada
           transformación wide: su shuffle abre un stage nuevo</td></tr>
         <tr><td><b>Task</b></td><td>El trabajo sobre una partición, en un core</td><td>Una por
@@ -276,7 +277,8 @@ AdaptiveSparkPlan isFinalPlan=false
     <h3 class="solo"><span class="k">Con qué se confunde</span></h3>
     <ul>
       <li><b>Job vs acción.</b> En principio, una acción da un job. Con AQE y broadcast es normal
-        ver varios jobs por una sola acción, porque cada query stage se lanza aparte.</li>
+        ver varios jobs por una sola acción, porque cada query stage se lanza aparte (ejemplo con
+        un <code>count()</code> en <a href="aqe.html#una-accion-dos-jobs">AQE</a>).</li>
       <li><b>Task vs partición.</b> Es una relación 1:1 dentro de un stage. Cambiar las particiones
         es cambiar las tasks: un <code>repartition(1)</code> deja un stage de <a
         href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/one-spark-task"
