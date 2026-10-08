@@ -11,40 +11,78 @@ extra_css: ["/assets/css/memoria-oom.css"]
     <div class="essentials" role="note">
       <p class="essentials-title">Lo esencial en 1 minuto</p>
       <ul>
-        <li>Spill: un sort, una agregación o un sort-merge join no cabe en la memoria de ejecución, escribe a disco local y termina más lento. OOM: la JVM del driver o de un executor no tiene memoria; la task falla y a menudo se pierde el executor.</li>
-        <li>Las tasks activas de un executor se reparten la memoria de ejecución. Lo que cuenta es la memoria por core; la doc de Databricks propone duplicarla como prueba.</li>
-        <li>Una tabla hash completa, un broadcast grande o un resultado entero en el driver no pueden hacer spill: ahí llega el OOM.</li>
-        <li>OOM del driver: <code>collect()</code>, <code>toPandas()</code>, broadcast grande o demasiada concurrencia. <code>spark.driver.maxResultSize</code> es una protección; subirlo no le da memoria al driver.</li>
-        <li>Arreglos en orden: no traer datos al driver, tasks más pequeñas, partir el skew, controlar los broadcasts y, al final, más memoria por core.</li>
+        <li>Spill: un sort, una agregación o un sort-merge join no cabe en la memoria de ejecución,
+          escribe a disco local y termina más lento. OOM: la JVM del driver o de un executor no
+          tiene memoria; la task falla y a menudo se pierde el executor.</li>
+        <li>Las tasks activas de un executor se reparten la memoria de ejecución. Lo que cuenta es
+          la memoria por core; la doc de Databricks propone duplicarla como prueba.</li>
+        <li>Una tabla hash completa, un broadcast grande o un resultado entero en el driver no
+          pueden hacer spill: ahí llega el OOM.</li>
+        <li>OOM del driver: <code>collect()</code>, <code>toPandas()</code>, broadcast grande o
+          demasiada concurrencia. <code>spark.driver.maxResultSize</code> es una protección; subirlo
+          no le da memoria al driver.</li>
+        <li>Arreglos en orden: no traer datos al driver, tasks más pequeñas, partir el skew,
+          controlar los broadcasts y, al final, más memoria por core.</li>
       </ul>
-      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> antes de pedir más memoria, averigua si el fallo está en el driver o en un executor y qué estructura se llenó.</p>
+      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> antes de pedir más memoria,
+        averigua si el fallo está en el driver o en un executor y qué estructura se llenó.</p>
     </div>
 
-    <h3><span class="k">Qué problema resuelve</span>Un error genérico que puede ser muchas cosas</h3>
+    <h3><span class="k">Qué problema resuelve</span>Un error genérico que puede ser muchas
+      cosas</h3>
     <p>Un job falla y en el stage ves algo así (es el ejemplo de la doc de Databricks):</p>
     <pre><code>ExecutorLostFailure (executor 4 exited caused by one of the running tasks)
 Reason: Remote RPC client disassociated. Likely due to containers exceeding
 thresholds, or network issues. Check driver logs for WARN messages.</code></pre>
-    <p>La doc avisa de que estos mensajes son genéricos. Para arreglarlo necesitas saber tres cosas: si el problema está en el <b>driver</b> o en un <b>executor</b>, qué estructura de memoria se llenó, y si Spark podía haber hecho <b>spill</b> en lugar de caerse. Esta página va de eso. En el examen entra por la sección 9 (diagnosticar errores con el Spark UI, los logs del cluster y las system tables) y por la 6 (coste y rendimiento).</p>
+    <p>La doc avisa de que estos mensajes son genéricos. Para arreglarlo necesitas saber tres cosas:
+      si el problema está en el <b>driver</b> o en un <b>executor</b>, qué estructura de memoria se
+      llenó, y si Spark podía haber hecho <b>spill</b> en lugar de caerse. Esta página va de eso. En
+      el examen entra por la sección 9 (diagnosticar errores con el Spark UI, los logs del cluster y
+      las system tables) y por la 6 (coste y rendimiento).</p>
 
     <h3><span class="k">Definición corta</span>Spill y OOM</h3>
-    <p class="def"><b>Spill</b>: Spark se queda sin memoria de ejecución para un sort, una agregación o un join, escribe parte de los datos a disco local y sigue. Es lento, pero termina. <b>OOM</b> (<i>out of memory</i>): un proceso (la JVM del driver o de un executor) necesita memoria que no tiene y no puede liberar. La task falla, y a menudo el executor entero se pierde.</p>
+    <p class="def"><b>Spill</b>: Spark se queda sin memoria de ejecución para un sort, una
+      agregación o un join, escribe parte de los datos a disco local y sigue. Es lento, pero
+      termina. <b>OOM</b> (<i>out of memory</i>): un proceso (la JVM del driver o de un executor)
+      necesita memoria que no tiene y no puede liberar. La task falla, y a menudo el executor entero
+      se pierde.</p>
 
     <h3><span class="k">Idea mental</span>Un escritorio y un archivador</h3>
-    <p>Cada task trabaja en un trozo de escritorio. Si los papeles no caben, guarda algunos en el archivador (disco) y los saca cuando los necesita: eso es spill. El problema llega cuando un solo documento es más grande que el escritorio, o cuando el trabajo exige tenerlo todo abierto a la vez (una tabla hash completa, un resultado entero en el driver). Ahí no hay archivador que valga y la mesa se hunde.</p>
+    <p>Cada task trabaja en un trozo de escritorio. Si los papeles no caben, guarda algunos en el
+      archivador (disco) y los saca cuando los necesita: eso es spill. El problema llega cuando un
+      solo documento es más grande que el escritorio, o cuando el trabajo exige tenerlo todo abierto
+      a la vez (una tabla hash completa, un resultado entero en el driver). Ahí no hay archivador
+      que valga y la mesa se hunde.</p>
 
     <h3><span class="k">Cómo funciona por dentro</span>Cómo se reparte el heap de un executor</h3>
-    <p>La doc de Spark divide la memoria en dos usos. <b>Ejecución</b>: la que usan shuffles, joins, sorts y agregaciones. <b>Almacenamiento</b>: la de la caché y de los datos internos que se propagan por el cluster (como los broadcast). Las dos comparten una región unificada <code>M</code>:</p>
+    <p>La doc de Spark divide la memoria en dos usos. <b>Ejecución</b>: la que usan shuffles, joins,
+      sorts y agregaciones. <b>Almacenamiento</b>: la de la caché y de los datos internos que se
+      propagan por el cluster (como los broadcast). Las dos comparten una región unificada
+      <code>M</code>:</p>
     <ul>
       <li><b>Reservada</b>: 300 MiB del heap que Spark aparta antes de calcular nada.</li>
-      <li><b>Unificada <code>M</code></b> = <code>spark.memory.fraction</code> × (heap − 300 MiB). Default 0.6.</li>
-      <li><b>User memory</b>: el 40 % restante. Estructuras de datos del usuario, metadatos internos de Spark y margen contra OOM con registros raros o muy grandes.</li>
-      <li><b><code>R</code></b> = <code>spark.memory.storageFraction</code> × <code>M</code>. Default 0.5. Es la parte de la caché que la ejecución no puede desalojar.</li>
+      <li><b>Unificada <code>M</code></b> = <code>spark.memory.fraction</code> × (heap − 300 MiB).
+        Default 0.6.</li>
+      <li><b>User memory</b>: el 40 % restante. Estructuras de datos del usuario, metadatos internos
+        de Spark y margen contra OOM con registros raros o muy grandes.</li>
+      <li><b><code>R</code></b> = <code>spark.memory.storageFraction</code> × <code>M</code>.
+        Default 0.5. Es la parte de la caché que la ejecución no puede desalojar.</li>
     </ul>
-    <p>Si no hay caché, la ejecución puede usar toda <code>M</code>. La ejecución puede desalojar bloques de caché hasta que la caché baje a <code>R</code>. La caché nunca desaloja a la ejecución. La doc de Spark recomienda dejar los dos valores por defecto.</p>
-    <p><b>Por task.</b> Las tasks que corren a la vez en un executor (una por core) se reparten la memoria de ejecución. Con N tasks activas, cada una puede llegar como mucho a 1/N del pool, y Spark intenta garantizarle al menos 1/(2N) antes de dejarla esperando.</p>
-    <div class="verify"><b>Verifícalo.</b> La regla 1/(2N) a 1/N no está en la doc de Spark. Sale del código (<code>ExecutionMemoryPool.scala</code>). La uso en el simulador porque explica por qué más cores por executor significa menos memoria por task.</div>
-    <p><b>Fuera del heap.</b> El contenedor de un executor no es solo el heap. La doc de configuración de Spark dice que su tamaño máximo es la suma de <code>spark.executor.memoryOverhead</code>, <code>spark.executor.memory</code>, <code>spark.memory.offHeap.size</code> y <code>spark.executor.pyspark.memory</code>. El overhead (por defecto 10 % del executor, mínimo 384 MiB) cubre memoria nativa de la VM y, si no configuras memoria de PySpark aparte, también la de los procesos de Python.</p>
+    <p>Si no hay caché, la ejecución puede usar toda <code>M</code>. La ejecución puede desalojar
+      bloques de caché hasta que la caché baje a <code>R</code>. La caché nunca desaloja a la
+      ejecución. La doc de Spark recomienda dejar los dos valores por defecto.</p>
+    <p><b>Por task.</b> Las tasks que corren a la vez en un executor (una por core) se reparten la
+      memoria de ejecución. Con N tasks activas, cada una puede llegar como mucho a 1/N del pool, y
+      Spark intenta garantizarle al menos 1/(2N) antes de dejarla esperando.</p>
+    <div class="verify"><b>Verifícalo.</b> La regla 1/(2N) a 1/N no está en la doc de Spark. Sale
+      del código (<code>ExecutionMemoryPool.scala</code>). La uso en el simulador porque explica por
+      qué más cores por executor significa menos memoria por task.</div>
+    <p><b>Fuera del heap.</b> El contenedor de un executor no es solo el heap. La doc de
+      configuración de Spark dice que su tamaño máximo es la suma de
+      <code>spark.executor.memoryOverhead</code>, <code>spark.executor.memory</code>,
+      <code>spark.memory.offHeap.size</code> y <code>spark.executor.pyspark.memory</code>. El
+      overhead (por defecto 10 % del executor, mínimo 384 MiB) cubre memoria nativa de la VM y, si
+      no configuras memoria de PySpark aparte, también la de los procesos de Python.</p>
 
     <div class="console" id="mx-sim">
       <div class="ttl">Memoria de un executor · un stage con una task por core</div>
@@ -62,7 +100,8 @@ thresholds, or network issues. Check driver logs for WARN messages.</code></pre>
           <input type="range" id="mx-part" min="16" max="4096" step="16" value="512">
         </div>
         <div class="ctrl">
-          <label for="mx-skew">Skew: task más grande / media <output id="mx-skew-o"></output></label>
+          <label for="mx-skew">Skew: task más grande / media <output
+            id="mx-skew-o"></output></label>
           <input type="range" id="mx-skew" min="1" max="20" step="1" value="1">
         </div>
         <div class="ctrl">
@@ -70,54 +109,106 @@ thresholds, or network issues. Check driver logs for WARN messages.</code></pre>
           <input type="range" id="mx-exp" min="1" max="50" step="1" value="1">
         </div>
         <div class="ctrl">
-          <label for="mx-cache">Datos en caché en este executor <output id="mx-cache-o"></output></label>
+          <label for="mx-cache">Datos en caché en este executor <output
+            id="mx-cache-o"></output></label>
           <input type="range" id="mx-cache" min="0" max="64" step="1" value="6">
         </div>
       </div>
-      <label class="switch" for="mx-con"><input type="checkbox" id="mx-con"> Hay datos en caché (<code>df.cache()</code>)</label>
-      <div class="chips" role="group" aria-label="Operador" id="mx-op"><span class="lab">Operador:</span>
-        <button type="button" data-v="spill" aria-pressed="true">Sort, agregación o sort-merge join</button>
-        <button type="button" data-v="hash" aria-pressed="false">Tabla hash completa (shuffle hash join)</button>
+      <label class="switch" for="mx-con"><input type="checkbox" id="mx-con"> Hay datos en caché
+        (<code>df.cache()</code>)</label>
+      <div class="chips" role="group" aria-label="Operador" id="mx-op"><span
+        class="lab">Operador:</span>
+        <button type="button" data-v="spill" aria-pressed="true">Sort, agregación o sort-merge
+          join</button>
+        <button type="button" data-v="hash" aria-pressed="false">Tabla hash completa (shuffle hash
+          join)</button>
       </div>
-      <svg class="chart" id="mx-chart" viewBox="0 0 360 214" role="img" aria-label="Reparto del heap del executor y memoria por task"></svg>
-      <div class="legend" id="mx-legend"><span style="--sw:var(--muted)">reservada</span><span style="--sw:var(--p1)">user memory</span><span style="--sw:var(--p2)">caché (storage)</span><span style="--sw:var(--cool)">ejecución disponible</span><span class="dash">límite R (caché protegida)</span></div>
+      <svg class="chart" id="mx-chart" viewBox="0 0 360 214" role="img"
+        aria-label="Reparto del heap del executor y memoria por task"></svg>
+      <div class="legend" id="mx-legend"><span style="--sw:var(--muted)">reservada</span><span
+        style="--sw:var(--p1)">user memory</span><span style="--sw:var(--p2)">caché
+        (storage)</span><span style="--sw:var(--cool)">ejecución disponible</span><span
+        class="dash">límite R (caché protegida)</span></div>
       <div class="stats" id="mx-stats"></div>
       <div class="verdict" id="mx-verdict" aria-live="polite"></div>
     </div>
-    <p class="c" style="font-size:.88rem">Ilustrativo. Usa los defaults de Spark (fraction 0.6, storageFraction 0.5, 300 MiB reservados) y supone que todas las tasks del executor están activas. "Datos por task" es lo que la task necesita tener en memoria a la vez (ya descomprimido); el factor de explode lo multiplica. No modela el overhead fuera del heap ni Photon.</p>
+    <p class="c" style="font-size:.88rem">Ilustrativo. Usa los defaults de Spark (fraction 0.6,
+      storageFraction 0.5, 300 MiB reservados) y supone que todas las tasks del executor están
+      activas. "Datos por task" es lo que la task necesita tener en memoria a la vez (ya
+      descomprimido); el factor de explode lo multiplica. No modela el overhead fuera del heap ni
+      Photon.</p>
     <ul>
-      <li>Sube el skew a ×6 con 512 MB por task. La task media cabe y la grande hace spill. Es el patrón de skew que ves en el Spark UI: una task lenta con spill.</li>
-      <li>Cambia el operador a tabla hash con el mismo skew. Lo que antes era spill ahora es OOM probable. La doc de Spark lo describe para los reduce tasks: construyen una tabla hash que puede ser grande, y el arreglo más simple es subir el paralelismo.</li>
-      <li>Activa la caché y súbela a 20 GB. La ejecución desaloja caché hasta el límite R, y a partir de ahí tiene menos sitio.</li>
-      <li>Baja los cores de 8 a 4 con el mismo heap. Cada task recibe el doble de memoria. La doc de Databricks propone justo esa prueba: duplicar la memoria por core para confirmar que el problema es de memoria.</li>
+      <li>Sube el skew a ×6 con 512 MB por task. La task media cabe y la grande hace spill. Es el
+        patrón de skew que ves en el Spark UI: una task lenta con spill.</li>
+      <li>Cambia el operador a tabla hash con el mismo skew. Lo que antes era spill ahora es OOM
+        probable. La doc de Spark lo describe para los reduce tasks: construyen una tabla hash que
+        puede ser grande, y el arreglo más simple es subir el paralelismo.</li>
+      <li>Activa la caché y súbela a 20 GB. La ejecución desaloja caché hasta el límite R, y a
+        partir de ahí tiene menos sitio.</li>
+      <li>Baja los cores de 8 a 4 con el mismo heap. Cada task recibe el doble de memoria. La doc de
+        Databricks propone justo esa prueba: duplicar la memoria por core para confirmar que el
+        problema es de memoria.</li>
     </ul>
 
     <h3><span class="k">Qué hace spill y qué se cae</span>No todo puede ir a disco</h3>
     <div class="tblwrap"><table>
       <thead><tr><th>Qué ocupa la memoria</th><th>Si no cabe</th><th>Dónde lo ves</th></tr></thead>
       <tbody>
-        <tr><td>Sort, agregación, sort-merge join</td><td>Spill a disco: más lento, termina</td><td>Spill (memory) y Spill (disk) en el stage; <code>spill size</code> en los nodos Sort y HashAggregate</td></tr>
-        <tr><td>Tabla hash de un reduce task (shuffle hash join, <code>groupByKey</code>)</td><td>Puede dar OOM; la doc de Spark recomienda más paralelismo</td><td>Task fallida, executor perdido</td></tr>
-        <tr><td>Broadcast grande</td><td>OOM en el driver o en los executors</td><td>Falla en <code>BroadcastExchange</code></td></tr>
-        <tr><td>UDFs que cargan toda su partición</td><td>Lento o inestable</td><td>Nodo de UDF en el DAG; memoria del proceso de Python</td></tr>
-        <tr><td>Ventana sin <code>PARTITION BY</code></td><td>Todo en una task</td><td>Un stage con una sola task</td></tr>
-        <tr><td>Caché</td><td>La ejecución la desaloja hasta R; lo que no cabe se recalcula o no se cachea</td><td>Pestaña Storage: Size in Memory</td></tr>
-        <tr><td>Estado de streaming</td><td>Crece sin límite si no acotas el estado</td><td>Métricas del state store</td></tr>
+        <tr><td>Sort, agregación, sort-merge join</td><td>Spill a disco: más lento,
+          termina</td><td>Spill (memory) y Spill (disk) en el stage; <code>spill size</code> en los
+          nodos Sort y HashAggregate</td></tr>
+        <tr><td>Tabla hash de un reduce task (shuffle hash join,
+          <code>groupByKey</code>)</td><td>Puede dar OOM; la doc de Spark recomienda más
+          paralelismo</td><td>Task fallida, executor perdido</td></tr>
+        <tr><td>Broadcast grande</td><td>OOM en el driver o en los executors</td><td>Falla en
+          <code>BroadcastExchange</code></td></tr>
+        <tr><td>UDFs que cargan toda su partición</td><td>Lento o inestable</td><td>Nodo de UDF en
+          el DAG; memoria del proceso de Python</td></tr>
+        <tr><td>Ventana sin <code>PARTITION BY</code></td><td>Todo en una task</td><td>Un stage con
+          una sola task</td></tr>
+        <tr><td>Caché</td><td>La ejecución la desaloja hasta R; lo que no cabe se recalcula o no se
+          cachea</td><td>Pestaña Storage: Size in Memory</td></tr>
+        <tr><td>Estado de streaming</td><td>Crece sin límite si no acotas el estado</td><td>Métricas
+          del state store</td></tr>
       </tbody>
     </table></div>
-    <p class="c" style="font-size:.88rem">La lista de causas (pocas particiones de shuffle, broadcast grande, UDFs, ventana sin <code>PARTITION BY</code>, skew, estado de streaming) es la de <i>Spark memory issues</i>. Lo de la tabla hash viene de la sección <i>Memory usage of reduce tasks</i> de la guía de tuning de Spark. Lo de las UDFs, de <i>Slow Spark stage with little I/O</i> (<a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/slow-spark-stage-low-io" target="_blank" rel="noopener">docs</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/slow-spark-stage-low-io" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</p>
-    <p><b>El GC avisa antes.</b> Cuando el heap va justo, la JVM pasa más tiempo en garbage collection. El Spark UI muestra <i>GC Time</i> por task en el stage y por executor en la pestaña Executors. Un GC Time alto respecto a la duración de las tasks es la señal previa típica a un OOM. Ojo: esa proporción es una regla práctica, no un umbral de la doc.</p>
+    <p class="c" style="font-size:.88rem">La lista de causas (pocas particiones de shuffle,
+      broadcast grande, UDFs, ventana sin <code>PARTITION BY</code>, skew, estado de streaming) es
+      la de <i>Spark memory issues</i>. Lo de la tabla hash viene de la sección <i>Memory usage of
+      reduce tasks</i> de la guía de tuning de Spark. Lo de las UDFs, de <i>Slow Spark stage with
+      little I/O</i> (<a
+      href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/slow-spark-stage-low-io"
+      target="_blank" rel="noopener">docs</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/slow-spark-stage-low-io"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>).</p>
+    <p><b>El GC avisa antes.</b> Cuando el heap va justo, la JVM pasa más tiempo en garbage
+      collection. El Spark UI muestra <i>GC Time</i> por task en el stage y por executor en la
+      pestaña Executors. Un GC Time alto respecto a la duración de las tasks es la señal previa
+      típica a un OOM. Ojo: esa proporción es una regla práctica, no un umbral de la doc.</p>
 
     <h3><span class="k">Driver o executor</span>Dos problemas distintos</h3>
     <div class="tblwrap"><table>
       <thead><tr><th></th><th>OOM del driver</th><th>OOM de un executor</th></tr></thead>
       <tbody>
-        <tr><td>Causas típicas</td><td><code>collect()</code>, <code>toPandas()</code>, broadcast grande, demasiadas cosas a la vez en el cluster (muchos streams, queries o jobs en paralelo), código no Spark corriendo en el driver</td><td>Partición con skew, pocas particiones de shuffle, <code>explode</code> o exploding join, filas enormes, UDFs y pandas UDFs, caché que no cabe</td></tr>
-        <tr><td>Cómo se ve</td><td>El fallo llega en la acción que trae datos (<code>collect</code>, <code>toPandas</code>), no en una task de un stage. Si es concurrencia, el driver aparece en rojo en <i>Server load distribution</i></td><td>Tasks fallidas, <code>ExecutorLostFailure</code>, executors eliminados en la pestaña Executors</td></tr>
-        <tr><td>Primer arreglo</td><td>No traer datos al driver; escribir a una tabla. Si es concurrencia, la doc propone duplicar el tamaño del driver primero</td><td>Más particiones y tasks más pequeñas, dejar que AQE parta el skew, más memoria por core</td></tr>
+        <tr><td>Causas típicas</td><td><code>collect()</code>, <code>toPandas()</code>, broadcast
+          grande, demasiadas cosas a la vez en el cluster (muchos streams, queries o jobs en
+          paralelo), código no Spark corriendo en el driver</td><td>Partición con skew, pocas
+          particiones de shuffle, <code>explode</code> o exploding join, filas enormes, UDFs y
+          pandas UDFs, caché que no cabe</td></tr>
+        <tr><td>Cómo se ve</td><td>El fallo llega en la acción que trae datos (<code>collect</code>,
+          <code>toPandas</code>), no en una task de un stage. Si es concurrencia, el driver aparece
+          en rojo en <i>Server load distribution</i></td><td>Tasks fallidas,
+          <code>ExecutorLostFailure</code>, executors eliminados en la pestaña Executors</td></tr>
+        <tr><td>Primer arreglo</td><td>No traer datos al driver; escribir a una tabla. Si es
+          concurrencia, la doc propone duplicar el tamaño del driver primero</td><td>Más particiones
+          y tasks más pequeñas, dejar que AQE parta el skew, más memoria por core</td></tr>
       </tbody>
     </table></div>
-    <p>Un caso de driver que conviene conocer: Delta puede necesitar listar tantos archivos que el resultado supera <code>spark.driver.maxResultSize</code>. La doc de errores de Databricks tiene una clase para eso, <code>DELTA_FILE_LISTING_MAX_RESULT_SIZE_EXCEEDED</code>, y avisa de que subir el límite demasiado respecto a la memoria del driver lo vuelve inestable.</p>
+    <p>Un caso de driver que conviene conocer: Delta puede necesitar listar tantos archivos que el
+      resultado supera <code>spark.driver.maxResultSize</code>. La doc de errores de Databricks
+      tiene una clase para eso, <code>DELTA_FILE_LISTING_MAX_RESULT_SIZE_EXCEEDED</code>, y avisa de
+      que subir el límite demasiado respecto a la memoria del driver lo vuelve inestable.</p>
 
     <div class="console" id="dr-sim">
       <div class="ttl">Driver · traer un resultado con collect() o toPandas()</div>
@@ -131,37 +222,79 @@ thresholds, or network issues. Check driver logs for WARN messages.</code></pre>
           <input type="range" id="dr-res" min="0" max="50" step="1" value="25">
         </div>
       </div>
-      <div class="chips" role="group" aria-label="Acción" id="dr-act"><span class="lab">Acción:</span>
+      <div class="chips" role="group" aria-label="Acción" id="dr-act"><span
+        class="lab">Acción:</span>
         <button type="button" data-v="collect" aria-pressed="true">df.collect()</button>
         <button type="button" data-v="pandas" aria-pressed="false">df.toPandas()</button>
       </div>
-      <div class="chips" role="group" aria-label="spark.driver.maxResultSize" id="dr-max"><span class="lab">maxResultSize:</span>
+      <div class="chips" role="group" aria-label="spark.driver.maxResultSize" id="dr-max"><span
+        class="lab">maxResultSize:</span>
         <button type="button" data-v="1" aria-pressed="true">1g (default de Spark)</button>
         <button type="button" data-v="4" aria-pressed="false">4g</button>
         <button type="button" data-v="0" aria-pressed="false">0 (sin límite)</button>
       </div>
-      <svg class="chart" id="dr-chart" viewBox="0 0 360 96" role="img" aria-label="Memoria del driver frente al resultado"></svg>
-      <div class="legend"><span style="--sw:var(--muted)">ocupado por otras cosas (la mitad, ilustrativo)</span><span style="--sw:var(--line)">libre</span><span style="--sw:var(--ok)">lo que ocuparía el resultado</span><span style="--sw:var(--cool)">resultado serializado</span></div>
+      <svg class="chart" id="dr-chart" viewBox="0 0 360 96" role="img"
+        aria-label="Memoria del driver frente al resultado"></svg>
+      <div class="legend"><span style="--sw:var(--muted)">ocupado por otras cosas (la mitad,
+        ilustrativo)</span><span style="--sw:var(--line)">libre</span><span
+        style="--sw:var(--ok)">lo que ocuparía el resultado</span><span
+        style="--sw:var(--cool)">resultado serializado</span></div>
       <div class="verdict" id="dr-verdict" aria-live="polite"></div>
     </div>
-    <p class="c" style="font-size:.88rem">Ilustrativo. Supone que el driver tiene libre la mitad de su memoria para el resultado y que el resultado ocupa en memoria 2× su tamaño serializado con <code>collect()</code> y 3× con <code>toPandas()</code>. Esos factores son inventados para el ejercicio; el comportamiento de <code>maxResultSize</code> es el de la doc de Spark.</p>
-    <p><code>spark.driver.maxResultSize</code> limita el tamaño total de los resultados serializados de todas las particiones de una acción como <code>collect</code>. Si se supera, Spark aborta el job. La doc de Spark lo presenta como una protección: un límite alto puede causar OOM en el driver, y un límite adecuado lo evita. <code>0</code> significa sin límite.</p>
-    <div class="verify"><b>Verifica el default en tu cluster.</b> El 1g es el default de Apache Spark. No encontré en docs.databricks.com el valor que usa Databricks. Míralo en la pestaña Environment del Spark UI o con <code>spark.conf.get("spark.driver.maxResultSize")</code>.</div>
+    <p class="c" style="font-size:.88rem">Ilustrativo. Supone que el driver tiene libre la mitad de
+      su memoria para el resultado y que el resultado ocupa en memoria 2× su tamaño serializado con
+      <code>collect()</code> y 3× con <code>toPandas()</code>. Esos factores son inventados para el
+      ejercicio; el comportamiento de <code>maxResultSize</code> es el de la doc de Spark.</p>
+    <p><code>spark.driver.maxResultSize</code> limita el tamaño total de los resultados serializados
+      de todas las particiones de una acción como <code>collect</code>. Si se supera, Spark aborta
+      el job. La doc de Spark lo presenta como una protección: un límite alto puede causar OOM en el
+      driver, y un límite adecuado lo evita. <code>0</code> significa sin límite.</p>
+    <div class="verify"><b>Verifica el default en tu cluster.</b> El 1g es el default de Apache
+      Spark. No encontré en docs.databricks.com el valor que usa Databricks. Míralo en la pestaña
+      Environment del Spark UI o con
+      <code>spark.conf.get("spark.driver.maxResultSize")</code>.</div>
 
     <h3><span class="k">Contenedor vs heap</span>Dos formas de morir</h3>
     <ul>
-      <li><b>OOM de la JVM.</b> El heap se llena y la JVM lanza <code>java.lang.OutOfMemoryError</code> (por ejemplo, <code>Java heap space</code>). Lo ves en el motivo de fallo de la task o en el log del executor.</li>
-      <li><b>Contenedor por encima de su límite.</b> La memoria total del proceso (heap más overhead, off-heap y Python) supera lo que tiene el contenedor y el sistema lo mata. Desde fuera solo ves el executor perdido. Es el <i>Likely due to containers exceeding thresholds</i> del mensaje de arriba. Pasa mucho con pandas UDFs y librerías nativas, que usan memoria fuera del heap.</li>
+      <li><b>OOM de la JVM.</b> El heap se llena y la JVM lanza
+        <code>java.lang.OutOfMemoryError</code> (por ejemplo, <code>Java heap space</code>). Lo ves
+        en el motivo de fallo de la task o en el log del executor.</li>
+      <li><b>Contenedor por encima de su límite.</b> La memoria total del proceso (heap más
+        overhead, off-heap y Python) supera lo que tiene el contenedor y el sistema lo mata. Desde
+        fuera solo ves el executor perdido. Es el <i>Likely due to containers exceeding
+        thresholds</i> del mensaje de arriba. Pasa mucho con pandas UDFs y librerías nativas, que
+        usan memoria fuera del heap.</li>
     </ul>
-    <div class="verify"><b>Verifícalo.</b> El texto <code>Java heap space</code> es el mensaje estándar de la JVM; la doc de Databricks no lo cita. La relación entre el mensaje "containers exceeding thresholds" y la memoria fuera del heap es mi lectura de la doc de configuración de Spark, que además dice que <code>memoryOverhead</code> aplica en YARN y Kubernetes. Databricks no documenta cómo calcula el overhead de sus nodos.</div>
+    <div class="verify"><b>Verifícalo.</b> El texto <code>Java heap space</code> es el mensaje
+      estándar de la JVM; la doc de Databricks no lo cita. La relación entre el mensaje "containers
+      exceeding thresholds" y la memoria fuera del heap es mi lectura de la doc de configuración de
+      Spark, que además dice que <code>memoryOverhead</code> aplica en YARN y Kubernetes. Databricks
+      no documenta cómo calcula el overhead de sus nodos.</div>
 
     <h3><span class="k">Dónde mirarlo</span>Spark UI, métricas y system tables</h3>
     <ol class="steps">
-      <li><b>Spark UI, pestaña Jobs → stage fallido.</b> La doc de Databricks propone bajar hasta la tabla de tasks para ver por qué falló cada una. Ahí suele aparecer que es un problema de memoria. Mira también Spill y GC Time en las métricas del stage (ver <a href="spark-ui.html">Spark UI</a>).</li>
-      <li><b>Event log del compute.</b> Si se perdieron executors, comprueba primero si fue autoscaling o pérdida de instancias spot. Si no hay explicación, ve a la pestaña Executors y abre los logs del executor fallido.</li>
-      <li><b>Métricas del compute.</b> En Compute → tu cluster → Metrics, los gráficos <i>Container memory usage</i> (memoria del contenedor, file cache y límite) y <i>JVM heap usage</i> (uso, capacidad y máximo del heap). Puedes verlos por nodo y hasta 30 días atrás. <i>Server load distribution</i> muestra si el driver está saturado.</li>
-      <li><b>Driver colgado.</b> Pestaña Executors, fila <code>driver</code>, columna Thread Dump (<a href="https://docs.databricks.com/aws/en/compute/troubleshooting/debugging-spark-ui" target="_blank" rel="noopener">Debugging with the Spark UI</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/troubleshooting/debugging-spark-ui" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
-      <li><b><code>system.compute.node_timeline</code></b> para ver la historia: una fila por nodo y minuto, con <code>mem_used_percent</code> (incluye procesos en segundo plano), <code>mem_swap_percent</code> y <code>driver</code> para separar driver de workers. Retención de 90 días, solo compute clásico, y los nodos que vivieron menos de 10 minutos pueden no aparecer.</li>
+      <li><b>Spark UI, pestaña Jobs → stage fallido.</b> La doc de Databricks propone bajar hasta la
+        tabla de tasks para ver por qué falló cada una. Ahí suele aparecer que es un problema de
+        memoria. Mira también Spill y GC Time en las métricas del stage (ver <a
+        href="spark-ui.html">Spark UI</a>).</li>
+      <li><b>Event log del compute.</b> Si se perdieron executors, comprueba primero si fue
+        autoscaling o pérdida de instancias spot. Si no hay explicación, ve a la pestaña Executors y
+        abre los logs del executor fallido.</li>
+      <li><b>Métricas del compute.</b> En Compute → tu cluster → Metrics, los gráficos <i>Container
+        memory usage</i> (memoria del contenedor, file cache y límite) y <i>JVM heap usage</i> (uso,
+        capacidad y máximo del heap). Puedes verlos por nodo y hasta 30 días atrás. <i>Server load
+        distribution</i> muestra si el driver está saturado.</li>
+      <li><b>Driver colgado.</b> Pestaña Executors, fila <code>driver</code>, columna Thread Dump
+        (<a href="https://docs.databricks.com/aws/en/compute/troubleshooting/debugging-spark-ui"
+        target="_blank" rel="noopener">Debugging with the Spark UI</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/troubleshooting/debugging-spark-ui"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
+      <li><b><code>system.compute.node_timeline</code></b> para ver la historia: una fila por nodo y
+        minuto, con <code>mem_used_percent</code> (incluye procesos en segundo plano),
+        <code>mem_swap_percent</code> y <code>driver</code> para separar driver de workers.
+        Retención de 90 días, solo compute clásico, y los nodos que vivieron menos de 10 minutos
+        pueden no aparecer.</li>
     </ol>
     <pre><code>-- Memoria y CPU por nodo en las últimas 24 h (adaptada de la doc de compute system tables)
 SELECT cluster_id, driver, node_type,
@@ -173,45 +306,139 @@ FROM system.compute.node_timeline
 WHERE start_time &gt;= now() - INTERVAL 1 DAY
 GROUP BY cluster_id, driver, node_type
 ORDER BY max_mem_pct DESC;</code></pre>
-    <p>Un worker con memoria al tope y CPU baja sugiere un problema de memoria. Un driver al tope con los workers tranquilos apunta a <code>collect</code>, <code>toPandas</code> o concurrencia en el driver.</p>
+    <p>Un worker con memoria al tope y CPU baja sugiere un problema de memoria. Un driver al tope
+      con los workers tranquilos apunta a <code>collect</code>, <code>toPandas</code> o concurrencia
+      en el driver.</p>
 
     <h3><span class="k">Arreglos</span>En este orden</h3>
     <ol class="steps">
-      <li><b>No traigas datos al driver.</b> Usa <code>.limit(n)</code> antes de mirar, escribe el resultado a una tabla, agrega antes de <code>toPandas()</code>. La doc de Databricks sobre streams múltiples lo dice directamente: evita <code>collect()</code> salvo que sea imprescindible, para no causar OOM.</li>
-      <li><b>Haz las tasks más pequeñas.</b> Más particiones de shuffle (<code>spark.sql.shuffle.partitions = auto</code>), un <code>spark.sql.files.maxPartitionBytes</code> menor para el scan (default 128 MB), o <code>repartition()</code> antes de una UDF. Ver <a href="remedios.html">Remedios</a>.</li>
-      <li><b>Deja que AQE parta el skew</b> en los joins, y si no puede (ventanas, agregaciones), aplica salting (ver <a href="aqe.html">AQE</a> y <a href="remedios.html">Remedios</a>).</li>
-      <li><b>Controla los broadcasts.</b> No subas <code>autoBroadcastJoinThreshold</code> a ciegas; usa el hint solo con tablas pequeñas de verdad (ver <a href="joins.html">Estrategias de join</a>).</li>
+      <li><b>No traigas datos al driver.</b> Usa <code>.limit(n)</code> antes de mirar, escribe el
+        resultado a una tabla, agrega antes de <code>toPandas()</code>. La doc de Databricks sobre
+        streams múltiples lo dice directamente: evita <code>collect()</code> salvo que sea
+        imprescindible, para no causar OOM.</li>
+      <li><b>Haz las tasks más pequeñas.</b> Más particiones de shuffle
+        (<code>spark.sql.shuffle.partitions = auto</code>), un
+        <code>spark.sql.files.maxPartitionBytes</code> menor para el scan (default 128 MB), o
+        <code>repartition()</code> antes de una UDF. Ver <a href="remedios.html">Remedios</a>.</li>
+      <li><b>Deja que AQE parta el skew</b> en los joins, y si no puede (ventanas, agregaciones),
+        aplica salting (ver <a href="aqe.html">AQE</a> y <a href="remedios.html">Remedios</a>).</li>
+      <li><b>Controla los broadcasts.</b> No subas <code>autoBroadcastJoinThreshold</code> a ciegas;
+        usa el hint solo con tablas pequeñas de verdad (ver <a href="joins.html">Estrategias de
+        join</a>).</li>
       <li><b>Cachea con criterio</b> y libera con <code>unpersist()</code> lo que ya no uses.</li>
       <li><b>Cambia UDFs por funciones nativas</b> cuando puedas.</li>
-      <li><b>Más memoria por core.</b> Primero como prueba (duplicar memoria por core, según la doc de Databricks). Si la carga lo necesita, Azure Well-Architected recomienda tipos de VM <i>memory-optimized</i>, como las series E o M, para datasets grandes con mucha caché en memoria o análisis complejos. Para un driver saturado por concurrencia, la doc propone empezar duplicando su tamaño.</li>
+      <li><b>Más memoria por core.</b> Primero como prueba (duplicar memoria por core, según la doc
+        de Databricks). Si la carga lo necesita, Azure Well-Architected recomienda tipos de VM
+        <i>memory-optimized</i>, como las series E o M, para datasets grandes con mucha caché en
+        memoria o análisis complejos. Para un driver saturado por concurrencia, la doc propone
+        empezar duplicando su tamaño.</li>
     </ol>
 
     <h3><span class="k">En serverless</span>Lo que puedes y no puedes tocar</h3>
     <ul>
-      <li>No eliges tamaño de executor ni de driver, y no hay Spark UI: el diagnóstico se hace con el <a href="query-profile.html">query profile</a>. Su métrica <b>Memory peak</b> por operador y el insight <code>DATA_SPILL</code> (en SQL warehouses, la recomendación es subir el tamaño del warehouse o reducir filas y columnas) son tus pistas.</li>
-      <li>Solo puedes fijar seis propiedades de Spark (lista en <a href="https://docs.databricks.com/aws/en/spark/conf#serverless" target="_blank" rel="noopener">Spark confs en serverless</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/spark/conf#configure-spark-properties-for-serverless-notebooks-and-jobs" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>). De esas seis, las que cambian la memoria por task son <code>shuffle.partitions</code> (default <code>auto</code>) y <code>maxPartitionBytes</code>. Un job serverless falla si fijas una propiedad no soportada.</li>
-      <li>Si un notebook serverless da OOM, puedes pasar su memoria de <b>Standard</b> (16 GB) a <b>High</b> (32 GB) en el panel Environment (Public Preview). Ojo: aumenta la memoria del REPL, no la de la sesión de Spark, y consume más DBUs. Aplica también a las tasks de job que usan ese notebook. Es el <i>high memory</i> que nombra la sección 1 del examen.</li>
-      <li>La guía de migración a serverless pide quitar las llamadas a <code>cache()</code> y <code>persist()</code>.</li>
+      <li>No eliges tamaño de executor ni de driver, y no hay Spark UI: el diagnóstico se hace con
+        el <a href="query-profile.html">query profile</a>. Su métrica <b>Memory peak</b> por
+        operador y el insight <code>DATA_SPILL</code> (en SQL warehouses, la recomendación es subir
+        el tamaño del warehouse o reducir filas y columnas) son tus pistas.</li>
+      <li>Solo puedes fijar seis propiedades de Spark (lista en <a
+        href="https://docs.databricks.com/aws/en/spark/conf#serverless" target="_blank"
+        rel="noopener">Spark confs en serverless</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/spark/conf#configure-spark-properties-for-serverless-notebooks-and-jobs"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>). De esas seis,
+        las que cambian la memoria por task son <code>shuffle.partitions</code> (default
+        <code>auto</code>) y <code>maxPartitionBytes</code>. Un job serverless falla si fijas una
+        propiedad no soportada.</li>
+      <li>Si un notebook serverless da OOM, puedes pasar su memoria de <b>Standard</b> (16 GB) a
+        <b>High</b> (32 GB) en el panel Environment (Public Preview). Ojo: aumenta la memoria del
+        REPL, no la de la sesión de Spark, y consume más DBUs. Aplica también a las tasks de job que
+        usan ese notebook. Es el <i>high memory</i> que nombra la sección 1 del examen.</li>
+      <li>La guía de migración a serverless pide quitar las llamadas a <code>cache()</code> y
+        <code>persist()</code>.</li>
     </ul>
-    <p class="c" style="font-size:.88rem">Fuentes de esta sección: <a href="https://docs.databricks.com/aws/en/spark/conf#serverless" target="_blank" rel="noopener">Spark confs en serverless</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/spark/conf#configure-spark-properties-for-serverless-notebooks-and-jobs" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/compute/serverless/dependencies" target="_blank" rel="noopener">Configure the serverless environment</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/serverless/dependencies#use-high-memory-serverless-compute" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/compute/serverless/migration" target="_blank" rel="noopener">Migrate to serverless</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/serverless/migration" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/sql/user/queries/performance-insights" target="_blank" rel="noopener">Query performance insights</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/sql/user/queries/performance-insights" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
+    <p class="c" style="font-size:.88rem">Fuentes de esta sección: <a
+      href="https://docs.databricks.com/aws/en/spark/conf#serverless" target="_blank"
+      rel="noopener">Spark confs en serverless</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/spark/conf#configure-spark-properties-for-serverless-notebooks-and-jobs"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/compute/serverless/dependencies" target="_blank"
+      rel="noopener">Configure the serverless environment</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/compute/serverless/dependencies#use-high-memory-serverless-compute"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/compute/serverless/migration" target="_blank"
+      rel="noopener">Migrate to serverless</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/compute/serverless/migration"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/sql/user/queries/performance-insights"
+      target="_blank" rel="noopener">Query performance insights</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/sql/user/queries/performance-insights"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
 
     <h3 class="solo"><span class="k">Con qué se confunde</span></h3>
     <ul>
-      <li><b>Spill vs OOM.</b> El spill es la salida de emergencia que funciona, y el stage termina más lento. El OOM llega cuando esa salida no existe o no alcanza.</li>
-      <li><b>Storage memory de la pestaña Executors vs heap.</b> La columna de memoria de la pestaña Executors habla de la memoria disponible para storage (aproximadamente la región unificada), no del heap total.</li>
-      <li><b><code>maxResultSize</code> vs memoria del driver.</b> El primero es un límite que aborta el job antes de que el driver se llene. Subirlo no le da más memoria al driver.</li>
-      <li><b><code>mem_used_percent</code> vs heap.</b> La columna de <code>node_timeline</code> mide la memoria de la máquina, incluidos procesos en segundo plano. El heap de la JVM se ve en el gráfico <i>JVM heap usage</i> de las métricas.</li>
-      <li><b>High memory de serverless vs memoria de Spark.</b> High memory amplía el REPL del notebook (tu código Python en el driver), no los executors.</li>
+      <li><b>Spill vs OOM.</b> El spill es la salida de emergencia que funciona, y el stage termina
+        más lento. El OOM llega cuando esa salida no existe o no alcanza.</li>
+      <li><b>Storage memory de la pestaña Executors vs heap.</b> La columna de memoria de la pestaña
+        Executors habla de la memoria disponible para storage (aproximadamente la región unificada),
+        no del heap total.</li>
+      <li><b><code>maxResultSize</code> vs memoria del driver.</b> El primero es un límite que
+        aborta el job antes de que el driver se llene. Subirlo no le da más memoria al driver.</li>
+      <li><b><code>mem_used_percent</code> vs heap.</b> La columna de <code>node_timeline</code>
+        mide la memoria de la máquina, incluidos procesos en segundo plano. El heap de la JVM se ve
+        en el gráfico <i>JVM heap usage</i> de las métricas.</li>
+      <li><b>High memory de serverless vs memoria de Spark.</b> High memory amplía el REPL del
+        notebook (tu código Python en el driver), no los executors.</li>
     </ul>
 
     <h3 class="solo"><span class="k">Qué pasaría si</span></h3>
     <ul>
-      <li><b>Subes el heap pero también los cores en la misma proporción:</b> la memoria por task no cambia. Lo que cuenta es la relación memoria/core, como dice la doc de Databricks.</li>
-      <li><b>Pones <code>spark.driver.maxResultSize = 0</code></b> para que deje de fallar el <code>collect()</code>: el siguiente fallo es un OOM del driver, más difícil de diagnosticar.</li>
-      <li><b>Cacheas una tabla de 40 GB en executors de 28 GB:</b> no cabe entera. La ejecución desaloja hasta R, y lo desalojado se vuelve a calcular cuando se lee.</li>
-      <li><b>Bajas <code>spark.memory.fraction</code></b> para dar más user memory: la doc avisa de que cuanto más bajo, más spills y más desalojo de caché.</li>
-      <li><b>El OOM es en un exploding join:</b> más memoria solo retrasa el problema. Revisa la condición del join (ver <a href="joins.html">exploding joins</a> y el <a href="casos.html">caso del join que multiplica filas</a>).</li>
+      <li><b>Subes el heap pero también los cores en la misma proporción:</b> la memoria por task no
+        cambia. Lo que cuenta es la relación memoria/core, como dice la doc de Databricks.</li>
+      <li><b>Pones <code>spark.driver.maxResultSize = 0</code></b> para que deje de fallar el
+        <code>collect()</code>: el siguiente fallo es un OOM del driver, más difícil de
+        diagnosticar.</li>
+      <li><b>Cacheas una tabla de 40 GB en executors de 28 GB:</b> no cabe entera. La ejecución
+        desaloja hasta R, y lo desalojado se vuelve a calcular cuando se lee.</li>
+      <li><b>Bajas <code>spark.memory.fraction</code></b> para dar más user memory: la doc avisa de
+        que cuanto más bajo, más spills y más desalojo de caché.</li>
+      <li><b>El OOM es en un exploding join:</b> más memoria solo retrasa el problema. Revisa la
+        condición del join (ver <a href="joins.html">exploding joins</a> y el <a
+        href="casos.html">caso del join que multiplica filas</a>).</li>
     </ul>
 
     <h3><span class="k">De dónde sale</span>Fuentes</h3>
-    <p class="src"><a href="https://spark.apache.org/docs/latest/tuning.html#memory-management-overview" target="_blank" rel="noopener">Apache Spark · Memory management overview</a> y <a href="https://spark.apache.org/docs/latest/configuration.html" target="_blank" rel="noopener">Configuration</a> · <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/spark-memory-issues" target="_blank" rel="noopener">Spark memory issues</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/spark-memory-issues" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/failing-spark-jobs" target="_blank" rel="noopener">Failing jobs or executors removed</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/failing-spark-jobs" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/spark-driver-overloaded" target="_blank" rel="noopener">Spark driver overloaded</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/spark-driver-overloaded" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/compute/cluster-metrics" target="_blank" rel="noopener">Compute metrics</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/cluster-metrics" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/admin/system-tables/compute" target="_blank" rel="noopener">Compute system tables</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/compute" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://learn.microsoft.com/azure/well-architected/service-guides/azure-databricks" target="_blank" rel="noopener">Azure Well-Architected · Azure Databricks</a></p>
+    <p class="src"><a
+      href="https://spark.apache.org/docs/latest/tuning.html#memory-management-overview"
+      target="_blank" rel="noopener">Apache Spark · Memory management overview</a> y <a
+      href="https://spark.apache.org/docs/latest/configuration.html" target="_blank"
+      rel="noopener">Configuration</a> · <a
+      href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/spark-memory-issues"
+      target="_blank" rel="noopener">Spark memory issues</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/spark-memory-issues"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> · <a
+      href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/failing-spark-jobs"
+      target="_blank" rel="noopener">Failing jobs or executors removed</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/failing-spark-jobs"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> · <a
+      href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/spark-driver-overloaded"
+      target="_blank" rel="noopener">Spark driver overloaded</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/spark-driver-overloaded"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> · <a
+      href="https://docs.databricks.com/aws/en/compute/cluster-metrics" target="_blank"
+      rel="noopener">Compute metrics</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/compute/cluster-metrics" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a
+      href="https://docs.databricks.com/aws/en/admin/system-tables/compute" target="_blank"
+      rel="noopener">Compute system tables</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/admin/system-tables/compute"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> · <a
+      href="https://learn.microsoft.com/azure/well-architected/service-guides/azure-databricks"
+      target="_blank" rel="noopener">Azure Well-Architected · Azure Databricks</a></p>

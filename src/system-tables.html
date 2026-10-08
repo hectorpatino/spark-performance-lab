@@ -11,98 +11,228 @@ extra_css: ["/assets/css/system-tables.css"]
     <div class="essentials" role="note">
       <p class="essentials-title">Lo esencial en 1 minuto</p>
       <ul>
-        <li>Las system tables son tablas de solo lectura en el catálogo <code>system</code> de Unity Catalog. Son gratis (pagas el compute que las consulta) y por defecto solo las lee quien es account admin y metastore admin.</li>
-        <li>No son tiempo real: <code>billing.usage</code> llega normalmente en 12 h, y <code>query.history</code> y las tablas de jobs en 1 h. Filtra siempre por fecha.</li>
-        <li>Para el coste, une <code>billing.usage</code> con <code>list_prices</code> por el rango de vigencia del precio y suma todas las filas, también las <code>RETRACTION</code> y <code>RESTATEMENT</code>.</li>
-        <li><code>query.history</code> cubre SQL warehouses, serverless y pipelines de Lakeflow, no clusters clásicos. Sus columnas clave son <code>spilled_local_bytes</code>, <code>pruned_files</code> y <code>waiting_at_capacity_duration_ms</code>.</li>
-        <li>Las tablas de jobs y clusters son SCD: toma la última fila por <code>change_time</code>. <code>job_run_timeline</code> parte las runs en filas por hora y solo la última trae <code>result_state</code>.</li>
+        <li>Las system tables son tablas de solo lectura en el catálogo <code>system</code> de Unity
+          Catalog. Son gratis (pagas el compute que las consulta) y por defecto solo las lee quien
+          es account admin y metastore admin.</li>
+        <li>No son tiempo real: <code>billing.usage</code> llega normalmente en 12 h, y
+          <code>query.history</code> y las tablas de jobs en 1 h. Filtra siempre por fecha.</li>
+        <li>Para el coste, une <code>billing.usage</code> con <code>list_prices</code> por el rango
+          de vigencia del precio y suma todas las filas, también las <code>RETRACTION</code> y
+          <code>RESTATEMENT</code>.</li>
+        <li><code>query.history</code> cubre SQL warehouses, serverless y pipelines de Lakeflow, no
+          clusters clásicos. Sus columnas clave son <code>spilled_local_bytes</code>,
+          <code>pruned_files</code> y <code>waiting_at_capacity_duration_ms</code>.</li>
+        <li>Las tablas de jobs y clusters son SCD: toma la última fila por <code>change_time</code>.
+          <code>job_run_timeline</code> parte las runs en filas por hora y solo la última trae
+          <code>result_state</code>.</li>
       </ul>
-      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> para enterarte sin mirar, pon una SQL alert sobre una de estas queries; para fallos y retrasos de un job, usa sus notificaciones.</p>
+      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> para enterarte sin mirar, pon una
+        SQL alert sobre una de estas queries; para fallos y retrasos de un job, usa sus
+        notificaciones.</p>
     </div>
-    <div class="nb-dl"><a class="btn" href="notebooks/system-tables.sql" download="system-tables.sql">Descargar notebook</a><span>Notebook SQL con las queries de monitoreo de rendimiento y coste, con explicaciones. Impórtalo en Databricks desde <b>Workspace</b> → clic derecho en una carpeta → <b>Import</b> → <b>File</b> (<a href="https://docs.databricks.com/aws/en/notebooks/notebook-export-import" target="_blank" rel="noopener">fuente</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/notebooks/notebook-export-import" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</span></div>
+    <div class="nb-dl"><a class="btn" href="notebooks/system-tables.sql"
+      download="system-tables.sql">Descargar notebook</a><span>Notebook SQL con las queries de
+      monitoreo de rendimiento y coste, con explicaciones. Impórtalo en Databricks desde
+      <b>Workspace</b> → clic derecho en una carpeta → <b>Import</b> → <b>File</b> (<a
+      href="https://docs.databricks.com/aws/en/notebooks/notebook-export-import" target="_blank"
+      rel="noopener">fuente</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/notebooks/notebook-export-import"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>).</span></div>
 
     <h3><span class="k">Qué problema resuelve</span>La factura sube y nadie sabe por qué</h3>
-    <p><b>Las system tables responden con SQL qué gastó, qué tardó y qué falló en toda la cuenta.</b></p>
-    <p>Llega el cierre de mes y el consumo de Databricks subió un 40 %. El Spark UI solo muestra la aplicación que tienes abierta. La Query History muestra queries una por una. Ninguna de las dos te dice qué job gastó más esta semana, qué warehouse tuvo cola el lunes o qué cluster interactivo quedó encendido todo el fin de semana con la CPU al 5 %.</p>
-    <p>Para eso necesitas los datos operativos de toda la cuenta en tablas que puedas consultar con SQL, unir entre sí y vigilar con alertas.</p>
+    <p><b>Las system tables responden con SQL qué gastó, qué tardó y qué falló en toda la
+      cuenta.</b></p>
+    <p>Llega el cierre de mes y el consumo de Databricks subió un 40 %. El Spark UI solo muestra la
+      aplicación que tienes abierta. La Query History muestra queries una por una. Ninguna de las
+      dos te dice qué job gastó más esta semana, qué warehouse tuvo cola el lunes o qué cluster
+      interactivo quedó encendido todo el fin de semana con la CPU al 5 %.</p>
+    <p>Para eso necesitas los datos operativos de toda la cuenta en tablas que puedas consultar con
+      SQL, unir entre sí y vigilar con alertas.</p>
 
-    <p class="def"><b>System tables</b> son tablas de solo lectura que Databricks aloja en el catálogo <code>system</code> de Unity Catalog con los datos operativos de tu cuenta: facturación, precios, queries, compute, jobs, predictive optimization, auditoría y más. Sirven para observabilidad histórica. Son gratis; solo pagas el compute con el que las consultas.</p>
+    <p class="def"><b>System tables</b> son tablas de solo lectura que Databricks aloja en el
+      catálogo <code>system</code> de Unity Catalog con los datos operativos de tu cuenta:
+      facturación, precios, queries, compute, jobs, predictive optimization, auditoría y más. Sirven
+      para observabilidad histórica. Son gratis; solo pagas el compute con el que las consultas.</p>
 
     <h3><span class="k">Idea mental</span>El libro contable y la caja negra</h3>
-    <p><b>Casi todo el monitoreo consiste en unir la facturación con lo que pasó, por un ID común.</b></p>
-    <p>Piensa en dos libros. <code>system.billing.usage</code> es el libro contable: cada fila dice cuántas unidades se consumieron, en qué SKU y a nombre de qué recurso (job, warehouse, cluster, tag). Las demás tablas son la caja negra de vuelo: qué pasó dentro de cada query, de cada nodo y de cada run. El trabajo de monitoreo casi siempre es unir los dos libros por un ID común: <code>usage_metadata.job_id</code> con <code>job_id</code>, <code>usage_metadata.cluster_id</code> con <code>cluster_id</code>, <code>usage_metadata.warehouse_id</code> con <code>compute.warehouse_id</code>.</p>
+    <p><b>Casi todo el monitoreo consiste en unir la facturación con lo que pasó, por un ID
+      común.</b></p>
+    <p>Piensa en dos libros. <code>system.billing.usage</code> es el libro contable: cada fila dice
+      cuántas unidades se consumieron, en qué SKU y a nombre de qué recurso (job, warehouse,
+      cluster, tag). Las demás tablas son la caja negra de vuelo: qué pasó dentro de cada query, de
+      cada nodo y de cada run. El trabajo de monitoreo casi siempre es unir los dos libros por un ID
+      común: <code>usage_metadata.job_id</code> con <code>job_id</code>,
+      <code>usage_metadata.cluster_id</code> con <code>cluster_id</code>,
+      <code>usage_metadata.warehouse_id</code> con <code>compute.warehouse_id</code>.</p>
 
     <h3><span class="k">Por dentro · 1</span>Dónde viven y quién las puede leer</h3>
-    <p><b>Necesitas Unity Catalog y permisos explícitos; query history es la más restringida.</b></p>
+    <p><b>Necesitas Unity Catalog y permisos explícitos; query history es la más
+      restringida.</b></p>
     <ul>
-      <li><b>Unity Catalog es requisito.</b> El catálogo <code>system</code> viene incluido en cada metastore. Hace falta al menos un workspace con Unity Catalog para habilitarlas, y solo se consultan desde un workspace con Unity Catalog. Aun así incluyen datos de los workspaces de la cuenta que no lo tienen.</li>
-      <li><b>Modelo de privilegios.</b> El metastore tiene que estar en Unity Catalog Privilege Model Version 1.0.</li>
-      <li><b>Acceso por defecto.</b> Solo quien es a la vez account admin y metastore admin. Para los demás, un admin concede <code>USE CATALOG</code> sobre <code>system</code>, y <code>USE SCHEMA</code> y <code>SELECT</code> sobre cada schema.</li>
-      <li><b>Regional o global.</b> La mayoría son regionales: ves los workspaces de la región desde la que consultas. <code>system.billing.usage</code> y <code>system.billing.list_prices</code> son globales. Por eso un join de <code>usage</code> con <code>clusters</code> solo encuentra los clusters de tu región.</li>
-      <li><b>Query history es más restringida.</b> Por defecto solo la ven los admins, y la doc recomienda dar acceso con una dynamic view por usuario o grupo. La columna <code>statement_text</code> devuelve <code>&lt;REDACTED&gt;</code> salvo para account admins o miembros del grupo <code>databricks_pii_access</code>.</li>
+      <li><b>Unity Catalog es requisito.</b> El catálogo <code>system</code> viene incluido en cada
+        metastore. Hace falta al menos un workspace con Unity Catalog para habilitarlas, y solo se
+        consultan desde un workspace con Unity Catalog. Aun así incluyen datos de los workspaces de
+        la cuenta que no lo tienen.</li>
+      <li><b>Modelo de privilegios.</b> El metastore tiene que estar en Unity Catalog Privilege
+        Model Version 1.0.</li>
+      <li><b>Acceso por defecto.</b> Solo quien es a la vez account admin y metastore admin. Para
+        los demás, un admin concede <code>USE CATALOG</code> sobre <code>system</code>, y <code>USE
+        SCHEMA</code> y <code>SELECT</code> sobre cada schema.</li>
+      <li><b>Regional o global.</b> La mayoría son regionales: ves los workspaces de la región desde
+        la que consultas. <code>system.billing.usage</code> y
+        <code>system.billing.list_prices</code> son globales. Por eso un join de <code>usage</code>
+        con <code>clusters</code> solo encuentra los clusters de tu región.</li>
+      <li><b>Query history es más restringida.</b> Por defecto solo la ven los admins, y la doc
+        recomienda dar acceso con una dynamic view por usuario o grupo. La columna
+        <code>statement_text</code> devuelve <code>&lt;REDACTED&gt;</code> salvo para account admins
+        o miembros del grupo <code>databricks_pii_access</code>.</li>
     </ul>
 <pre><code>-- Dar lectura de facturación y jobs a un grupo de ingeniería
 GRANT USE CATALOG ON CATALOG system TO `data-engineers`;
 GRANT USE SCHEMA, SELECT ON SCHEMA system.billing  TO `data-engineers`;
 GRANT USE SCHEMA, SELECT ON SCHEMA system.lakeflow TO `data-engineers`;
 GRANT USE SCHEMA, SELECT ON SCHEMA system.compute  TO `data-engineers`;</code></pre>
-    <div class="verify">La doc actual de la página de referencia solo habla de habilitar system tables a nivel de cuenta. Algunos materiales antiguos y skills del AI Dev Kit dicen que cada schema se habilita por separado con <code>databricks system-schemas enable &lt;metastore-id&gt; &lt;schema&gt;</code>. <b>Verifica</b> en tu cuenta si algún schema (por ejemplo <code>system.query</code>) aparece vacío o deshabilitado antes de concluir que no tienes permisos.</div>
+    <div class="verify">La doc actual de la página de referencia solo habla de habilitar system
+      tables a nivel de cuenta. Algunos materiales antiguos y skills del AI Dev Kit dicen que cada
+      schema se habilita por separado con <code>databricks system-schemas enable
+      &lt;metastore-id&gt; &lt;schema&gt;</code>. <b>Verifica</b> en tu cuenta si algún schema (por
+      ejemplo <code>system.query</code>) aparece vacío o deshabilitado antes de concluir que no
+      tienes permisos.</div>
 
     <h3><span class="k">Por dentro · 2</span>Retención y frescura: no es tiempo real</h3>
-    <p><b>Cada tabla tiene su retención y su retraso, y el retraso decide cuándo programar una alerta.</b> La doc es explícita: no hay monitoreo en tiempo real y los datos se actualizan a lo largo del día. Cada tabla tiene su propio retraso típico. Ese retraso decide a qué hora puedes programar una alerta sin que le falten datos.</p>
+    <p><b>Cada tabla tiene su retención y su retraso, y el retraso decide cuándo programar una
+      alerta.</b> La doc es explícita: no hay monitoreo en tiempo real y los datos se actualizan a
+      lo largo del día. Cada tabla tiene su propio retraso típico. Ese retraso decide a qué hora
+      puedes programar una alerta sin que le falten datos.</p>
     <div class="tblwrap"><table class="st-map">
-      <thead><tr><th>Tabla</th><th>Retención gratuita</th><th>Registros disponibles</th><th>Alcance</th></tr></thead>
+      <thead><tr><th>Tabla</th><th>Retención gratuita</th><th>Registros
+        disponibles</th><th>Alcance</th></tr></thead>
       <tbody>
-        <tr><td><code>system.billing.usage</code></td><td>365 días</td><td>normalmente en 12 h (solo registros <code>ORIGINAL</code>)</td><td>global</td></tr>
-        <tr><td><code>system.billing.list_prices</code></td><td>indefinida</td><td>una fila por cada cambio de precio</td><td>global</td></tr>
-        <tr><td><code>system.query.history</code></td><td>365 días</td><td>normalmente en 1 h</td><td>regional</td></tr>
-        <tr><td><code>system.compute.clusters</code></td><td>365 días</td><td class="c">la doc no lo indica</td><td>regional</td></tr>
-        <tr><td><code>system.compute.node_timeline</code></td><td><b>90 días</b></td><td class="c">la doc no lo indica</td><td>regional</td></tr>
-        <tr><td><code>system.compute.node_types</code></td><td>indefinida</td><td class="c">tipos disponibles hoy</td><td>regional</td></tr>
-        <tr><td><code>system.compute.warehouse_events</code></td><td>365 días</td><td class="c">la doc no lo indica</td><td>regional</td></tr>
-        <tr><td><code>system.lakeflow.jobs</code>, <code>job_tasks</code></td><td>365 días + la última fila de cada job</td><td>normalmente en 1 h</td><td>regional</td></tr>
-        <tr><td><code>system.lakeflow.job_run_timeline</code>, <code>job_task_run_timeline</code></td><td>365 días</td><td>normalmente en 1 h, contado desde <code>period_end_time</code></td><td>regional</td></tr>
-        <tr><td><code>system.storage.predictive_optimization_operations_history</code></td><td><b>180 días</b></td><td>en 2 h; la información de billing puede tardar hasta 24 h</td><td>regional</td></tr>
-        <tr><td><code>system.access.audit</code></td><td>365 días</td><td class="c">la doc no lo indica</td><td>regional (eventos de cuenta: global)</td></tr>
+        <tr><td><code>system.billing.usage</code></td><td>365 días</td><td>normalmente en 12 h (solo
+          registros <code>ORIGINAL</code>)</td><td>global</td></tr>
+        <tr><td><code>system.billing.list_prices</code></td><td>indefinida</td><td>una fila por cada
+          cambio de precio</td><td>global</td></tr>
+        <tr><td><code>system.query.history</code></td><td>365 días</td><td>normalmente en 1
+          h</td><td>regional</td></tr>
+        <tr><td><code>system.compute.clusters</code></td><td>365 días</td><td class="c">la doc no lo
+          indica</td><td>regional</td></tr>
+        <tr><td><code>system.compute.node_timeline</code></td><td><b>90 días</b></td><td
+          class="c">la doc no lo indica</td><td>regional</td></tr>
+        <tr><td><code>system.compute.node_types</code></td><td>indefinida</td><td class="c">tipos
+          disponibles hoy</td><td>regional</td></tr>
+        <tr><td><code>system.compute.warehouse_events</code></td><td>365 días</td><td class="c">la
+          doc no lo indica</td><td>regional</td></tr>
+        <tr><td><code>system.lakeflow.jobs</code>, <code>job_tasks</code></td><td>365 días + la
+          última fila de cada job</td><td>normalmente en 1 h</td><td>regional</td></tr>
+        <tr><td><code>system.lakeflow.job_run_timeline</code>,
+          <code>job_task_run_timeline</code></td><td>365 días</td><td>normalmente en 1 h, contado
+          desde <code>period_end_time</code></td><td>regional</td></tr>
+        <tr><td><code>system.storage.predictive_optimization_operations_history</code></td><td><b>180
+          días</b></td><td>en 2 h; la información de billing puede tardar hasta 24
+          h</td><td>regional</td></tr>
+        <tr><td><code>system.access.audit</code></td><td>365 días</td><td class="c">la doc no lo
+          indica</td><td>regional (eventos de cuenta: global)</td></tr>
       </tbody>
     </table></div>
-    <details><summary>Cuatro matices: retención configurable, consultas poco selectivas, schema que crece y streaming</summary>
+    <details><summary>Cuatro matices: retención configurable, consultas poco selectivas, schema que
+      crece y streaming</summary>
     <ul>
-      <li><b>Retención configurable (Beta).</b> Si el account admin activa el preview <i>System Tables Configurable Retention</i>, la retención gratuita pasa a 395 días para las tablas soportadas y se puede fijar entre 30 y 3.650 días (setting <code>st_retention</code>). Lo que pase de 395 días se cobrará como almacenamiento cuando sea GA.</li>
-      <li><b>Consultas poco selectivas fallan.</b> Si no filtras lo suficiente, recibes <code>System Table query returned too much data. Please repeat query with more selective predicates.</code> Filtra siempre por fecha.</li>
-      <li><b>El schema crece.</b> Pueden aparecer columnas nuevas en cualquier momento. Si copias estas tablas a otra, activa schema evolution y no uses <code>SELECT *</code> en vistas que dependan de un orden fijo.</li>
-      <li><b>Streaming.</b> Las tablas que lo admiten se leen en streaming desde DBR 16.4 con <code>skipChangeCommits = true</code>. No todas lo admiten: según la columna <i>Supports streaming</i> de la referencia, <code>system.query.history</code>, <code>system.billing.list_prices</code>, <code>system.storage.predictive_optimization_operations_history</code>, <code>system.compute.node_types</code> y <code>system.alert.*</code> no admiten streaming. Tienen <code>VACUUM</code> de 7 días, así que un stream que se atrase más de 7 días puede romperse.</li>
+      <li><b>Retención configurable (Beta).</b> Si el account admin activa el preview <i>System
+        Tables Configurable Retention</i>, la retención gratuita pasa a 395 días para las tablas
+        soportadas y se puede fijar entre 30 y 3.650 días (setting <code>st_retention</code>). Lo
+        que pase de 395 días se cobrará como almacenamiento cuando sea GA.</li>
+      <li><b>Consultas poco selectivas fallan.</b> Si no filtras lo suficiente, recibes <code>System
+        Table query returned too much data. Please repeat query with more selective
+        predicates.</code> Filtra siempre por fecha.</li>
+      <li><b>El schema crece.</b> Pueden aparecer columnas nuevas en cualquier momento. Si copias
+        estas tablas a otra, activa schema evolution y no uses <code>SELECT *</code> en vistas que
+        dependan de un orden fijo.</li>
+      <li><b>Streaming.</b> Las tablas que lo admiten se leen en streaming desde DBR 16.4 con
+        <code>skipChangeCommits = true</code>. No todas lo admiten: según la columna <i>Supports
+        streaming</i> de la referencia, <code>system.query.history</code>,
+        <code>system.billing.list_prices</code>,
+        <code>system.storage.predictive_optimization_operations_history</code>,
+        <code>system.compute.node_types</code> y <code>system.alert.*</code> no admiten streaming.
+        Tienen <code>VACUUM</code> de 7 días, así que un stream que se atrase más de 7 días puede
+        romperse.</li>
     </ul>
     </details>
 
     <h3><span class="k">Mapa</span>Qué tabla responde qué pregunta</h3>
-    <p><b>Busca tu pregunta en la segunda columna y lee la tercera antes de escribir la query.</b></p>
+    <p><b>Busca tu pregunta en la segunda columna y lee la tercera antes de escribir la
+      query.</b></p>
     <div class="tblwrap"><table class="st-map">
       <thead><tr><th>Tabla</th><th>Pregunta que responde</th><th>Ojo con</th></tr></thead>
       <tbody>
-        <tr><td><code>system.billing.usage</code></td><td>¿Cuántos DBUs consumió cada job, warehouse, cluster, pipeline o tag?</td><td>Las correcciones llegan como filas <code>RETRACTION</code> (cantidad negativa) y <code>RESTATEMENT</code>. Suma todas, no filtres solo <code>ORIGINAL</code>. <code>usage_metadata.job_id</code> viene vacío para jobs en clusters all-purpose.</td></tr>
-        <tr><td><code>system.billing.list_prices</code></td><td>¿Cuánto vale la unidad de cada SKU en cada momento?</td><td>Es precio de lista. Únela por rango <code>price_start_time</code> / <code>price_end_time</code>. <code>pricing.effective_list.default</code> resuelve promociones y es el que la doc describe como precio para calcular el coste.</td></tr>
-        <tr><td><code>system.query.history</code></td><td>¿Qué queries tardan, hacen spill, leen de más, se podan mal o esperan en cola?</td><td>Cubre SQL warehouses, serverless (notebooks y jobs) y pipelines de Lakeflow. <b>No cubre</b> clusters clásicos all-purpose ni de jobs: para esos usa el Spark UI. <code>compute.cluster_id</code> nunca se llena.</td></tr>
-        <tr><td><code>system.compute.clusters</code></td><td>¿Qué configuración tenía un cluster: nodos, autoescalado, auto-terminación, DBR, dueño, access mode?</td><td>Es SCD: toma la última fila por <code>change_time</code>. No incluye serverless ni SQL warehouses.</td></tr>
-        <tr><td><code>system.compute.node_types</code></td><td>¿Cuántos vCPU (<code>core_count</code>) y memoria (<code>memory_mb</code>) tiene cada tipo de nodo?</td><td>Solo los tipos disponibles hoy.</td></tr>
-        <tr><td><code>system.compute.node_timeline</code></td><td>¿Cómo se usaron CPU, memoria, swap, red y disco por nodo, minuto a minuto?</td><td>90 días. Los nodos que vivieron menos de 10 minutos pueden no aparecer. La columna <code>driver</code> separa driver de workers.</td></tr>
-        <tr><td><code>system.compute.warehouse_events</code></td><td>¿Cuándo arrancó, escaló o se apagó un warehouse y con cuántos clusters?</td><td><code>event_type</code>: <code>SCALED_UP</code>, <code>SCALED_DOWN</code>, <code>STOPPING</code>, <code>RUNNING</code>, <code>STARTING</code>, <code>STOPPED</code>.</td></tr>
-        <tr><td><code>system.lakeflow.jobs</code></td><td>¿Qué jobs existen, quién los corre, qué timeout y health rules tienen?</td><td>SCD2: última fila por <code>change_time</code> <b>y después</b> <code>delete_time IS NULL</code>. <code>timeout_seconds</code>, <code>health_rules</code>, <code>paused</code>, <code>run_as_user_name</code> y otras columnas nuevas vienen vacías en las filas emitidas antes de principios de diciembre de 2025; un job que no cambia desde entonces no las tiene.</td></tr>
-        <tr><td><code>system.lakeflow.job_run_timeline</code></td><td>¿Cuánto duró y cómo terminó cada run?</td><td>Las runs largas se parten en filas de hasta una hora. Desde el 19 de enero de 2026 los cortes se alinean a la hora del reloj: una run de 3 h que empieza a las 4:47 genera 4 filas. <code>result_state</code> solo está en la última. Las columnas <code>*_duration_seconds</code> valen 0 en jobs multi-task o creados con la API actual.</td></tr>
-        <tr><td><code>system.lakeflow.job_task_run_timeline</code></td><td>¿Qué task es la lenta y en qué compute corrió (<code>compute_ids</code>)?</td><td>Aquí sí hay duración por task. <code>run_id</code> es el de la task; <code>job_run_id</code> el de la run del job.</td></tr>
-        <tr><td><code>system.storage.predictive_optimization_operations_history</code></td><td>¿Qué <code>COMPACTION</code>, <code>VACUUM</code>, <code>CLUSTERING</code> o <code>ANALYZE</code> hizo predictive optimization y cuántos DBUs estimados costó?</td><td>Public Preview, 180 días. <code>usage_unit = 'ESTIMATED_DBU'</code>: el reparto por operación es aproximado.</td></tr>
-        <tr><td><code>system.access.audit</code></td><td>¿Quién cambió un permiso, un cluster o un job, y cuándo?</td><td>Public Preview. Filtra por <code>event_date</code>, la doc lo recomienda para rendimiento. Los eventos de cuenta tienen <code>workspace_id = 0</code>.</td></tr>
-        <tr><td><code>system.alert.alerts</code>, <code>alert_evaluation_history</code></td><td>¿Qué alertas existen y cómo se evaluaron?</td><td>Public Preview, 365 días.</td></tr>
+        <tr><td><code>system.billing.usage</code></td><td>¿Cuántos DBUs consumió cada job,
+          warehouse, cluster, pipeline o tag?</td><td>Las correcciones llegan como filas
+          <code>RETRACTION</code> (cantidad negativa) y <code>RESTATEMENT</code>. Suma todas, no
+          filtres solo <code>ORIGINAL</code>. <code>usage_metadata.job_id</code> viene vacío para
+          jobs en clusters all-purpose.</td></tr>
+        <tr><td><code>system.billing.list_prices</code></td><td>¿Cuánto vale la unidad de cada SKU
+          en cada momento?</td><td>Es precio de lista. Únela por rango <code>price_start_time</code>
+          / <code>price_end_time</code>. <code>pricing.effective_list.default</code> resuelve
+          promociones y es el que la doc describe como precio para calcular el coste.</td></tr>
+        <tr><td><code>system.query.history</code></td><td>¿Qué queries tardan, hacen spill, leen de
+          más, se podan mal o esperan en cola?</td><td>Cubre SQL warehouses, serverless (notebooks y
+          jobs) y pipelines de Lakeflow. <b>No cubre</b> clusters clásicos all-purpose ni de jobs:
+          para esos usa el Spark UI. <code>compute.cluster_id</code> nunca se llena.</td></tr>
+        <tr><td><code>system.compute.clusters</code></td><td>¿Qué configuración tenía un cluster:
+          nodos, autoescalado, auto-terminación, DBR, dueño, access mode?</td><td>Es SCD: toma la
+          última fila por <code>change_time</code>. No incluye serverless ni SQL
+          warehouses.</td></tr>
+        <tr><td><code>system.compute.node_types</code></td><td>¿Cuántos vCPU
+          (<code>core_count</code>) y memoria (<code>memory_mb</code>) tiene cada tipo de
+          nodo?</td><td>Solo los tipos disponibles hoy.</td></tr>
+        <tr><td><code>system.compute.node_timeline</code></td><td>¿Cómo se usaron CPU, memoria,
+          swap, red y disco por nodo, minuto a minuto?</td><td>90 días. Los nodos que vivieron menos
+          de 10 minutos pueden no aparecer. La columna <code>driver</code> separa driver de
+          workers.</td></tr>
+        <tr><td><code>system.compute.warehouse_events</code></td><td>¿Cuándo arrancó, escaló o se
+          apagó un warehouse y con cuántos clusters?</td><td><code>event_type</code>:
+          <code>SCALED_UP</code>, <code>SCALED_DOWN</code>, <code>STOPPING</code>,
+          <code>RUNNING</code>, <code>STARTING</code>, <code>STOPPED</code>.</td></tr>
+        <tr><td><code>system.lakeflow.jobs</code></td><td>¿Qué jobs existen, quién los corre, qué
+          timeout y health rules tienen?</td><td>SCD2: última fila por <code>change_time</code> <b>y
+          después</b> <code>delete_time IS NULL</code>. <code>timeout_seconds</code>,
+          <code>health_rules</code>, <code>paused</code>, <code>run_as_user_name</code> y otras
+          columnas nuevas vienen vacías en las filas emitidas antes de principios de diciembre de
+          2025; un job que no cambia desde entonces no las tiene.</td></tr>
+        <tr><td><code>system.lakeflow.job_run_timeline</code></td><td>¿Cuánto duró y cómo terminó
+          cada run?</td><td>Las runs largas se parten en filas de hasta una hora. Desde el 19 de
+          enero de 2026 los cortes se alinean a la hora del reloj: una run de 3 h que empieza a las
+          4:47 genera 4 filas. <code>result_state</code> solo está en la última. Las columnas
+          <code>*_duration_seconds</code> valen 0 en jobs multi-task o creados con la API
+          actual.</td></tr>
+        <tr><td><code>system.lakeflow.job_task_run_timeline</code></td><td>¿Qué task es la lenta y
+          en qué compute corrió (<code>compute_ids</code>)?</td><td>Aquí sí hay duración por task.
+          <code>run_id</code> es el de la task; <code>job_run_id</code> el de la run del
+          job.</td></tr>
+        <tr><td><code>system.storage.predictive_optimization_operations_history</code></td><td>¿Qué
+          <code>COMPACTION</code>, <code>VACUUM</code>, <code>CLUSTERING</code> o
+          <code>ANALYZE</code> hizo predictive optimization y cuántos DBUs estimados
+          costó?</td><td>Public Preview, 180 días. <code>usage_unit = 'ESTIMATED_DBU'</code>: el
+          reparto por operación es aproximado.</td></tr>
+        <tr><td><code>system.access.audit</code></td><td>¿Quién cambió un permiso, un cluster o un
+          job, y cuándo?</td><td>Public Preview. Filtra por <code>event_date</code>, la doc lo
+          recomienda para rendimiento. Los eventos de cuenta tienen <code>workspace_id =
+          0</code>.</td></tr>
+        <tr><td><code>system.alert.alerts</code>, <code>alert_evaluation_history</code></td><td>¿Qué
+          alertas existen y cómo se evaluaron?</td><td>Public Preview, 365 días.</td></tr>
       </tbody>
     </table></div>
 
     <h3><span class="k">Explorador</span>Nueve preguntas, nueve queries</h3>
-    <p><b>Mira la forma del resultado de cada query antes de correrla.</b> Elige una pregunta. Verás la query, un resultado con forma real y la visualización que harías en el SQL editor. Los datos son inventados, pero las columnas son las que devuelve cada query.</p>
+    <p><b>Mira la forma del resultado de cada query antes de correrla.</b> Elige una pregunta. Verás
+      la query, un resultado con forma real y la visualización que harías en el SQL editor. Los
+      datos son inventados, pero las columnas son las que devuelve cada query.</p>
     <div class="console" id="st-exp">
       <div class="ttl">Explorador de system tables · datos ilustrativos</div>
       <div class="chips" role="group" aria-label="Pregunta" id="st-qs">
         <button type="button" data-q="q-coste-job" aria-pressed="true">Coste por job</button>
-        <button type="button" data-q="q-coste-dia" aria-pressed="false">Coste diario por producto</button>
+        <button type="button" data-q="q-coste-dia" aria-pressed="false">Coste diario por
+          producto</button>
         <button type="button" data-q="q-spill" aria-pressed="false">Queries con spill</button>
         <button type="button" data-q="q-poda" aria-pressed="false">Poca poda de archivos</button>
         <button type="button" data-q="q-cola" aria-pressed="false">Cola del warehouse</button>
@@ -116,7 +246,10 @@ GRANT USE SCHEMA, SELECT ON SCHEMA system.compute  TO `data-engineers`;</code></
     </div>
 
     <h3><span class="k">Cómo se usa</span>Queries listas para correr</h3>
-    <p><b>Diez queries de coste, rendimiento y jobs, cada una con su lectura y su fuente.</b> Todas se pueden pegar en el SQL editor de un SQL warehouse. Cambia los valores entre <code>&lt; &gt;</code>. Cada una indica la tabla y la página de la doc donde se verifican sus columnas.</p>
+    <p><b>Diez queries de coste, rendimiento y jobs, cada una con su lectura y su fuente.</b> Todas
+      se pueden pegar en el SQL editor de un SQL warehouse. Cambia los valores entre <code>&lt;
+      &gt;</code>. Cada una indica la tabla y la página de la doc donde se verifican sus
+      columnas.</p>
 
     <div class="st-q" id="q-coste-job">
       <h4>1. ¿Qué jobs cuestan más en los últimos 30 días?</h4>
@@ -150,8 +283,27 @@ LEFT JOIN jobs USING (workspace_id, job_id)
 GROUP BY uso.workspace_id, uso.job_id
 ORDER BY usd_lista DESC
 LIMIT 20;</code></pre>
-      <p><b>Cómo leerlo.</b> Dos o tres jobs suelen concentrar casi todo el gasto: empieza por ellos. El join con <code>list_prices</code> usa el rango de vigencia del precio, como en la doc; unir solo con <code>price_end_time IS NULL</code> aplica el precio de hoy a consumos viejos. El nombre sale de <code>usage_metadata.job_name</code> (solo serverless) o de la última fila de <code>system.lakeflow.jobs</code>. Los jobs que corren en clusters all-purpose no aparecen, porque ahí no se llena <code>job_id</code>.</p>
-      <p class="c">Tablas: <a href="https://docs.databricks.com/aws/en/admin/system-tables/billing" target="_blank" rel="noopener">billing.usage</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/billing" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/admin/system-tables/pricing" target="_blank" rel="noopener">billing.list_prices</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/pricing" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/admin/system-tables/jobs" target="_blank" rel="noopener">lakeflow.jobs</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/jobs" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>. La doc tiene una versión por run en "Calculate cost per job run".</p>
+      <p><b>Cómo leerlo.</b> Dos o tres jobs suelen concentrar casi todo el gasto: empieza por
+        ellos. El join con <code>list_prices</code> usa el rango de vigencia del precio, como en la
+        doc; unir solo con <code>price_end_time IS NULL</code> aplica el precio de hoy a consumos
+        viejos. El nombre sale de <code>usage_metadata.job_name</code> (solo serverless) o de la
+        última fila de <code>system.lakeflow.jobs</code>. Los jobs que corren en clusters
+        all-purpose no aparecen, porque ahí no se llena <code>job_id</code>.</p>
+      <p class="c">Tablas: <a href="https://docs.databricks.com/aws/en/admin/system-tables/billing"
+        target="_blank" rel="noopener">billing.usage</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/admin/system-tables/billing"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+        href="https://docs.databricks.com/aws/en/admin/system-tables/pricing" target="_blank"
+        rel="noopener">billing.list_prices</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/admin/system-tables/pricing"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+        href="https://docs.databricks.com/aws/en/admin/system-tables/jobs" target="_blank"
+        rel="noopener">lakeflow.jobs</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/admin/system-tables/jobs" target="_blank"
+        rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>. La
+        doc tiene una versión por run en "Calculate cost per job run".</p>
     </div>
 
     <div class="st-q" id="q-coste-dia">
@@ -168,8 +320,20 @@ JOIN system.billing.list_prices p
 WHERE u.usage_date &gt;= CURRENT_DATE() - INTERVAL 30 DAY
 GROUP BY ALL
 ORDER BY u.usage_date, usd_lista DESC;</code></pre>
-      <p><b>Cómo leerlo.</b> <code>billing_origin_product</code> separa <code>JOBS</code>, <code>SQL</code>, <code>ALL_PURPOSE</code>, <code>DLT</code>, <code>PREDICTIVE_OPTIMIZATION</code> y otros. Esto importa porque predictive optimization, data quality monitoring y los jobs serverless comparten el mismo SKU: con <code>sku_name</code> no los distingues. Un pico aislado en <code>ALL_PURPOSE</code> suele ser un cluster interactivo que no se apagó; revisa su <code>auto_termination_minutes</code> en <code>system.compute.clusters</code>. El último día suele verse bajo porque los registros tardan hasta 12 horas en llegar.</p>
-      <p class="c">Tablas: <a href="https://docs.databricks.com/aws/en/admin/usage/system-tables" target="_blank" rel="noopener">Monitor costs using system tables</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/usage/system-tables" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> (de ahí sale el patrón del join con precios).</p>
+      <p><b>Cómo leerlo.</b> <code>billing_origin_product</code> separa <code>JOBS</code>,
+        <code>SQL</code>, <code>ALL_PURPOSE</code>, <code>DLT</code>,
+        <code>PREDICTIVE_OPTIMIZATION</code> y otros. Esto importa porque predictive optimization,
+        data quality monitoring y los jobs serverless comparten el mismo SKU: con
+        <code>sku_name</code> no los distingues. Un pico aislado en <code>ALL_PURPOSE</code> suele
+        ser un cluster interactivo que no se apagó; revisa su <code>auto_termination_minutes</code>
+        en <code>system.compute.clusters</code>. El último día suele verse bajo porque los registros
+        tardan hasta 12 horas en llegar.</p>
+      <p class="c">Tablas: <a href="https://docs.databricks.com/aws/en/admin/usage/system-tables"
+        target="_blank" rel="noopener">Monitor costs using system tables</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/admin/usage/system-tables"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a> (de ahí sale el
+        patrón del join con precios).</p>
     </div>
 
     <div class="st-q" id="q-spill">
@@ -185,8 +349,24 @@ WHERE start_time &gt;= NOW() - INTERVAL 7 DAY
   -- AND compute.warehouse_id = '&lt;warehouse-id&gt;'
 ORDER BY spilled_local_bytes DESC
 LIMIT 50;</code></pre>
-      <p><b>Cómo leerlo.</b> <code>spilled_local_bytes</code> es lo que la query escribió temporalmente a disco por falta de memoria. En un SQL warehouse, la doc recomienda subir el tamaño del warehouse o optimizar la query. Para ver dónde ocurre, copia el <code>statement_id</code>, ve a <b>Query History</b>, pégalo en el filtro <b>Statement ID</b> y abre <b>See query profile</b>. El mismo diagnóstico en el Spark UI está en <a href="diagnostico.html">Diagnóstico</a>.</p>
-      <p class="c">Tabla: <a href="https://docs.databricks.com/aws/en/admin/system-tables/query-history" target="_blank" rel="noopener">query.history</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/query-history" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>. Basada en <a href="https://docs.databricks.com/aws/en/compute/sql-warehouse/monitor/queries" target="_blank" rel="noopener">Example queries for monitoring SQL warehouse activity</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/sql-warehouse/monitor/queries" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
+      <p><b>Cómo leerlo.</b> <code>spilled_local_bytes</code> es lo que la query escribió
+        temporalmente a disco por falta de memoria. En un SQL warehouse, la doc recomienda subir el
+        tamaño del warehouse o optimizar la query. Para ver dónde ocurre, copia el
+        <code>statement_id</code>, ve a <b>Query History</b>, pégalo en el filtro <b>Statement
+        ID</b> y abre <b>See query profile</b>. El mismo diagnóstico en el Spark UI está en <a
+        href="diagnostico.html">Diagnóstico</a>.</p>
+      <p class="c">Tabla: <a
+        href="https://docs.databricks.com/aws/en/admin/system-tables/query-history" target="_blank"
+        rel="noopener">query.history</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/admin/system-tables/query-history"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>. Basada en <a
+        href="https://docs.databricks.com/aws/en/compute/sql-warehouse/monitor/queries"
+        target="_blank" rel="noopener">Example queries for monitoring SQL warehouse activity</a> <a
+        class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/sql-warehouse/monitor/queries"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
     </div>
 
     <div class="st-q" id="q-poda">
@@ -204,8 +384,21 @@ WHERE start_time &gt;= NOW() - INTERVAL 7 DAY
   AND read_files_bytes &gt; 10 * POW(1024, 3)      -- solo lecturas de más de 10 GB
 ORDER BY pct_podado ASC, read_files_bytes DESC
 LIMIT 50;</code></pre>
-      <p><b>Cómo leerlo.</b> La doc define el total de archivos de las tablas leídas como <code>read_files + pruned_files</code>, y su tamaño comprimido como <code>read_files_bytes + pruned_files_bytes</code>. Un <code>pct_podado</code> cercano a 0 con muchos GB leídos indica que el filtro no coincide con cómo están organizados los archivos: revisa las claves de <a href="liquid-clustering.html">liquid clustering</a>. Una query sin <code>WHERE</code> también da 0 %, y eso es correcto. No compares <code>read_bytes</code> con estos tamaños: <code>read_bytes</code> mezcla datos comprimidos con datos de la disk cache sin comprimir y puede ser mayor que la tabla.</p>
-      <p class="c">Tabla: <a href="https://docs.databricks.com/aws/en/admin/system-tables/query-history" target="_blank" rel="noopener">query.history</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/query-history" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, sección "Understanding scan metrics". El umbral de 10 GB es nuestro.</p>
+      <p><b>Cómo leerlo.</b> La doc define el total de archivos de las tablas leídas como
+        <code>read_files + pruned_files</code>, y su tamaño comprimido como <code>read_files_bytes +
+        pruned_files_bytes</code>. Un <code>pct_podado</code> cercano a 0 con muchos GB leídos
+        indica que el filtro no coincide con cómo están organizados los archivos: revisa las claves
+        de <a href="liquid-clustering.html">liquid clustering</a>. Una query sin <code>WHERE</code>
+        también da 0 %, y eso es correcto. No compares <code>read_bytes</code> con estos tamaños:
+        <code>read_bytes</code> mezcla datos comprimidos con datos de la disk cache sin comprimir y
+        puede ser mayor que la tabla.</p>
+      <p class="c">Tabla: <a
+        href="https://docs.databricks.com/aws/en/admin/system-tables/query-history" target="_blank"
+        rel="noopener">query.history</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/admin/system-tables/query-history"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>, sección
+        "Understanding scan metrics". El umbral de 10 GB es nuestro.</p>
     </div>
 
     <div class="st-q" id="q-cola">
@@ -221,8 +414,24 @@ WHERE compute.warehouse_id = '&lt;warehouse-id&gt;'
   AND start_time &gt;= NOW() - INTERVAL 30 DAY
 GROUP BY DATE(start_time)
 ORDER BY dia;</code></pre>
-      <p><b>Cómo leerlo.</b> Son dos esperas distintas. <code>waiting_at_capacity_duration_ms</code> es tiempo en cola porque el warehouse ya estaba lleno: la doc recomienda subir <b>max clusters</b> para que escale. <code>waiting_for_compute_duration_ms</code> es tiempo esperando a que se aprovisione compute, por ejemplo cuando el warehouse estaba detenido. Si lo que sube es <code>duracion_p95_s</code> sin cola, el problema está en las queries o en el tamaño del warehouse.</p>
-      <p class="c">Tabla: <a href="https://docs.databricks.com/aws/en/admin/system-tables/query-history" target="_blank" rel="noopener">query.history</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/query-history" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>. Adaptada de "Analyze query performance trends over time" en <a href="https://docs.databricks.com/aws/en/compute/sql-warehouse/monitor/queries" target="_blank" rel="noopener">la página de monitoreo de warehouses</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/sql-warehouse/monitor/queries" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
+      <p><b>Cómo leerlo.</b> Son dos esperas distintas. <code>waiting_at_capacity_duration_ms</code>
+        es tiempo en cola porque el warehouse ya estaba lleno: la doc recomienda subir <b>max
+        clusters</b> para que escale. <code>waiting_for_compute_duration_ms</code> es tiempo
+        esperando a que se aprovisione compute, por ejemplo cuando el warehouse estaba detenido. Si
+        lo que sube es <code>duracion_p95_s</code> sin cola, el problema está en las queries o en el
+        tamaño del warehouse.</p>
+      <p class="c">Tabla: <a
+        href="https://docs.databricks.com/aws/en/admin/system-tables/query-history" target="_blank"
+        rel="noopener">query.history</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/admin/system-tables/query-history"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>. Adaptada de
+        "Analyze query performance trends over time" en <a
+        href="https://docs.databricks.com/aws/en/compute/sql-warehouse/monitor/queries"
+        target="_blank" rel="noopener">la página de monitoreo de warehouses</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/sql-warehouse/monitor/queries"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
     </div>
 
     <div class="st-q" id="q-nodos">
@@ -245,8 +454,20 @@ GROUP BY ALL
 HAVING AVG(n.cpu_user_percent + n.cpu_system_percent) &lt; 20
     OR MAX(n.mem_used_percent) &gt; 90
 ORDER BY mem_max_pct DESC;</code></pre>
-      <p><b>Cómo leerlo.</b> Cada fila de <code>node_timeline</code> es un minuto de un nodo. CPU media baja en un cluster interactivo grande sugiere que sobra tamaño o que le falta auto-terminación. Memoria máxima por encima del 90 % con swap distinto de cero en los workers es una señal de presión de memoria: riesgo de spill o de OOM. Mira si es el driver (<code>driver = true</code>) o los workers, porque el remedio es distinto. Para comparar con el hardware, une <code>worker_node_type</code> con <code>system.compute.node_types</code> (<code>core_count</code>, <code>memory_mb</code>).</p>
-      <p class="c">Tablas: <a href="https://docs.databricks.com/aws/en/admin/system-tables/compute" target="_blank" rel="noopener">compute.node_timeline, compute.clusters, compute.node_types</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/compute" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>. Solo clusters clásicos (all-purpose, jobs, pipelines). Los umbrales de 20 % y 90 % son nuestros.</p>
+      <p><b>Cómo leerlo.</b> Cada fila de <code>node_timeline</code> es un minuto de un nodo. CPU
+        media baja en un cluster interactivo grande sugiere que sobra tamaño o que le falta
+        auto-terminación. Memoria máxima por encima del 90 % con swap distinto de cero en los
+        workers es una señal de presión de memoria: riesgo de spill o de OOM. Mira si es el driver
+        (<code>driver = true</code>) o los workers, porque el remedio es distinto. Para comparar con
+        el hardware, une <code>worker_node_type</code> con <code>system.compute.node_types</code>
+        (<code>core_count</code>, <code>memory_mb</code>).</p>
+      <p class="c">Tablas: <a href="https://docs.databricks.com/aws/en/admin/system-tables/compute"
+        target="_blank" rel="noopener">compute.node_timeline, compute.clusters,
+        compute.node_types</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/admin/system-tables/compute"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>. Solo clusters
+        clásicos (all-purpose, jobs, pipelines). Los umbrales de 20 % y 90 % son nuestros.</p>
     </div>
 
     <div class="st-q" id="q-fallos">
@@ -260,8 +481,18 @@ WHERE period_end_time &gt;= CURRENT_TIMESTAMP() - INTERVAL 30 DAYS
   AND result_state IS NOT NULL     -- solo la última fila de cada run trae result_state
 GROUP BY ALL
 ORDER BY dia;</code></pre>
-      <p><b>Cómo leerlo.</b> Los valores de <code>result_state</code> son <code>SUCCEEDED</code>, <code>FAILED</code>, <code>SKIPPED</code>, <code>CANCELLED</code>, <code>TIMED_OUT</code>, <code>ERROR</code> y <code>BLOCKED</code>. Escribir <code>'SUCCESS'</code> o <code>'CANCELED'</code> devuelve cero filas sin avisar. Para la causa, mira <code>termination_code</code> (por ejemplo <code>CLUSTER_ERROR</code>, <code>LIBRARY_INSTALLATION_ERROR</code>, <code>MAX_CONCURRENT_RUNS_EXCEEDED</code>). Una run que nunca empezó aparece con <code>period_start_time = period_end_time</code>.</p>
-      <p class="c">Tabla: <a href="https://docs.databricks.com/aws/en/admin/system-tables/jobs" target="_blank" rel="noopener">lakeflow.job_run_timeline</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/jobs" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> (Result state values, Termination code values).</p>
+      <p><b>Cómo leerlo.</b> Los valores de <code>result_state</code> son <code>SUCCEEDED</code>,
+        <code>FAILED</code>, <code>SKIPPED</code>, <code>CANCELLED</code>, <code>TIMED_OUT</code>,
+        <code>ERROR</code> y <code>BLOCKED</code>. Escribir <code>'SUCCESS'</code> o
+        <code>'CANCELED'</code> devuelve cero filas sin avisar. Para la causa, mira
+        <code>termination_code</code> (por ejemplo <code>CLUSTER_ERROR</code>,
+        <code>LIBRARY_INSTALLATION_ERROR</code>, <code>MAX_CONCURRENT_RUNS_EXCEEDED</code>). Una run
+        que nunca empezó aparece con <code>period_start_time = period_end_time</code>.</p>
+      <p class="c">Tabla: <a href="https://docs.databricks.com/aws/en/admin/system-tables/jobs"
+        target="_blank" rel="noopener">lakeflow.job_run_timeline</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/admin/system-tables/jobs" target="_blank"
+        rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>
+        (Result state values, Termination code values).</p>
     </div>
 
     <div class="st-q" id="q-tasks">
@@ -281,8 +512,15 @@ FROM (
 ) t
 GROUP BY task_key
 ORDER BY p95_min DESC;</code></pre>
-      <p><b>Cómo leerlo.</b> La duración se suma desde las filas por hora, igual que hace la doc con las runs. No uses <code>run_duration_seconds</code> de <code>job_run_timeline</code>: vale 0 en jobs multi-task. Una p95 muy por encima de la media indica runs irregulares: días con más datos, skew o espera por recursos. Busca esas runs en la vista de matriz del job.</p>
-      <p class="c">Tabla: <a href="https://docs.databricks.com/aws/en/admin/system-tables/jobs" target="_blank" rel="noopener">lakeflow.job_task_run_timeline</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/jobs" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
+      <p><b>Cómo leerlo.</b> La duración se suma desde las filas por hora, igual que hace la doc con
+        las runs. No uses <code>run_duration_seconds</code> de <code>job_run_timeline</code>: vale 0
+        en jobs multi-task. Una p95 muy por encima de la media indica runs irregulares: días con más
+        datos, skew o espera por recursos. Busca esas runs en la vista de matriz del job.</p>
+      <p class="c">Tabla: <a href="https://docs.databricks.com/aws/en/admin/system-tables/jobs"
+        target="_blank" rel="noopener">lakeflow.job_task_run_timeline</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/admin/system-tables/jobs" target="_blank"
+        rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
     </div>
 
     <div class="st-q" id="q-po">
@@ -296,8 +534,23 @@ WHERE usage_unit = 'ESTIMATED_DBU'
 GROUP BY ALL
 ORDER BY dbus_estimados DESC
 LIMIT 20;</code></pre>
-      <p><b>Cómo leerlo.</b> <code>operation_type</code> puede ser <code>COMPACTION</code>, <code>VACUUM</code>, <code>ANALYZE</code>, <code>CLUSTERING</code>, <code>AUTO_CLUSTERING_COLUMN_SELECTION</code>, <code>DATA_SKIPPING_COLUMN_SELECTION</code>, <code>COMPATIBILITY_MODE_REFRESH</code>, <code>DELETE</code> o <code>PURGE</code>. Mira también <code>operation_status</code>: un <code>FAILED: PRIVATE_LINK_SETUP_ERROR</code> indica que falta conectividad privada para serverless hacia tu storage. En <code>system.billing.usage</code> este gasto aparece con <code>billing_origin_product = 'PREDICTIVE_OPTIMIZATION'</code>. Si una tabla ya está bajo predictive optimization, un job propio de <code>OPTIMIZE</code> sobre ella es gasto duplicado.</p>
-      <p class="c">Tabla: <a href="https://docs.databricks.com/aws/en/admin/system-tables/predictive-optimization" target="_blank" rel="noopener">storage.predictive_optimization_operations_history</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/predictive-optimization" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> (Public Preview).</p>
+      <p><b>Cómo leerlo.</b> <code>operation_type</code> puede ser <code>COMPACTION</code>,
+        <code>VACUUM</code>, <code>ANALYZE</code>, <code>CLUSTERING</code>,
+        <code>AUTO_CLUSTERING_COLUMN_SELECTION</code>, <code>DATA_SKIPPING_COLUMN_SELECTION</code>,
+        <code>COMPATIBILITY_MODE_REFRESH</code>, <code>DELETE</code> o <code>PURGE</code>. Mira
+        también <code>operation_status</code>: un <code>FAILED: PRIVATE_LINK_SETUP_ERROR</code>
+        indica que falta conectividad privada para serverless hacia tu storage. En
+        <code>system.billing.usage</code> este gasto aparece con <code>billing_origin_product =
+        'PREDICTIVE_OPTIMIZATION'</code>. Si una tabla ya está bajo predictive optimization, un job
+        propio de <code>OPTIMIZE</code> sobre ella es gasto duplicado.</p>
+      <p class="c">Tabla: <a
+        href="https://docs.databricks.com/aws/en/admin/system-tables/predictive-optimization"
+        target="_blank" rel="noopener">storage.predictive_optimization_operations_history</a> <a
+        class="az"
+        href="https://learn.microsoft.com/azure/databricks/admin/system-tables/predictive-optimization"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a> (Public
+        Preview).</p>
     </div>
 
     <div class="st-q" id="q-allpurpose">
@@ -320,22 +573,53 @@ all_purpose_cluster_jobs AS (
     INNER JOIN clusters t2 USING (workspace_id, cluster_id)
 )
 SELECT * FROM all_purpose_cluster_jobs LIMIT 10;</code></pre>
-      <p><b>Cómo leerlo.</b> Es la query de la doc, sin cambios. <code>cluster_source</code> vale <code>UI</code> o <code>API</code> solo para compute all-purpose; el compute de jobs aparece como <code>JOB</code>. Un job en all-purpose tiene dos problemas: comparte recursos con notebooks y su coste no se puede atribuir con exactitud, porque <code>usage_metadata.job_id</code> no se llena. La doc recomienda job compute o serverless.</p>
-      <p class="c">Tablas: <a href="https://docs.databricks.com/aws/en/admin/system-tables/jobs" target="_blank" rel="noopener">lakeflow.job_task_run_timeline + compute.clusters</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/jobs" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, "Find jobs running on all-purpose compute".</p>
+      <p><b>Cómo leerlo.</b> Es la query de la doc, sin cambios. <code>cluster_source</code> vale
+        <code>UI</code> o <code>API</code> solo para compute all-purpose; el compute de jobs aparece
+        como <code>JOB</code>. Un job en all-purpose tiene dos problemas: comparte recursos con
+        notebooks y su coste no se puede atribuir con exactitud, porque
+        <code>usage_metadata.job_id</code> no se llena. La doc recomienda job compute o
+        serverless.</p>
+      <p class="c">Tablas: <a href="https://docs.databricks.com/aws/en/admin/system-tables/jobs"
+        target="_blank" rel="noopener">lakeflow.job_task_run_timeline + compute.clusters</a> <a
+        class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/jobs"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>, "Find jobs
+        running on all-purpose compute".</p>
     </div>
 
     <h3><span class="k">Alertas</span>De una query a una SQL alert</h3>
-    <p><b>Una SQL alert convierte cualquiera de estas queries en un aviso programado.</b> Una <b>Databricks SQL alert</b> ejecuta una query con un horario, evalúa una condición sobre el resultado y notifica cuando se cumple. Cada evaluación termina en <code>OK</code>, <code>TRIGGERED</code> o <code>ERROR</code>. La versión actual ya no tiene el estado <code>UNKNOWN</code> de las alertas legacy, y cada alerta tiene su propia query: no reutiliza una query guardada.</p>
+    <p><b>Una SQL alert convierte cualquiera de estas queries en un aviso programado.</b> Una
+      <b>Databricks SQL alert</b> ejecuta una query con un horario, evalúa una condición sobre el
+      resultado y notifica cuando se cumple. Cada evaluación termina en <code>OK</code>,
+      <code>TRIGGERED</code> o <code>ERROR</code>. La versión actual ya no tiene el estado
+      <code>UNKNOWN</code> de las alertas legacy, y cada alerta tiene su propia query: no reutiliza
+      una query guardada.</p>
     <ol class="steps">
       <li><b>Crea la alerta.</b> En la barra lateral, <b>Alerts</b> &gt; <b>Create Alert</b>.</li>
-      <li><b>Escribe la query.</b> Que devuelva pocas filas y una columna clara para comparar. Las alertas <b>no aceptan queries con parámetros</b>, así que la fecha va en el SQL (<code>current_date() - 1</code>), no en un <code>:parametro</code>.</li>
+      <li><b>Escribe la query.</b> Que devuelva pocas filas y una columna clara para comparar. Las
+        alertas <b>no aceptan queries con parámetros</b>, así que la fecha va en el SQL
+        (<code>current_date() - 1</code>), no en un <code>:parametro</code>.</li>
       <li><b>Elige el compute.</b> El SQL warehouse que ejecutará la query en cada evaluación.</li>
-      <li><b>Define la condición.</b> El valor a comprobar es el primer valor de una columna o una agregación sobre todas las filas de esa columna (por ejemplo SUM o AVERAGE); luego el operador (por ejemplo <b>&gt;</b>) y el umbral, que por defecto es <b>Static value</b>. Pulsa <b>Test condition</b> para ver si dispararía con los datos de hoy.</li>
-      <li><b>Notificaciones.</b> Usuarios o notification destinations (Slack, Microsoft Teams, PagerDuty, webhooks, que crea un workspace admin). Opcionalmente, una frecuencia para repetir la notificación hasta que la alerta vuelva a <code>OK</code>.</li>
-      <li><b>Horario.</b> En el icono de calendario, <b>Edit schedule</b>. Puedes marcar <b>Show cron syntax</b> y escribirlo en Quartz cron.</li>
-      <li><b>Advanced.</b> <b>Notify on OK</b> (avisar cuando se normaliza), <b>Empty result state</b> (qué estado dar si la query no devuelve filas) y <b>Template</b> para personalizar el mensaje con variables como <code>&#123;&#123;ALERT_NAME&#125;&#125;</code>, <code>&#123;&#123;ALERT_STATUS&#125;&#125;</code> o <code>&#123;&#123;QUERY_RESULT_TABLE&#125;&#125;</code> (primeras 100 filas; HTML solo se ve en email).</li>
+      <li><b>Define la condición.</b> El valor a comprobar es el primer valor de una columna o una
+        agregación sobre todas las filas de esa columna (por ejemplo SUM o AVERAGE); luego el
+        operador (por ejemplo <b>&gt;</b>) y el umbral, que por defecto es <b>Static value</b>.
+        Pulsa <b>Test condition</b> para ver si dispararía con los datos de hoy.</li>
+      <li><b>Notificaciones.</b> Usuarios o notification destinations (Slack, Microsoft Teams,
+        PagerDuty, webhooks, que crea un workspace admin). Opcionalmente, una frecuencia para
+        repetir la notificación hasta que la alerta vuelva a <code>OK</code>.</li>
+      <li><b>Horario.</b> En el icono de calendario, <b>Edit schedule</b>. Puedes marcar <b>Show
+        cron syntax</b> y escribirlo en Quartz cron.</li>
+      <li><b>Advanced.</b> <b>Notify on OK</b> (avisar cuando se normaliza), <b>Empty result
+        state</b> (qué estado dar si la query no devuelve filas) y <b>Template</b> para personalizar
+        el mensaje con variables como <code>&#123;&#123;ALERT_NAME&#125;&#125;</code>,
+        <code>&#123;&#123;ALERT_STATUS&#125;&#125;</code> o
+        <code>&#123;&#123;QUERY_RESULT_TABLE&#125;&#125;</code> (primeras 100 filas; HTML solo se ve
+        en email).</li>
     </ol>
-    <p>Una alerta también puede ser una task dentro de un job (<b>SQL alert task</b>), para que las tasks siguientes del job dependan del resultado. Cada workspace admite por defecto 250 ejecuciones de alertas activas a la vez; si todas se programan a la misma hora, algunas se saltan. La doc recomienda escalonar los horarios.</p>
+    <p>Una alerta también puede ser una task dentro de un job (<b>SQL alert task</b>), para que las
+      tasks siguientes del job dependan del resultado. Cada workspace admite por defecto 250
+      ejecuciones de alertas activas a la vez; si todas se programan a la misma hora, algunas se
+      saltan. La doc recomienda escalonar los horarios.</p>
 
     <div class="console" id="st-al">
       <div class="ttl">Simulador de alerta · 30 días de valores ilustrativos</div>
@@ -346,7 +630,8 @@ SELECT * FROM all_purpose_cluster_jobs LIMIT 10;</code></pre>
         <button type="button" data-m="fail" aria-pressed="false">Runs fallidas</button>
         <button type="button" data-m="dq" aria-pressed="false">Calidad: nulos en cliente_id</button>
       </div>
-      <div class="ctrl"><label for="al-thr">Umbral <output id="al-thr-o"></output></label><input type="range" id="al-thr" min="0" max="100" step="1" value="50"></div>
+      <div class="ctrl"><label for="al-thr">Umbral <output id="al-thr-o"></output></label><input
+        type="range" id="al-thr" min="0" max="100" step="1" value="50"></div>
       <div class="chips" role="group" aria-label="Horario" id="al-f">
         <span class="lab">Horario:</span>
         <button type="button" data-f="h" aria-pressed="false">Cada hora</button>
@@ -356,46 +641,89 @@ SELECT * FROM all_purpose_cluster_jobs LIMIT 10;</code></pre>
       <div class="chips" role="group" aria-label="Notificaciones" id="al-n">
         <span class="lab">Notificar:</span>
         <button type="button" data-n="once" aria-pressed="true">Solo al pasar a TRIGGERED</button>
-        <button type="button" data-n="rep" aria-pressed="false">En cada evaluación con TRIGGERED</button>
+        <button type="button" data-n="rep" aria-pressed="false">En cada evaluación con
+          TRIGGERED</button>
       </div>
       <label class="switch"><input type="checkbox" id="al-ok"> Notify on OK</label>
       <div id="al-cond"></div>
-      <svg class="chart" id="al-chart" viewBox="0 0 360 196" role="img" aria-label="Valores diarios y días en que la alerta dispara"></svg>
-      <div class="legend"><span style="--sw:var(--cool)">día por debajo del umbral</span><span style="--sw:var(--hot)">día por encima</span><span style="--sw:color-mix(in srgb,var(--muted) 45%,transparent)">día sin evaluación</span><span style="--sw:var(--warn)">umbral</span><span style="--sw:var(--p1)">notificación (el número indica cuántas ese día)</span><span style="--sw:var(--ok)">aviso de vuelta a OK</span></div>
+      <svg class="chart" id="al-chart" viewBox="0 0 360 196" role="img"
+        aria-label="Valores diarios y días en que la alerta dispara"></svg>
+      <div class="legend"><span style="--sw:var(--cool)">día por debajo del umbral</span><span
+        style="--sw:var(--hot)">día por encima</span><span
+        style="--sw:color-mix(in srgb,var(--muted) 45%,transparent)">día sin evaluación</span><span
+        style="--sw:var(--warn)">umbral</span><span style="--sw:var(--p1)">notificación (el número
+        indica cuántas ese día)</span><span style="--sw:var(--ok)">aviso de vuelta a OK</span></div>
       <div class="stats" id="al-stats"></div>
       <div class="verdict" id="al-verdict"></div>
       <div id="al-yaml"></div>
     </div>
-    <p>Prueba tres cosas. Con <b>Lunes 07:00</b>, los picos de mitad de semana pasan sin aviso. Con <b>Cada hora</b> y <b>En cada evaluación</b>, un solo día malo manda 24 mensajes. Con <b>Coste diario</b>, recuerda que <code>system.billing.usage</code> tarda hasta 12 horas: a las 07:00 el día de ayer todavía puede estar incompleto, así que es más seguro evaluar anteayer o programar la alerta por la tarde.</p>
-    <div class="verify">En el simulador, "Solo al pasar a TRIGGERED" corresponde a <code>retrigger_seconds</code> en 0 u omitido: según la doc de bundles, la alerta no manda más notificaciones tras el primer disparo; asumimos que vuelve a notificar si pasa por <code>OK</code> y dispara otra vez. "En cada evaluación" corresponde a <code>retrigger_seconds: 1</code>. El literal <code>GREATER_THAN</code> de <code>comparison_operator</code> aparece en la doc del CLI de alertas legacy; <b>verifica</b> la lista de operadores de Alerts v2 en la referencia de la API.</div>
-    <p class="c">Fuentes: <a href="https://docs.databricks.com/aws/en/sql/user/alerts/create" target="_blank" rel="noopener">Create an alert</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/sql/user/alerts/create" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> y <a href="https://docs.databricks.com/aws/en/dev-tools/bundles/resources" target="_blank" rel="noopener">Declarative Automation Bundles resources (alert)</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/dev-tools/bundles/resources" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
+    <p>Prueba tres cosas. Con <b>Lunes 07:00</b>, los picos de mitad de semana pasan sin aviso. Con
+      <b>Cada hora</b> y <b>En cada evaluación</b>, un solo día malo manda 24 mensajes. Con <b>Coste
+      diario</b>, recuerda que <code>system.billing.usage</code> tarda hasta 12 horas: a las 07:00
+      el día de ayer todavía puede estar incompleto, así que es más seguro evaluar anteayer o
+      programar la alerta por la tarde.</p>
+    <div class="verify">En el simulador, "Solo al pasar a TRIGGERED" corresponde a
+      <code>retrigger_seconds</code> en 0 u omitido: según la doc de bundles, la alerta no manda más
+      notificaciones tras el primer disparo; asumimos que vuelve a notificar si pasa por
+      <code>OK</code> y dispara otra vez. "En cada evaluación" corresponde a
+      <code>retrigger_seconds: 1</code>. El literal <code>GREATER_THAN</code> de
+      <code>comparison_operator</code> aparece en la doc del CLI de alertas legacy; <b>verifica</b>
+      la lista de operadores de Alerts v2 en la referencia de la API.</div>
+    <p class="c">Fuentes: <a href="https://docs.databricks.com/aws/en/sql/user/alerts/create"
+      target="_blank" rel="noopener">Create an alert</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/sql/user/alerts/create" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> y <a
+      href="https://docs.databricks.com/aws/en/dev-tools/bundles/resources" target="_blank"
+      rel="noopener">Declarative Automation Bundles resources (alert)</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/dev-tools/bundles/resources"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
 
     <h3><span class="k">Lakeflow Jobs</span>Notificaciones y umbrales de un job</h3>
-    <p><b>Para fallos y retrasos de un job, usa sus notificaciones y su duration warning, no una query.</b> Las SQL alerts vigilan el resultado de una query. Las notificaciones de un job reaccionan a eventos de sus runs. Un job o una task pueden notificar en estos eventos:</p>
+    <p><b>Para fallos y retrasos de un job, usa sus notificaciones y su duration warning, no una
+      query.</b> Las SQL alerts vigilan el resultado de una query. Las notificaciones de un job
+      reaccionan a eventos de sus runs. Un job o una task pueden notificar en estos eventos:</p>
     <ul>
       <li><b>Start</b>, <b>Success</b> y <b>Failure</b>.</li>
       <li><b>Duration warning</b>: la run supera la duración esperada que configuraste.</li>
       <li><b>Streaming backlog</b>: una métrica de backlog supera su umbral.</li>
-      <li><b>Maintenance start</b> y <b>Maintenance complete</b>, en jobs continuos con ventana de mantenimiento. Estos dos no admiten email; usa un system destination.</li>
+      <li><b>Maintenance start</b> y <b>Maintenance complete</b>, en jobs continuos con ventana de
+        mantenimiento. Estos dos no admiten email; usa un system destination.</li>
     </ul>
     <h4>En la UI de Lakeflow Jobs</h4>
     <ol class="steps">
-      <li>En el panel <b>Job details</b>, abre <b>Duration and streaming backlog thresholds</b>. Con la métrica <b>Run duration</b>, el campo <b>Warning</b> es la duración esperada (solo genera un evento) y el campo <b>Timeout</b> es la máxima: si la run no termina a tiempo queda como <i>Timed Out</i>. Para un umbral de streaming, elige la métrica de backlog y su valor.</li>
-      <li>En <b>Job notifications</b>, <b>Edit notifications</b> &gt; <b>Add notification</b>. Elige <b>Email address</b> o un system destination y marca los eventos: <b>Start</b>, <b>Success</b>, <b>Failure</b>, <b>Duration warning</b> o <b>Streaming backlog</b>.</li>
-      <li>Para reducir ruido, marca <b>Mute notifications for skipped runs</b> o <b>Mute notifications for canceled runs</b>. En notificaciones de task existe además <b>Mute notifications until the last retry</b>.</li>
+      <li>En el panel <b>Job details</b>, abre <b>Duration and streaming backlog thresholds</b>. Con
+        la métrica <b>Run duration</b>, el campo <b>Warning</b> es la duración esperada (solo genera
+        un evento) y el campo <b>Timeout</b> es la máxima: si la run no termina a tiempo queda como
+        <i>Timed Out</i>. Para un umbral de streaming, elige la métrica de backlog y su valor.</li>
+      <li>En <b>Job notifications</b>, <b>Edit notifications</b> &gt; <b>Add notification</b>. Elige
+        <b>Email address</b> o un system destination y marca los eventos: <b>Start</b>,
+        <b>Success</b>, <b>Failure</b>, <b>Duration warning</b> o <b>Streaming backlog</b>.</li>
+      <li>Para reducir ruido, marca <b>Mute notifications for skipped runs</b> o <b>Mute
+        notifications for canceled runs</b>. En notificaciones de task existe además <b>Mute
+        notifications until the last retry</b>.</li>
     </ol>
     <details><summary>Permisos, límites y casos en que no llega el aviso</summary>
     <ul>
       <li>Necesitas permiso <b>CAN MANAGE</b> o <b>IS OWNER</b> sobre el job.</li>
       <li>Máximo tres system destinations por tipo de evento en cada job o task.</li>
-      <li>Las notificaciones a nivel de job no se envían cuando se reintenta una task fallida. Si quieres un aviso por cada fallo de task, configura la notificación en la task.</li>
-      <li>Un job que termina en <i>Succeeded with failures</i> cuenta como éxito: para enterarte tienes que marcar <b>Success</b>.</li>
-      <li>El backlog se evalúa como <b>media de 10 minutos</b>; mientras siga alto, el aviso se repite cada <b>30 minutos</b>. No funciona en pipeline tasks (para pipelines, usa una SQL alert sobre el event log o event hooks) y deja de funcionar si el código usa <code>awaitTermination()</code>.</li>
-      <li>Las métricas de backlog dependen de la fuente: Kafka da bytes y records; Kinesis, bytes y seconds; Delta y Auto Loader, bytes y files. Es Public Preview.</li>
+      <li>Las notificaciones a nivel de job no se envían cuando se reintenta una task fallida. Si
+        quieres un aviso por cada fallo de task, configura la notificación en la task.</li>
+      <li>Un job que termina en <i>Succeeded with failures</i> cuenta como éxito: para enterarte
+        tienes que marcar <b>Success</b>.</li>
+      <li>El backlog se evalúa como <b>media de 10 minutos</b>; mientras siga alto, el aviso se
+        repite cada <b>30 minutos</b>. No funciona en pipeline tasks (para pipelines, usa una SQL
+        alert sobre el event log o event hooks) y deja de funcionar si el código usa
+        <code>awaitTermination()</code>.</li>
+      <li>Las métricas de backlog dependen de la fuente: Kafka da bytes y records; Kinesis, bytes y
+        seconds; Delta y Auto Loader, bytes y files. Es Public Preview.</li>
     </ul>
     </details>
     <h4>Lo mismo como configuración del job</h4>
-    <p>Los campos son los de la API de Jobs, y los mismos que acepta un bundle. Las métricas de <code>health.rules</code> documentadas son <code>RUN_DURATION_SECONDS</code>, <code>STREAMING_BACKLOG_BYTES</code>, <code>STREAMING_BACKLOG_RECORDS</code>, <code>STREAMING_BACKLOG_SECONDS</code> y <code>STREAMING_BACKLOG_FILES</code>.</p>
+    <p>Los campos son los de la API de Jobs, y los mismos que acepta un bundle. Las métricas de
+      <code>health.rules</code> documentadas son <code>RUN_DURATION_SECONDS</code>,
+      <code>STREAMING_BACKLOG_BYTES</code>, <code>STREAMING_BACKLOG_RECORDS</code>,
+      <code>STREAMING_BACKLOG_SECONDS</code> y <code>STREAMING_BACKLOG_FILES</code>.</p>
 <pre><code>{
   "job_id": 123456789,
   "new_settings": {
@@ -418,12 +746,43 @@ SELECT * FROM all_purpose_cluster_jobs LIMIT 10;</code></pre>
   }
 }</code></pre>
 <pre><code>databricks jobs update --json @notificaciones.json</code></pre>
-    <p>El cuerpo lleva <code>job_id</code> y los cambios dentro de <code>new_settings</code>, como en el ejemplo de <code>databricks api patch /api/2.0/jobs/update</code> de la referencia del CLI (<a href="https://docs.databricks.com/aws/en/dev-tools/cli/reference/api-commands#databricks-api-patch" target="_blank" rel="noopener">api command group</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/dev-tools/cli/reference/api-commands#databricks-api-patch" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</p>
-    <div class="verify">Los nombres de campo (<code>health.rules</code> con <code>metric</code>, <code>op</code> y <code>value</code>; <code>email_notifications.*</code>; <code>notification_settings</code>; <code>timeout_seconds</code>) están en la referencia de recursos de bundles, que reproduce los campos de la API. La referencia de <code>databricks jobs update</code> muestra <code>JOB_ID</code> como argumento posicional; con <code>--json</code>, algunas versiones del CLI rechazan el argumento y piden <code>job_id</code> dentro del JSON. <b>Verifica</b> con tu versión del CLI (<code>databricks jobs update -h</code>), y confirma en la referencia de la API de Jobs que <code>GREATER_THAN</code> es el valor de <code>op</code>. Para Slack o Teams se usa <code>webhook_notifications</code> con los IDs de las notification destinations.</div>
-    <p class="c">Fuentes: <a href="https://docs.databricks.com/aws/en/jobs/notifications" target="_blank" rel="noopener">Add notifications on a job</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/jobs/notifications" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/jobs/configure-job" target="_blank" rel="noopener">Configure and edit Lakeflow Jobs</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/jobs/configure-job" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/jobs/diagnose-job-performance" target="_blank" rel="noopener">Diagnose Lakeflow Jobs performance</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/jobs/diagnose-job-performance" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
+    <p>El cuerpo lleva <code>job_id</code> y los cambios dentro de <code>new_settings</code>, como
+      en el ejemplo de <code>databricks api patch /api/2.0/jobs/update</code> de la referencia del
+      CLI (<a
+      href="https://docs.databricks.com/aws/en/dev-tools/cli/reference/api-commands#databricks-api-patch"
+      target="_blank" rel="noopener">api command group</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/dev-tools/cli/reference/api-commands#databricks-api-patch"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>).</p>
+    <div class="verify">Los nombres de campo (<code>health.rules</code> con <code>metric</code>,
+      <code>op</code> y <code>value</code>; <code>email_notifications.*</code>;
+      <code>notification_settings</code>; <code>timeout_seconds</code>) están en la referencia de
+      recursos de bundles, que reproduce los campos de la API. La referencia de <code>databricks
+      jobs update</code> muestra <code>JOB_ID</code> como argumento posicional; con
+      <code>--json</code>, algunas versiones del CLI rechazan el argumento y piden
+      <code>job_id</code> dentro del JSON. <b>Verifica</b> con tu versión del CLI (<code>databricks
+      jobs update -h</code>), y confirma en la referencia de la API de Jobs que
+      <code>GREATER_THAN</code> es el valor de <code>op</code>. Para Slack o Teams se usa
+      <code>webhook_notifications</code> con los IDs de las notification destinations.</div>
+    <p class="c">Fuentes: <a href="https://docs.databricks.com/aws/en/jobs/notifications"
+      target="_blank" rel="noopener">Add notifications on a job</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/jobs/notifications" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/jobs/configure-job" target="_blank"
+      rel="noopener">Configure and edit Lakeflow Jobs</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/jobs/configure-job" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/jobs/diagnose-job-performance" target="_blank"
+      rel="noopener">Diagnose Lakeflow Jobs performance</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/jobs/diagnose-job-performance"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
 
     <h3><span class="k">CLI y REST API</span>Consultar runs sin abrir la UI</h3>
-    <p><b>Para lo que pasa ahora mismo con un job, el CLI o la API son más rápidos que las system tables.</b> Las system tables llegan con hasta una hora de retraso. Para saber qué pasa ahora con un job concreto, usa el CLI o la API de Jobs. Estos comandos están en la referencia del CLI:</p>
+    <p><b>Para lo que pasa ahora mismo con un job, el CLI o la API son más rápidos que las system
+      tables.</b> Las system tables llegan con hasta una hora de retraso. Para saber qué pasa ahora
+      con un job concreto, usa el CLI o la API de Jobs. Estos comandos están en la referencia del
+      CLI:</p>
 <pre><code># Buscar un job por nombre exacto (sin distinguir mayúsculas)
 databricks jobs list --name "merge_clientes_silver" -o json
 
@@ -443,66 +802,186 @@ databricks jobs get-run-output 555666777
 databricks jobs repair-run 987654321 --rerun-all-failed-tasks --no-wait</code></pre>
     <details><summary>Más opciones y límites del CLI</summary>
     <ul>
-      <li><code>list-runs</code> admite también <code>--run-type</code> (<code>JOB_RUN</code>, <code>SUBMIT_RUN</code>, <code>WORKFLOW_RUN</code>) y <code>--start-time-from</code> / <code>--start-time-to</code>.</li>
-      <li><code>get-run-output</code> devuelve como máximo los primeros 5 MB, y las runs se eliminan automáticamente a los 60 días.</li>
-      <li>Sin <code>--no-wait</code>, <code>repair-run</code> y <code>run-now</code> se quedan esperando a que la run llegue a <code>TERMINATED</code> o <code>SKIPPED</code>, hasta 20 minutos por defecto (<code>--timeout</code>).</li>
-      <li><code>run-now</code> y <code>repair-run</code> aceptan <code>--performance-target</code> con <code>PERFORMANCE_OPTIMIZED</code> o <code>STANDARD</code> para jobs serverless.</li>
-      <li>Usa <code>-p &lt;perfil&gt;</code> para elegir el workspace de tu <code>~/.databrickscfg</code>.</li>
+      <li><code>list-runs</code> admite también <code>--run-type</code> (<code>JOB_RUN</code>,
+        <code>SUBMIT_RUN</code>, <code>WORKFLOW_RUN</code>) y <code>--start-time-from</code> /
+        <code>--start-time-to</code>.</li>
+      <li><code>get-run-output</code> devuelve como máximo los primeros 5 MB, y las runs se eliminan
+        automáticamente a los 60 días.</li>
+      <li>Sin <code>--no-wait</code>, <code>repair-run</code> y <code>run-now</code> se quedan
+        esperando a que la run llegue a <code>TERMINATED</code> o <code>SKIPPED</code>, hasta 20
+        minutos por defecto (<code>--timeout</code>).</li>
+      <li><code>run-now</code> y <code>repair-run</code> aceptan <code>--performance-target</code>
+        con <code>PERFORMANCE_OPTIMIZED</code> o <code>STANDARD</code> para jobs serverless.</li>
+      <li>Usa <code>-p &lt;perfil&gt;</code> para elegir el workspace de tu
+        <code>~/.databrickscfg</code>.</li>
     </ul>
     </details>
 <pre><code># Lo mismo por REST, con un token en DATABRICKS_TOKEN
 curl -s -H "Authorization: Bearer $DATABRICKS_TOKEN" \
   "https://adb-&lt;workspace-id&gt;.&lt;n&gt;.azuredatabricks.net/api/2.2/jobs/runs/list?job_id=123456789&amp;completed_only=true&amp;limit=25"</code></pre>
-    <div class="verify">La doc de Azure confirma que existe la API 2.2 de Jobs, pero no pude abrir la referencia de la API para comprobar la ruta exacta <code>/api/2.2/jobs/runs/list</code> ni las unidades de <code>--start-time-from</code> (la API suele usar milisegundos epoch). <b>Verifícalo</b> en la referencia de la API de Jobs, endpoint "List job runs".</div>
-    <p class="c">Fuente: <a href="https://docs.databricks.com/aws/en/dev-tools/cli/reference/jobs-commands" target="_blank" rel="noopener">jobs command group</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/dev-tools/cli/reference/jobs-commands" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
+    <div class="verify">La doc de Azure confirma que existe la API 2.2 de Jobs, pero no pude abrir
+      la referencia de la API para comprobar la ruta exacta <code>/api/2.2/jobs/runs/list</code> ni
+      las unidades de <code>--start-time-from</code> (la API suele usar milisegundos epoch).
+      <b>Verifícalo</b> en la referencia de la API de Jobs, endpoint "List job runs".</div>
+    <p class="c">Fuente: <a
+      href="https://docs.databricks.com/aws/en/dev-tools/cli/reference/jobs-commands"
+      target="_blank" rel="noopener">jobs command group</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/dev-tools/cli/reference/jobs-commands"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
 
     <h3><span class="k">Coste en Azure</span>Lo que las system tables no te cobran</h3>
-    <p><b>En compute clásico, la factura real es mayor que lo que ves en <code>billing.usage</code>.</b></p>
+    <p><b>En compute clásico, la factura real es mayor que lo que ves en
+      <code>billing.usage</code>.</b></p>
     <ul>
-      <li><b>DBUs más infraestructura.</b> Según la guía de optimización de costes, el coste total del compute clásico es DBUs más máquinas virtuales, discos y red, que Azure factura aparte. En serverless, el DBU ya incluye las máquinas virtuales. Por eso un cluster clásico cuesta más de lo que ves en <code>system.billing.usage</code>.</li>
-      <li><b>Precio de lista.</b> <code>system.billing.list_prices</code> guarda precios publicados. Si tu empresa tiene descuentos o compró capacidad por adelantado (Databricks commit units, DBCU), la factura real es menor que <code>usd_lista</code>. El descuento de DBCU solo aplica a los DBUs; compute, storage y red se cobran aparte.</li>
-      <li><b>Tags en los dos lados.</b> Los custom tags de workspaces, clusters, pools y SQL warehouses se propagan a <code>custom_tags</code> en <code>system.billing.usage</code> y a los recursos de Azure. Con los mismos tags puedes cuadrar el coste de DBUs con el de VMs en <b>Cost analysis</b> de Microsoft Cost Management.</li>
-      <li><b>Detalles de Azure en las tablas.</b> <code>cloud = 'AZURE'</code>; <code>usage_metadata.metastore_id</code> nunca se llena en Azure Databricks; los tipos de nodo usan nombres de Azure como <code>Standard_D16s_v3</code>; <code>azure_attributes.availability</code> en <code>system.compute.clusters</code> muestra valores como <code>ON_DEMAND_AZURE</code>.</li>
-      <li><b>Dashboards listos.</b> Los account admins pueden importar un dashboard de monitoreo de costes prediseñado y personalizable (Usage dashboards), construido sobre estas mismas tablas.</li>
+      <li><b>DBUs más infraestructura.</b> Según la guía de optimización de costes, el coste total
+        del compute clásico es DBUs más máquinas virtuales, discos y red, que Azure factura aparte.
+        En serverless, el DBU ya incluye las máquinas virtuales. Por eso un cluster clásico cuesta
+        más de lo que ves en <code>system.billing.usage</code>.</li>
+      <li><b>Precio de lista.</b> <code>system.billing.list_prices</code> guarda precios publicados.
+        Si tu empresa tiene descuentos o compró capacidad por adelantado (Databricks commit units,
+        DBCU), la factura real es menor que <code>usd_lista</code>. El descuento de DBCU solo aplica
+        a los DBUs; compute, storage y red se cobran aparte.</li>
+      <li><b>Tags en los dos lados.</b> Los custom tags de workspaces, clusters, pools y SQL
+        warehouses se propagan a <code>custom_tags</code> en <code>system.billing.usage</code> y a
+        los recursos de Azure. Con los mismos tags puedes cuadrar el coste de DBUs con el de VMs en
+        <b>Cost analysis</b> de Microsoft Cost Management.</li>
+      <li><b>Detalles de Azure en las tablas.</b> <code>cloud = 'AZURE'</code>;
+        <code>usage_metadata.metastore_id</code> nunca se llena en Azure Databricks; los tipos de
+        nodo usan nombres de Azure como <code>Standard_D16s_v3</code>;
+        <code>azure_attributes.availability</code> en <code>system.compute.clusters</code> muestra
+        valores como <code>ON_DEMAND_AZURE</code>.</li>
+      <li><b>Dashboards listos.</b> Los account admins pueden importar un dashboard de monitoreo de
+        costes prediseñado y personalizable (Usage dashboards), construido sobre estas mismas
+        tablas.</li>
     </ul>
-    <p class="c">Fuentes: <a href="https://docs.databricks.com/aws/en/lakehouse-architecture/cost-optimization/best-practices" target="_blank" rel="noopener">Best practices for cost optimization</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/lakehouse-architecture/cost-optimization/best-practices" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://learn.microsoft.com/azure/cost-management-billing/reservations/prepay-databricks-reserved-capacity" target="_blank" rel="noopener">Optimize Azure Databricks costs with a prepurchase</a> (solo Azure), <a href="https://learn.microsoft.com/azure/cost-management-billing/costs/quick-acm-cost-analysis" target="_blank" rel="noopener">Cost analysis</a> (solo Azure).</p>
+    <p class="c">Fuentes: <a
+      href="https://docs.databricks.com/aws/en/lakehouse-architecture/cost-optimization/best-practices"
+      target="_blank" rel="noopener">Best practices for cost optimization</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/lakehouse-architecture/cost-optimization/best-practices"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://learn.microsoft.com/azure/cost-management-billing/reservations/prepay-databricks-reserved-capacity"
+      target="_blank" rel="noopener">Optimize Azure Databricks costs with a prepurchase</a> (solo
+      Azure), <a
+      href="https://learn.microsoft.com/azure/cost-management-billing/costs/quick-acm-cost-analysis"
+      target="_blank" rel="noopener">Cost analysis</a> (solo Azure).</p>
 
     <h3><span class="k">Cuándo usarlo</span>System tables, UI o Spark UI</h3>
-    <p><b>System tables para tendencias e historia; otras herramientas para el ahora o para una query concreta.</b></p>
+    <p><b>System tables para tendencias e historia; otras herramientas para el ahora o para una
+      query concreta.</b></p>
     <div class="tblwrap"><table>
       <thead><tr><th>Necesitas</th><th>Usa</th></tr></thead>
       <tbody>
-        <tr><td>Tendencias, rankings y coste de semanas o meses, en varios workspaces</td><td>System tables</td></tr>
-        <tr><td>Saber si un job está fallando en este momento</td><td>Jobs UI, notificaciones del job o <code>databricks jobs list-runs --active-only</code></td></tr>
-        <tr><td>Entender por qué una query concreta de un warehouse o serverless es lenta</td><td>Query profile (desde Query History con el <code>statement_id</code>)</td></tr>
-        <tr><td>Entender por qué un stage es lento en un cluster clásico</td><td>Spark UI. <code>system.query.history</code> no registra clusters clásicos</td></tr>
-        <tr><td>Que alguien se entere cuando un número cruza un límite</td><td>SQL alert sobre una de estas queries</td></tr>
-        <tr><td>Que alguien se entere cuando un job falla o tarda más de lo esperado</td><td>Notificaciones y thresholds del job</td></tr>
+        <tr><td>Tendencias, rankings y coste de semanas o meses, en varios workspaces</td><td>System
+          tables</td></tr>
+        <tr><td>Saber si un job está fallando en este momento</td><td>Jobs UI, notificaciones del
+          job o <code>databricks jobs list-runs --active-only</code></td></tr>
+        <tr><td>Entender por qué una query concreta de un warehouse o serverless es
+          lenta</td><td>Query profile (desde Query History con el
+          <code>statement_id</code>)</td></tr>
+        <tr><td>Entender por qué un stage es lento en un cluster clásico</td><td>Spark UI.
+          <code>system.query.history</code> no registra clusters clásicos</td></tr>
+        <tr><td>Que alguien se entere cuando un número cruza un límite</td><td>SQL alert sobre una
+          de estas queries</td></tr>
+        <tr><td>Que alguien se entere cuando un job falla o tarda más de lo
+          esperado</td><td>Notificaciones y thresholds del job</td></tr>
       </tbody>
     </table></div>
 
     <h3 class="solo"><span class="k">Con qué se confunde</span></h3>
     <p><b>Valores y columnas que se parecen y no significan lo mismo.</b></p>
     <ul>
-      <li><b><code>result_state</code> y <code>termination_code</code>.</b> En las tablas de jobs, <code>result_state</code> usa <code>SUCCEEDED</code>; <code>termination_code</code> usa <code>SUCCESS</code>. Y la ortografía cambia entre tablas: los jobs usan <code>CANCELLED</code>, mientras que query history y <code>pipeline_update_timeline</code> usan <code>CANCELED</code>.</li>
-      <li><b><code>waiting_at_capacity</code> y <code>waiting_for_compute</code>.</b> La primera es cola por warehouse lleno (más max clusters); la segunda es esperar a que arranque o se aprovisione compute.</li>
-      <li><b><code>pricing.default</code> y <code>pricing.effective_list.default</code>.</b> El primero sirve para estimaciones simples a largo plazo; el segundo resuelve las promociones y es el que la doc describe para calcular el coste. Algunas queries de la doc usan uno y otras el otro.</li>
-      <li><b>Duration warning y timeout.</b> El warning solo dispara una notificación y la run sigue. El timeout la detiene y la marca como <i>Timed Out</i>.</li>
-      <li><b>SQL alert y notificación de job.</b> La alerta evalúa una query con un horario; la notificación reacciona a un evento de una run. Para una alerta sobre el event log de un pipeline (por ejemplo backlog), necesitas una SQL alert, porque las notificaciones de backlog no aplican a pipeline tasks.</li>
-      <li><b><code>system.compute</code> y los SQL warehouses.</b> <code>clusters</code> y <code>node_timeline</code> no tienen warehouses ni serverless. Para warehouses usa <code>warehouse_events</code>, <code>warehouses</code> y <code>query.history</code>.</li>
+      <li><b><code>result_state</code> y <code>termination_code</code>.</b> En las tablas de jobs,
+        <code>result_state</code> usa <code>SUCCEEDED</code>; <code>termination_code</code> usa
+        <code>SUCCESS</code>. Y la ortografía cambia entre tablas: los jobs usan
+        <code>CANCELLED</code>, mientras que query history y <code>pipeline_update_timeline</code>
+        usan <code>CANCELED</code>.</li>
+      <li><b><code>waiting_at_capacity</code> y <code>waiting_for_compute</code>.</b> La primera es
+        cola por warehouse lleno (más max clusters); la segunda es esperar a que arranque o se
+        aprovisione compute.</li>
+      <li><b><code>pricing.default</code> y <code>pricing.effective_list.default</code>.</b> El
+        primero sirve para estimaciones simples a largo plazo; el segundo resuelve las promociones y
+        es el que la doc describe para calcular el coste. Algunas queries de la doc usan uno y otras
+        el otro.</li>
+      <li><b>Duration warning y timeout.</b> El warning solo dispara una notificación y la run
+        sigue. El timeout la detiene y la marca como <i>Timed Out</i>.</li>
+      <li><b>SQL alert y notificación de job.</b> La alerta evalúa una query con un horario; la
+        notificación reacciona a un evento de una run. Para una alerta sobre el event log de un
+        pipeline (por ejemplo backlog), necesitas una SQL alert, porque las notificaciones de
+        backlog no aplican a pipeline tasks.</li>
+      <li><b><code>system.compute</code> y los SQL warehouses.</b> <code>clusters</code> y
+        <code>node_timeline</code> no tienen warehouses ni serverless. Para warehouses usa
+        <code>warehouse_events</code>, <code>warehouses</code> y <code>query.history</code>.</li>
     </ul>
 
     <h3 class="solo"><span class="k">Qué pasaría si</span></h3>
     <p><b>Errores habituales al consultar estas tablas y lo que provocan.</b></p>
     <ul>
-      <li><b>Consultas <code>system.query.history</code> sin filtro de fecha:</b> puede fallar con <code>System Table query returned too much data</code>.</li>
-      <li><b>Cuentas runs sin <code>result_state IS NOT NULL</code>:</b> una run de tres horas cuenta tres o cuatro veces, una por cada fila horaria (con los cortes alineados al reloj desde enero de 2026, una run de 3 h puede ocupar 4 filas; <a href="https://docs.databricks.com/aws/en/admin/system-tables/jobs#slicing-logic-in-the-timeline-tables" target="_blank" rel="noopener">fuente</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/jobs#slicing-logic-in-the-timeline-tables" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>). Y un run reparado tiene una fila con <code>result_state</code> por intento: cuenta con <code>COUNT(DISTINCT run_id)</code>.</li>
-      <li><b>Filtras <code>delete_time IS NULL</code> antes de tomar la última fila de <code>jobs</code>:</b> los jobs borrados aparecen con su último estado previo al borrado. La doc pide el orden inverso.</li>
-      <li><b>Sumas <code>run_duration_seconds</code>:</b> obtienes ceros en casi todos los jobs actuales, porque solo se llena en jobs de una task creados con la API legacy.</li>
-      <li><b>Tu equipo no ve query history aunque tiene <code>SELECT</code> en otros schemas:</b> por defecto es solo para admins. Crea una dynamic view.</li>
-      <li><b>Pones una alerta horaria con notificación en cada evaluación:</b> un solo día malo genera 24 mensajes y 720 ejecuciones de la query al mes en tu warehouse.</li>
-      <li><b>Tu job de streaming llama <code>awaitTermination()</code>:</b> el servicio de Jobs no puede seguir el stream y las notificaciones de backlog no llegan.</li>
+      <li><b>Consultas <code>system.query.history</code> sin filtro de fecha:</b> puede fallar con
+        <code>System Table query returned too much data</code>.</li>
+      <li><b>Cuentas runs sin <code>result_state IS NOT NULL</code>:</b> una run de tres horas
+        cuenta tres o cuatro veces, una por cada fila horaria (con los cortes alineados al reloj
+        desde enero de 2026, una run de 3 h puede ocupar 4 filas; <a
+        href="https://docs.databricks.com/aws/en/admin/system-tables/jobs#slicing-logic-in-the-timeline-tables"
+        target="_blank" rel="noopener">fuente</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/admin/system-tables/jobs#slicing-logic-in-the-timeline-tables"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>). Y un run
+        reparado tiene una fila con <code>result_state</code> por intento: cuenta con
+        <code>COUNT(DISTINCT run_id)</code>.</li>
+      <li><b>Filtras <code>delete_time IS NULL</code> antes de tomar la última fila de
+        <code>jobs</code>:</b> los jobs borrados aparecen con su último estado previo al borrado. La
+        doc pide el orden inverso.</li>
+      <li><b>Sumas <code>run_duration_seconds</code>:</b> obtienes ceros en casi todos los jobs
+        actuales, porque solo se llena en jobs de una task creados con la API legacy.</li>
+      <li><b>Tu equipo no ve query history aunque tiene <code>SELECT</code> en otros schemas:</b>
+        por defecto es solo para admins. Crea una dynamic view.</li>
+      <li><b>Pones una alerta horaria con notificación en cada evaluación:</b> un solo día malo
+        genera 24 mensajes y 720 ejecuciones de la query al mes en tu warehouse.</li>
+      <li><b>Tu job de streaming llama <code>awaitTermination()</code>:</b> el servicio de Jobs no
+        puede seguir el stream y las notificaciones de backlog no llegan.</li>
     </ul>
 
     <h3><span class="k">De dónde sale</span>Fuentes</h3>
-    <p class="src"><a href="https://docs.databricks.com/aws/en/admin/system-tables/" target="_blank" rel="noopener">System tables reference</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/admin/system-tables/billing" target="_blank" rel="noopener">Billable usage</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/billing" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/admin/system-tables/pricing" target="_blank" rel="noopener">Pricing</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/pricing" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/admin/system-tables/query-history" target="_blank" rel="noopener">Query history</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/query-history" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/admin/system-tables/compute" target="_blank" rel="noopener">Compute</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/compute" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/admin/system-tables/jobs" target="_blank" rel="noopener">Jobs</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/jobs" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/admin/system-tables/predictive-optimization" target="_blank" rel="noopener">Predictive optimization</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/predictive-optimization" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/sql/user/alerts/" target="_blank" rel="noopener">Databricks SQL alerts</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/sql/user/alerts/" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> y <a href="https://docs.databricks.com/aws/en/jobs/notifications" target="_blank" rel="noopener">Add notifications on a job</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/jobs/notifications" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
+    <p class="src"><a href="https://docs.databricks.com/aws/en/admin/system-tables/" target="_blank"
+      rel="noopener">System tables reference</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/admin/system-tables/" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/admin/system-tables/billing" target="_blank"
+      rel="noopener">Billable usage</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/admin/system-tables/billing"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/admin/system-tables/pricing" target="_blank"
+      rel="noopener">Pricing</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/admin/system-tables/pricing"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/admin/system-tables/query-history" target="_blank"
+      rel="noopener">Query history</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/admin/system-tables/query-history"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/admin/system-tables/compute" target="_blank"
+      rel="noopener">Compute</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/admin/system-tables/compute"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/admin/system-tables/jobs" target="_blank"
+      rel="noopener">Jobs</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/admin/system-tables/jobs" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/admin/system-tables/predictive-optimization"
+      target="_blank" rel="noopener">Predictive optimization</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/admin/system-tables/predictive-optimization"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/sql/user/alerts/" target="_blank"
+      rel="noopener">Databricks SQL alerts</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/sql/user/alerts/" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> y <a
+      href="https://docs.databricks.com/aws/en/jobs/notifications" target="_blank"
+      rel="noopener">Add notifications on a job</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/jobs/notifications" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>

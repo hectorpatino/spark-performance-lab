@@ -6,19 +6,38 @@ description: "Manual para diagnosticar jobs lentos en Databricks y Apache Spark:
 ---
 <div class="hero">
   <h1>¿Por qué va lento tu job de Spark?</h1>
-  <p class="lede">Un manual para encontrar la causa y arreglarla, en compute clásico y en serverless. Cada página explica un problema, trae un simulador para mover los números y termina con lo que suele confundirse. Todo se apoya en la documentación oficial que se cita en cada página.</p>
+  <p class="lede">Un manual para encontrar la causa y arreglarla, en compute clásico y en
+    serverless. Cada página explica un problema, trae un simulador para mover los números y termina
+    con lo que suele confundirse. Todo se apoya en la documentación oficial que se cita en cada
+    página.</p>
+  <p class="authorship">Este manual lo ha escrito Claude Code, pero cada palabra ha sido revisada,
+    analizada y aprobada por mí.</p>
 </div>
 
 <h2>Por dónde empezar</h2>
 <p>Primero mira dónde corre el job; después recorre las preguntas en orden.</p>
 <ol class="flow">
-  <li><a href="spark-ui.html"><b>¿Compute clásico o serverless?</b><span>En compute clásico abres el Spark UI. En serverless y en los SQL warehouses no hay Spark UI: usas el query profile.</span><em>Leer el Spark UI y Query profile</em></a></li>
-  <li><a href="stages.html"><b>¿Cuántas tasks tiene el stage frente a los cores?</b><span>Una sola task, menos tasks que cores o una última wave casi vacía.</span><em>Tasks, cores y waves</em></a></li>
-  <li><a href="diagnostico.html"><b>¿Hay spill o skew?</b><span>Spill en todas las tasks: particiones grandes. Max de Duration más de un 50% sobre el p75: skew. Comprueba si AQE pudo partirlo.</span><em>Diagnóstico, AQE y Remedios</em></a></li>
-  <li><a href="joins.html"><b>¿Qué hace el join?</b><span>Un sort-merge con mucho shuffle donde cabría un broadcast, o un join que produce muchas más filas de las que entran.</span><em>Estrategias de join</em></a></li>
-  <li><a href="liquid-clustering.html"><b>¿El scan lee de más?</b><span>Decenas de miles de archivos pequeños, o casi todos los archivos para un filtro selectivo.</span><em>Liquid clustering y Mantenimiento de Delta</em></a></li>
-  <li><a href="memoria-oom.html"><b>¿Falla con OOM o se pierden executors?</b><span>Distingue un OOM del driver de uno de un executor, y una VM spot desalojada de un fallo de memoria.</span><em>Memoria y OOM</em></a></li>
-  <li><a href="system-tables.html"><b>¿Quieres que no vuelva a pasar sin enterarte?</b><span>Vigila coste, spill, colas y fallos con system tables, y monta una alerta encima.</span><em>System tables</em></a></li>
+  <li><a href="spark-ui.html"><b>¿Compute clásico o serverless?</b><span>En compute clásico abres el
+    Spark UI. En serverless y en los SQL warehouses no hay Spark UI: usas el query
+    profile.</span><em>Leer el Spark UI y Query profile</em></a></li>
+  <li><a href="stages.html"><b>¿Cuántas tasks tiene el stage frente a los cores?</b><span>Una sola
+    task, menos tasks que cores o una última wave casi vacía.</span><em>Tasks, cores y
+    waves</em></a></li>
+  <li><a href="diagnostico.html"><b>¿Hay spill o skew?</b><span>Spill en todas las tasks:
+    particiones grandes. Max de Duration más de un 50% sobre el p75: skew. Comprueba si AQE pudo
+    partirlo.</span><em>Diagnóstico, AQE y Remedios</em></a></li>
+  <li><a href="joins.html"><b>¿Qué hace el join?</b><span>Un sort-merge con mucho shuffle donde
+    cabría un broadcast, o un join que produce muchas más filas de las que
+    entran.</span><em>Estrategias de join</em></a></li>
+  <li><a href="liquid-clustering.html"><b>¿El scan lee de más?</b><span>Decenas de miles de archivos
+    pequeños, o casi todos los archivos para un filtro selectivo.</span><em>Liquid clustering y
+    Mantenimiento de Delta</em></a></li>
+  <li><a href="memoria-oom.html"><b>¿Falla con OOM o se pierden executors?</b><span>Distingue un OOM
+    del driver de uno de un executor, y una VM spot desalojada de un fallo de
+    memoria.</span><em>Memoria y OOM</em></a></li>
+  <li><a href="system-tables.html"><b>¿Quieres que no vuelva a pasar sin enterarte?</b><span>Vigila
+    coste, spill, colas y fallos con system tables, y monta una alerta encima.</span><em>System
+    tables</em></a></li>
 </ol>
 
 <h2>Contenido</h2>
@@ -30,7 +49,8 @@ description: "Manual para diagnosticar jobs lentos en Databricks y Apache Spark:
   <div><h3>{{ p.section }}</h3><ul>
     {%- assign home_group = p.section -%}
   {%- endif %}
-    <li><a href="{{ p.slug | append: '.html' | relative_url }}">{{ p.title }}</a><span>{{ p.summary }}</span></li>
+    <li><a
+      href="{{ p.slug | append: '.html' | relative_url }}">{{ p.title }}</a><span>{{ p.summary }}</span></li>
   {%- if forloop.last %}</ul></div>{% endif -%}
 {%- endfor %}
 </div>
