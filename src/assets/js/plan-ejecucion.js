@@ -4,18 +4,19 @@
   const { el } = window.SPL;
   try {
   const B_FILES = 2, MAX_LINES = 12, MAX_JOBS = 5;
-  const DEFAULT = ['filter', 'count', 'groupBy', 'write'];
+  const DEFAULT = ['filter', 'withColumn', 'count', 'groupBy', 'write'];
   // k: n = narrow, w = wide (shuffle), a = acción
   const OPS = {
-    filter:  { k: 'n', code: 'df = df.filter("monto > 100")', plan: 'Filter' },
-    select:  { k: 'n', code: 'df = df.select("cliente_id", "monto")', plan: 'Project' },
-    groupBy: { k: 'w', code: 'df = df.groupBy("cliente_id").agg(F.sum("monto").alias("monto"))', plan: 'Aggregate' },
-    join:    { k: 'w', code: 'df = df.join(clientes, "cliente_id")', plan: 'Join' },
-    orderBy: { k: 'w', code: 'df = df.orderBy("monto")', plan: 'Sort' },
-    count:   { k: 'a', code: 'df.count()', plan: 'Aggregate (count)' },
-    show:    { k: 'a', code: 'df.show()', plan: 'Limit 21' },
-    collect: { k: 'a', code: 'filas = df.collect()', plan: 'Collect' },
-    write:   { k: 'a', code: 'df.write.saveAsTable("salida")', plan: 'Write' }
+    filter:  { k: 'n', code: 'df = df.filter("monto > 100")' },
+    select:  { k: 'n', code: 'df = df.select("cliente_id", "monto")' },
+    withColumn: { k: 'n', code: 'df = df.withColumn("monto_iva", F.col("monto") * 1.19)' },
+    groupBy: { k: 'w', code: 'df = df.groupBy("cliente_id").agg(F.sum("monto").alias("monto"))' },
+    join:    { k: 'w', code: 'df = df.join(clientes, "cliente_id")' },
+    orderBy: { k: 'w', code: 'df = df.orderBy("monto")' },
+    count:   { k: 'a', code: 'df.count()' },
+    show:    { k: 'a', code: 'df.show()' },
+    collect: { k: 'a', code: 'filas = df.collect()' },
+    write:   { k: 'a', code: 'df.write.saveAsTable("salida")' }
   };
   const HEAD = ['from pyspark.sql import functions as F', 'df = spark.read.table("ventas")', 'clientes = spark.read.table("clientes")'];
   const fI = document.getElementById('tr-f'), pI = document.getElementById('tr-p');
@@ -36,40 +37,49 @@
       const lin = [];
       steps.slice(0, i).forEach((x, j) => { if (OPS[x].k !== 'a') lin.push({ op: x, line: j }); });
       const stages = [], notes = [];
+      // cada paso del stage es la línea de código que lo origina (c) y una nota (d);
+      // sin c es trabajo previo de una línea que aparece en el stage siguiente
+      const op = (c, d) => ({ c, d });
+      const SP = 'una por partición del shuffle (<code>spark.sql.shuffle.partitions</code> = ' + sp + ')';
       // los padres se crean antes que el hijo: así numera Spark los stages
-      const open = (ops, tasks, parents, why) => ({ id: sid++, ops, tasks, parents, why });
-      let cur = open(['Scan ventas'], files, [], `una por archivo de ventas (${files})`);
-      const cut = (tail, next) => { cur.ops.push(tail); stages.push(cur); cur = next(cur.id); };
+      const open = (ops, tasks, parents, why) => ({ id: sid++, ops, tasks, parents, why, sh: null });
+      let cur = open([op('spark.read.table("ventas")')], files, [], `una por partición de lectura de ventas (${files})`);
+      // el stage termina escribiendo un shuffle; el siguiente lo lee
+      const cut = (sh, next) => { cur.sh = sh; stages.push(cur); cur = next(cur.id); };
+      let topk = false;
       lin.forEach((x, n) => {
         const last = n === lin.length - 1;
-        if (x.op === 'filter' || x.op === 'select') cur.ops.push(OPS[x.op].plan);
-        else if (x.op === 'groupBy') { cur.ops.push('HashAggregate (parcial)'); cut('Exchange', p => open(['HashAggregate (final)'], sp, [p], 'una por partición del shuffle (<code>spark.sql.shuffle.partitions</code> = ' + sp + ')')); }
+        // narrow: se queda en el stage actual, con su código sin el "df = df."
+        if (OPS[x.op].k === 'n') cur.ops.push(op(OPS[x.op].code.replace(/^df = df\./, '')));
+        else if (x.op === 'groupBy') { cur.ops.push(op(null, 'suma parcial por cliente_id en cada partición')); cut('por cliente_id', p => open([op('groupBy("cliente_id")', 'junta las sumas parciales')], sp, [p], SP)); }
         else if (x.op === 'join') {
-          cur.ops.push('Exchange'); stages.push(cur);
-          const a = cur.id, b = open(['Scan clientes', 'Exchange'], B_FILES, [], `una por archivo de clientes (${B_FILES})`);
-          stages.push(b);
-          cur = open(['Sort', 'SortMergeJoin'], sp, [a, b.id], 'una por partición del shuffle (<code>spark.sql.shuffle.partitions</code> = ' + sp + ')');
+          cur.sh = 'por cliente_id'; stages.push(cur);
+          const a = cur.id, b = open([op('spark.read.table("clientes")')], B_FILES, [], `una por partición de lectura de clientes (${B_FILES})`);
+          b.sh = 'por cliente_id'; stages.push(b);
+          cur = open([op('join(clientes, "cliente_id")')], sp, [a, b.id], SP);
         }
         else if (x.op === 'orderBy') {
-          if (last && s === 'show') { cur.ops.push('TakeOrderedAndProject'); notes.push('<code>orderBy</code> seguido de <code>show()</code> no hace shuffle: Spark lo cambia por <code>TakeOrderedAndProject</code>, que saca el top de cada partición y lo junta en el driver.'); }
-          else { cut('Exchange (rangos)', p => open(['Sort'], sp, [p], 'una por partición del shuffle (<code>spark.sql.shuffle.partitions</code> = ' + sp + ')')); notes.push('Por el <code>orderBy</code>, antes de este job verás en el Spark UI un job corto de <b>muestreo</b>: Spark lee una muestra para decidir los rangos de cada partición.'); }
+          if (last && s === 'show') { topk = true; cur.ops.push(op('orderBy("monto")', 'las 21 primeras de cada partición')); notes.push('<code>orderBy</code> seguido de <code>show()</code> no hace shuffle: cada partición saca sus 21 primeras filas y el driver junta esos tops.'); }
+          else { cut('por rangos de monto', p => open([op('orderBy("monto")', 'ordena cada rango')], sp, [p], SP)); notes.push('Por el <code>orderBy</code>, antes de este job verás en el Spark UI un job corto de <b>muestreo</b>: Spark lee una muestra para decidir los rangos de cada partición.'); }
         }
       });
-      if (s === 'count') { cur.ops.push('HashAggregate (parcial)'); cut('Exchange (1 partición)', p => open(['HashAggregate (final)'], 1, [p], '<code>count()</code> junta los conteos parciales en una sola partición, así que hay una sola task')); }
-      else if (s === 'write') cur.ops.push('WriteFiles');
-      else if (s === 'collect') { cur.ops.push('Collect → driver'); notes.push('<code>collect()</code> trae todas las filas al driver. Con datos grandes, ahí empieza un OOM del driver.'); }
-      else if (s === 'show') { cur.ops.push('CollectLimit 21'); if (!cur.ops.includes('TakeOrderedAndProject')) { cur.tasks = 1; cur.why = '<code>show()</code> lee primero 1 partición y solo pide más si no le alcanzan las 21 filas'; } }
+      if (s === 'count') { cur.ops.push(op(null, 'conteo parcial de cada partición')); cut('a 1 partición', p => open([op('count()', 'suma los conteos parciales')], 1, [p], '<code>count()</code> junta los conteos parciales en una sola partición, así que hay una sola task')); }
+      else if (s === 'write') cur.ops.push(op('write.saveAsTable("salida")'));
+      else if (s === 'collect') { cur.ops.push(op('collect()', 'manda las filas al driver')); notes.push('<code>collect()</code> trae todas las filas al driver. Con datos grandes, ahí empieza un OOM del driver.'); }
+      else if (s === 'show') { cur.ops.push(op('show()', '21 filas')); if (!topk) { cur.tasks = 1; cur.why = '<code>show()</code> lee primero 1 partición y solo pide más si no le alcanzan las 21 filas'; } }
       stages.push(cur);
       stages.forEach(st => { st.t0 = tid; tid += st.tasks; });
       // nivel = cuándo puede correr el stage dentro del job (los que no dependen entre sí, a la vez)
       const lvl = {}; stages.forEach(st => { lvl[st.id] = st.parents.length ? Math.max(...st.parents.map(p => lvl[p])) + 1 : 0; st.lvl = lvl[st.id]; });
-      jobs.push({ id: jobs.length, line: i, action: s, lin, stages, notes,
-        plan: ['Scan ventas', ...lin.map(x => OPS[x.op].plan), OPS[s].plan] });
+      jobs.push({ id: jobs.length, line: i, action: s, lin, stages, notes });
     });
     app = { jobs, files, sp, tasks: tid, stages: sid, lazy: steps.filter(s => OPS[s].k !== 'a').length };
     if (!sel || (sel.t === 'job' && !jobs[sel.id]) || (sel.t === 'stage' && sel.id >= sid)) sel = jobs.length ? { t: 'job', id: jobs.length - 1 } : null;
   }
 
+  // el stage como cadena de código: texto plano para el tooltip, HTML para el panel
+  const stageText = st => st.ops.map(o => o.c ? o.c + (o.d ? ` (${o.d})` : '') : o.d).join(' › ') + (st.sh ? ` › shuffle ${st.sh}` : '');
+  const stageHtml = st => st.ops.map(o => o.c ? `<code>${esc(o.c)}</code>${o.d ? ` (${o.d})` : ''}` : o.d).join(' › ') + (st.sh ? ` › shuffle ${st.sh}` : '');
   const jobOfStage = id => app.jobs.find(j => j.stages.some(s => s.id === id));
 
   /* ---------- árbol en SVG ---------- */
@@ -112,7 +122,7 @@
       j.stages.forEach((st, k) => {
         const y = ys[k];
         gEdges.appendChild(edge(170, jy, 184, y));
-        const gs = node('tr-stage', 184, y - 11, 74, 22, [[`Stage ${st.id}`, 't'], [`${st.tasks} task${st.tasks === 1 ? '' : 's'}`, 's']], `Stage ${st.id}: ${st.ops.join(' › ')}`);
+        const gs = node('tr-stage', 184, y - 11, 74, 22, [[`Stage ${st.id}`, 't'], [`${st.tasks} task${st.tasks === 1 ? '' : 's'}`, 's']], `Stage ${st.id}: ${stageText(st)}`);
         clickable(gs, () => select({ t: 'stage', id: st.id }), `Stage ${st.id}`);
         gNodes.appendChild(gs); nodes.stage[st.id] = gs;
         const shown = st.tasks <= 5 ? st.tasks : 4, gt = el('g', { class: 'tr-tasks' });
@@ -152,7 +162,7 @@
     if (!sel) { info.innerHTML = 'Hay transformaciones, pero ninguna acción. Spark solo ha anotado el plan: <b>no ha lanzado ningún job</b>. Añade <code>count()</code>, <code>show()</code>, <code>collect()</code> o <code>write</code>.'; return; }
     if (sel.t === 'job') {
       const j = app.jobs[sel.id], ex = j.stages.length - 1;
-      let h = `<p><b>Job ${j.id}</b> lo lanza <code>${esc(OPS[j.action].code)}</code>. Su <b>plan lógico</b> es todo el linaje hasta esa acción: <code>${j.plan.join(' › ')}</code>. Catalyst lo optimiza, elige un plan físico y el scheduler lo corta en <b>${j.stages.length} stage${j.stages.length > 1 ? 's' : ''}</b>${ex ? `, uno más por cada Exchange (${ex})` : ' porque no hay ningún Exchange'}. </p>`;
+      let h = `<p><b>Job ${j.id}</b> lo lanza <code>${esc(OPS[j.action].code)}</code>. Su <b>plan lógico</b> sale de las líneas resaltadas del notebook, desde la lectura de ventas hasta la acción. Catalyst lo optimiza, elige un plan físico y el scheduler lo corta en <b>${j.stages.length} stage${j.stages.length > 1 ? 's' : ''}</b>${ex ? `, uno más por cada shuffle (${ex})` : ' porque no hay ningún shuffle'}.</p>`;
       const tot = j.stages.reduce((a, s) => a + s.tasks, 0);
       h += j.stages.length > 1
         ? `<p><b>${tot} tasks</b>, que se suman stage por stage:</p><ul>${j.stages.map(st => `<li><b>${st.tasks}</b> del Stage ${st.id}: ${st.why}</li>`).join('')}</ul>`
@@ -163,10 +173,10 @@
       info.innerHTML = h;
     } else {
       const j = jobOfStage(sel.id), st = j.stages.find(s => s.id === sel.id);
-      const writes = /^Exchange/.test(st.ops[st.ops.length - 1]);
-      info.innerHTML = `<p><b>Stage ${st.id}</b> (Job ${j.id}) ejecuta <code>${st.ops.join(' › ')}</code>.</p>
+      const part = st.ops.some(o => !o.c), child = j.stages.find(x => x.parents.includes(st.id));
+      info.innerHTML = `<p><b>Stage ${st.id}</b> (Job ${j.id}) ejecuta: ${stageHtml(st)}.</p>
         <p><b>${st.tasks} task${st.tasks > 1 ? 's' : ''}</b>: ${st.why}. Las tasks las fija el número de particiones, no los cores. Los cores solo deciden cuántas corren a la vez. TIDs ${st.t0}–${st.t0 + st.tasks - 1}.</p>
-        <p>${st.parents.length ? `No empieza hasta que terminan ${st.parents.length > 1 ? 'los Stages ' + st.parents.join(' y ') : 'el Stage ' + st.parents[0]}, porque lee su shuffle.` : 'Lee directo de la tabla, así que puede empezar en cuanto arranca el job.'}${writes ? ' Termina escribiendo shuffle: ahí se corta el stage.' : ''}</p>`;
+        <p>${st.parents.length ? `No empieza hasta que ${st.parents.length > 1 ? 'terminan los Stages ' + st.parents.join(' y ') : 'termina el Stage ' + st.parents[0]}, porque lee su shuffle.` : 'Lee directo de la tabla, así que puede empezar en cuanto arranca el job.'}${st.sh ? ' Termina escribiendo un shuffle: ahí se corta el stage.' : ''}${part && child ? ` El cálculo parcial lo termina el Stage ${child.id} con <code>${esc(child.ops[0].c)}</code>.` : ''}</p>`;
     }
   }
 
