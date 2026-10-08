@@ -9,20 +9,52 @@ description: "Provocar skew en Free Edition y arreglarlo."
     <div class="essentials" role="note">
       <p class="essentials-title">Lo esencial en 1 minuto</p>
       <ul>
-        <li>Free Edition es serverless: no hay Spark UI y solo puedes cambiar seis propiedades de Spark, entre ellas <code>spark.sql.shuffle.partitions</code>. AQE se queda encendido.</li>
-        <li>Detecta el skew sin UI contando filas por clave con <code>groupBy(clave).count()</code>.</li>
-        <li>Una ventana <code>PARTITION BY</code> sobre la clave caliente manda todas sus filas a una sola task, y AQE no parte ventanas.</li>
-        <li>Una agregación combinable como <code>max</code> sufre mucho menos, porque se reduce dentro de cada partición antes del shuffle.</li>
-        <li>Cambiar el número de particiones no arregla el skew; el salting en dos fases o rediseñar el cálculo sí.</li>
+        <li>Free Edition es serverless: no hay Spark UI y solo puedes cambiar seis propiedades de
+          Spark, entre ellas <code>spark.sql.shuffle.partitions</code>. AQE se queda encendido.</li>
+        <li>Detecta el skew sin UI contando filas por clave con
+          <code>groupBy(clave).count()</code>.</li>
+        <li>Una ventana <code>PARTITION BY</code> sobre la clave caliente manda todas sus filas a
+          una sola task, y AQE no parte ventanas.</li>
+        <li>Una agregación combinable como <code>max</code> sufre mucho menos, porque se reduce
+          dentro de cada partición antes del shuffle.</li>
+        <li>Cambiar el número de particiones no arregla el skew; el salting en dos fases o rediseñar
+          el cálculo sí.</li>
       </ul>
-      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> la clave caliente decide el tiempo del stage, y AQE solo la parte en joins.</p>
+      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> la clave caliente decide el
+        tiempo del stage, y AQE solo la parte en joins.</p>
     </div>
 
-    <div class="def" id="descargar"><p style="margin:.2rem 0 .55rem"><a href="notebooks/lab-skew.py" download="lab-skew.py" style="display:inline-block;text-decoration:none;font-weight:600;font-size:.9rem;padding:.5rem .9rem;border-radius:8px;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent)">Descargar notebook</a></p><p style="margin:0;font-size:.92rem">Es el archivo <code>lab-skew.py</code> en formato source de Databricks, con todas las celdas del lab y sus explicaciones. Para importarlo: <b>Workspace</b> en la barra lateral → clic derecho en una carpeta → <b>Import</b> → <b>File</b> y elige el archivo → <b>Import</b> (<a href="https://docs.databricks.com/aws/en/notebooks/notebook-export-import" target="_blank" rel="noopener">fuente</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/notebooks/notebook-export-import" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</p></div>
+    <div class="def" id="descargar"><p style="margin:.2rem 0 .55rem"><a href="notebooks/lab-skew.py"
+      download="lab-skew.py"
+      style="display:inline-block;text-decoration:none;font-weight:600;font-size:.9rem;padding:.5rem .9rem;border-radius:8px;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent)">Descargar
+      notebook</a></p><p style="margin:0;font-size:.92rem">Es el archivo <code>lab-skew.py</code> en
+      formato source de Databricks, con todas las celdas del lab y sus explicaciones. Para
+      importarlo: <b>Workspace</b> en la barra lateral → clic derecho en una carpeta → <b>Import</b>
+      → <b>File</b> y elige el archivo → <b>Import</b> (<a
+      href="https://docs.databricks.com/aws/en/notebooks/notebook-export-import" target="_blank"
+      rel="noopener">fuente</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/notebooks/notebook-export-import"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>).</p></div>
 
-    <div class="note"><b>Antes de empezar.</b> El notebook original desactiva y ajusta configs de AQE para comparar antes y después. En serverless (y Free Edition es serverless) solo se pueden cambiar unas pocas propiedades: <code>spark.sql.shuffle.partitions</code>, <code>spark.sql.files.maxPartitionBytes</code>, <code>spark.sql.ansi.enabled</code>, <code>spark.sql.session.timeZone</code>, <code>spark.sql.legacy.timeParserPolicy</code> y <code>spark.databricks.execution.timeout</code> (<a href="https://docs.databricks.com/aws/en/spark/conf" target="_blank" rel="noopener">fuente</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/spark/conf" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>). Por eso adapté el lab: no apagamos AQE, sino que buscamos un caso donde AQE <b>no</b> te salva y lo arreglamos a mano.</div>
+    <div class="note"><b>Antes de empezar.</b> El notebook original desactiva y ajusta configs de
+      AQE para comparar antes y después. En serverless (y Free Edition es serverless) solo se pueden
+      cambiar unas pocas propiedades: <code>spark.sql.shuffle.partitions</code>,
+      <code>spark.sql.files.maxPartitionBytes</code>, <code>spark.sql.ansi.enabled</code>,
+      <code>spark.sql.session.timeZone</code>, <code>spark.sql.legacy.timeParserPolicy</code> y
+      <code>spark.databricks.execution.timeout</code> (<a
+      href="https://docs.databricks.com/aws/en/spark/conf" target="_blank" rel="noopener">fuente</a>
+      <a class="az" href="https://learn.microsoft.com/azure/databricks/spark/conf" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>). Por
+      eso adapté el lab: no apagamos AQE, sino que buscamos un caso donde AQE <b>no</b> te salva y
+      lo arreglamos a mano.</div>
 
-    <div class="verify">No pude leer el contenido celda por celda del notebook original (la página no devolvió el código). Lo que sigue es mi adaptación con la misma idea de datos. Para ver el perfil en serverless: en la celda pulsa <b>See performance</b>, elige la instrucción y luego <b>See query profile</b> (<a href="https://learn.microsoft.com/azure/databricks/compute/serverless/notebooks#view-query-insights" target="_blank" rel="noopener">doc de Azure Databricks</a>).</div>
+    <div class="verify">No pude leer el contenido celda por celda del notebook original (la página
+      no devolvió el código). Lo que sigue es mi adaptación con la misma idea de datos. Para ver el
+      perfil en serverless: en la celda pulsa <b>See performance</b>, elige la instrucción y luego
+      <b>See query profile</b> (<a
+      href="https://learn.microsoft.com/azure/databricks/compute/serverless/notebooks#view-query-insights"
+      target="_blank" rel="noopener">doc de Azure Databricks</a>).</div>
 
     <ol class="steps">
       <li>
@@ -37,26 +69,37 @@ sales = (spark.range(20_000_000)
   .withColumn("amount", F.round(F.rand(seed=3) * 100, 2)))</code></pre>
       </li>
       <li>
-        <b>Detéctalo sin UI.</b> Es el método más simple de la guía de optimización: contar filas por la clave del join o la agregación.
+        <b>Detéctalo sin UI.</b> Es el método más simple de la guía de optimización: contar filas
+          por la clave del join o la agregación.
 <pre><code>(sales.groupBy("product_id").count()
       .orderBy(F.desc("count")).show(5))
 <span class="c"># Esperado: product_id 100 con ~16 M filas; el resto con ~40 cada uno</span></code></pre>
       </li>
       <li>
-        <b>Caso lento: ventana sobre la clave caliente.</b> Un acumulado por producto obliga a ordenar todas las filas de cada producto juntas. Las ~16 M filas del producto 100 van a una sola task, y AQE no parte ventanas.
+        <b>Caso lento: ventana sobre la clave caliente.</b> Un acumulado por producto obliga a
+          ordenar todas las filas de cada producto juntas. Las ~16 M filas del producto 100 van a
+          una sola task, y AQE no parte ventanas.
 <pre><code>w = Window.partitionBy("product_id").orderBy("amount")
 running = sales.withColumn("acumulado", F.sum("amount").over(w))
 running.agg(F.max("acumulado")).collect()</code></pre>
-        Abre el query profile de esa celda (See performance → See query profile). Busca el operador de ventana / sort: verás que se lleva casi todo el tiempo. El query profile muestra operadores, no tasks; para ver la task lenta en sí necesitas el Spark UI de un compute clásico (ver <a href="query-profile.html">Query profile</a> y <a href="spark-ui.html">Leer el Spark UI</a>).
+        Abre el query profile de esa celda (See performance → See query profile). Busca el operador
+          de ventana / sort: verás que se lleva casi todo el tiempo. El query profile muestra
+          operadores, no tasks; para ver la task lenta en sí necesitas el Spark UI de un compute
+          clásico (ver <a href="query-profile.html">Query profile</a> y <a href="spark-ui.html">Leer
+          el Spark UI</a>).
       </li>
       <li>
-        <b>Contraste: una agregación combinable no sufre igual.</b> <code>max</code> se calcula primero dentro de cada partición y luego se combina (agregación parcial). Antes del shuffle, la clave caliente ya está reducida a una fila por partición.
+        <b>Contraste: una agregación combinable no sufre igual.</b> <code>max</code> se calcula
+          primero dentro de cada partición y luego se combina (agregación parcial). Antes del
+          shuffle, la clave caliente ya está reducida a una fila por partición.
 <pre><code>top_agg = sales.groupBy("product_id").agg(F.max("amount").alias("max_amount"))
 top_agg.count()</code></pre>
-        Compara tiempos. Lección: si tu cálculo admite reescribirse como agregación combinable, hazlo. Un acumulado no lo admite, y para eso existe el salting o rediseñar el cálculo.
+        Compara tiempos. Lección: si tu cálculo admite reescribirse como agregación combinable,
+          hazlo. Un acumulado no lo admite, y para eso existe el salting o rediseñar el cálculo.
       </li>
       <li>
-        <b>Salting en dos fases.</b> Aquí se aplica a <code>max</code> solo para que veas la mecánica; el detalle está en <a href="remedios.html">Remedios</a>.
+        <b>Salting en dos fases.</b> Aquí se aplica a <code>max</code> solo para que veas la
+          mecánica; el detalle está en <a href="remedios.html">Remedios</a>.
 <pre><code>N = 16
 salted = sales.withColumn("salt", (F.rand(seed=4) * N).cast("int"))
 fase1 = salted.groupBy("product_id", "salt").agg(F.max("amount").alias("m"))
@@ -64,11 +107,18 @@ fase2 = fase1.groupBy("product_id").agg(F.max("m").alias("max_amount"))
 fase2.count()</code></pre>
       </li>
       <li>
-        <b>Opcional: juega con particiones.</b> Esta sí se puede cambiar en serverless. Repite el paso 3 con <code>200</code> y con <code>auto</code>, y confirma que <b>no</b> arregla el skew.
+        <b>Opcional: juega con particiones.</b> Esta sí se puede cambiar en serverless. Repite el
+          paso 3 con <code>200</code> y con <code>auto</code>, y confirma que <b>no</b> arregla el
+          skew.
 <pre><code>spark.conf.set("spark.sql.shuffle.partitions", "200")</code></pre>
       </li>
     </ol>
-    <p><b>Qué deberías sacar del lab:</b> la clave caliente decide el tiempo del stage. AQE solo la parte en joins, y para ventanas o agregaciones sin parcial la solución es cambiar el algoritmo o hacer salting.</p>
+    <p><b>Qué deberías sacar del lab:</b> la clave caliente decide el tiempo del stage. AQE solo la
+      parte en joins, y para ventanas o agregaciones sin parcial la solución es cambiar el algoritmo
+      o hacer salting.</p>
 
     <h3><span class="k">De dónde sale</span>Fuentes</h3>
-    <p class="src">Base: notebook oficial <a href="https://docs.databricks.com/aws/en/notebooks/source/aqe-demo.html" target="_blank" rel="noopener">AQE Demo</a> (crea una tabla <code>sales</code> donde el item 100 está en el 80% de las ventas).</p>
+    <p class="src">Base: notebook oficial <a
+      href="https://docs.databricks.com/aws/en/notebooks/source/aqe-demo.html" target="_blank"
+      rel="noopener">AQE Demo</a> (crea una tabla <code>sales</code> donde el item 100 está en el
+      80% de las ventas).</p>

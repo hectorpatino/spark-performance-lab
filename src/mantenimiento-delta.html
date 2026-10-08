@@ -11,26 +11,55 @@ extra_css: ["/assets/css/mantenimiento-delta.css"]
     <div class="essentials" role="note">
       <p class="essentials-title">Lo esencial en 1 minuto</p>
       <ul>
-        <li>Predictive optimization ejecuta <code>OPTIMIZE</code>, <code>VACUUM</code> y <code>ANALYZE</code> solo en tablas managed de Unity Catalog, en serverless. En tablas external te toca programarlos a ti.</li>
-        <li><code>VACUUM</code> borra archivos sin referencia más viejos que <code>delta.deletedFileRetentionDuration</code> (7 días), y eso marca hasta dónde llega el time travel. El historial (<code>logRetentionDuration</code>, 30 días) es otra cosa.</li>
-        <li>Con deletion vectors, <code>DELETE</code>, <code>UPDATE</code> y <code>MERGE</code> marcan filas en vez de reescribir archivos. Para borrar de verdad: <code>REORG … APPLY (PURGE)</code> y después <code>VACUUM</code>.</li>
-        <li><code>OPTIMIZE</code> compacta archivos pequeños hacia un tamaño objetivo que crece con la tabla (256 MB hasta 2,56 TB). Es idempotente.</li>
-        <li>Con predictive optimization activo, quita tus jobs de <code>OPTIMIZE</code> y <code>VACUUM</code> sobre esas tablas: serían gasto duplicado.</li>
+        <li>Predictive optimization ejecuta <code>OPTIMIZE</code>, <code>VACUUM</code> y
+          <code>ANALYZE</code> solo en tablas managed de Unity Catalog, en serverless. En tablas
+          external te toca programarlos a ti.</li>
+        <li><code>VACUUM</code> borra archivos sin referencia más viejos que
+          <code>delta.deletedFileRetentionDuration</code> (7 días), y eso marca hasta dónde llega el
+          time travel. El historial (<code>logRetentionDuration</code>, 30 días) es otra cosa.</li>
+        <li>Con deletion vectors, <code>DELETE</code>, <code>UPDATE</code> y <code>MERGE</code>
+          marcan filas en vez de reescribir archivos. Para borrar de verdad: <code>REORG … APPLY
+          (PURGE)</code> y después <code>VACUUM</code>.</li>
+        <li><code>OPTIMIZE</code> compacta archivos pequeños hacia un tamaño objetivo que crece con
+          la tabla (256 MB hasta 2,56 TB). Es idempotente.</li>
+        <li>Con predictive optimization activo, quita tus jobs de <code>OPTIMIZE</code> y
+          <code>VACUUM</code> sobre esas tablas: serían gasto duplicado.</li>
       </ul>
-      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> la pregunta clave es si la tabla es managed de Unity Catalog; de eso depende quién hace el mantenimiento.</p>
+      <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> la pregunta clave es si la tabla
+        es managed de Unity Catalog; de eso depende quién hace el mantenimiento.</p>
     </div>
 
     <h3><span class="k">Qué problema resuelve</span>Una tabla que empeora sola</h3>
-    <p>Una tabla Delta recién creada suele ir bien. Con los meses aparecen tres síntomas. Las cargas incrementales dejan miles de archivos pequeños y cada query abre más archivos de los necesarios. Los <code>UPDATE</code> y <code>DELETE</code> reescriben archivos enteros para cambiar unas pocas filas. Y el storage crece aunque la tabla no crezca, porque los archivos viejos siguen en ADLS para el time travel.</p>
-    <p>Cada síntoma tiene su comando: <code>OPTIMIZE</code> compacta, <code>VACUUM</code> borra lo que ya no se usa, <code>ANALYZE</code> refresca estadísticas y los deletion vectors evitan reescrituras. La pregunta del examen es quién los ejecuta. En una tabla <b>managed de Unity Catalog</b> con predictive optimization, los tres primeros corren solos. En una tabla external, te tocan a ti.</p>
+    <p>Una tabla Delta recién creada suele ir bien. Con los meses aparecen tres síntomas. Las cargas
+      incrementales dejan miles de archivos pequeños y cada query abre más archivos de los
+      necesarios. Los <code>UPDATE</code> y <code>DELETE</code> reescriben archivos enteros para
+      cambiar unas pocas filas. Y el storage crece aunque la tabla no crezca, porque los archivos
+      viejos siguen en ADLS para el time travel.</p>
+    <p>Cada síntoma tiene su comando: <code>OPTIMIZE</code> compacta, <code>VACUUM</code> borra lo
+      que ya no se usa, <code>ANALYZE</code> refresca estadísticas y los deletion vectors evitan
+      reescrituras. La pregunta del examen es quién los ejecuta. En una tabla <b>managed de Unity
+      Catalog</b> con predictive optimization, los tres primeros corren solos. En una tabla
+      external, te tocan a ti.</p>
 
-    <p class="def"><b>Predictive optimization</b> ejecuta automáticamente <code>OPTIMIZE</code>, <code>VACUUM</code> y <code>ANALYZE</code> sobre las tablas managed de Unity Catalog (Delta e Iceberg). Decide qué tablas lo necesitan, encola las operaciones y las corre en serverless compute para jobs. No actúa sobre tablas external.</p>
+    <p class="def"><b>Predictive optimization</b> ejecuta automáticamente <code>OPTIMIZE</code>,
+      <code>VACUUM</code> y <code>ANALYZE</code> sobre las tablas managed de Unity Catalog (Delta e
+      Iceberg). Decide qué tablas lo necesitan, encola las operaciones y las corre en serverless
+      compute para jobs. No actúa sobre tablas external.</p>
 
     <h3><span class="k">Idea mental</span>Un cuaderno de contabilidad</h3>
-    <p>Cada archivo de datos es una hoja del cuaderno. Corregir una cifra a la manera antigua obliga a copiar la hoja completa en limpio. Con <b>deletion vectors</b> tachas la línea y anotas al margen; la hoja se queda donde está. De vez en cuando alguien pasa el cuaderno a limpio y junta las hojas medio vacías: eso es <code>OPTIMIZE</code>. Las hojas viejas van a una caja por si hay que revisar cómo estaba el cuaderno la semana pasada (time travel). <code>VACUUM</code> vacía la caja, pero solo de hojas con más de 7 días. Con predictive optimization, ese alguien trabaja para ti sin que lo programes.</p>
+    <p>Cada archivo de datos es una hoja del cuaderno. Corregir una cifra a la manera antigua obliga
+      a copiar la hoja completa en limpio. Con <b>deletion vectors</b> tachas la línea y anotas al
+      margen; la hoja se queda donde está. De vez en cuando alguien pasa el cuaderno a limpio y
+      junta las hojas medio vacías: eso es <code>OPTIMIZE</code>. Las hojas viejas van a una caja
+      por si hay que revisar cómo estaba el cuaderno la semana pasada (time travel).
+      <code>VACUUM</code> vacía la caja, pero solo de hojas con más de 7 días. Con predictive
+      optimization, ese alguien trabaja para ti sin que lo programes.</p>
 
     <h3><span class="k">Por dentro · 1</span>La vida de una tabla, archivo por archivo</h3>
-    <p>El simulador arranca con una tabla de 4 archivos de 240 MB (un CTAS) en el día 0. Cada botón es una operación real. Los tamaños y porcentajes son ilustrativos. Las reglas siguen la doc: VACUUM respeta la retención, OPTIMIZE compacta archivos pequeños hacia el objetivo de 256 MB, REORG PURGE solo reescribe archivos con soft-deletes.</p>
+    <p>El simulador arranca con una tabla de 4 archivos de 240 MB (un CTAS) en el día 0. Cada botón
+      es una operación real. Los tamaños y porcentajes son ilustrativos. Las reglas siguen la doc:
+      VACUUM respeta la retención, OPTIMIZE compacta archivos pequeños hacia el objetivo de 256 MB,
+      REORG PURGE solo reescribe archivos con soft-deletes.</p>
 
     <div class="console" id="md-sim">
       <div class="ttl">Vida de una tabla Delta · archivos en el storage</div>
@@ -53,7 +82,8 @@ extra_css: ["/assets/css/mantenimiento-delta.css"]
         <button type="button" data-md-op="reset">Reiniciar</button>
       </div>
       <div class="grid2">
-        <label class="switch" for="md-dv"><input type="checkbox" id="md-dv" checked> <span>Deletion vectors activados</span></label>
+        <label class="switch" for="md-dv"><input type="checkbox" id="md-dv" checked> <span>Deletion
+          vectors activados</span></label>
         <div class="chips" role="group" aria-label="Retención" id="md-ret">
           <span class="lab" title="delta.deletedFileRetentionDuration">Retención de VACUUM:</span>
           <button type="button" data-md-ret="7" aria-pressed="true">7 días</button>
@@ -62,35 +92,79 @@ extra_css: ["/assets/css/mantenimiento-delta.css"]
       </div>
       <div class="stats" id="md-stats"></div>
       <div class="md-files" id="md-files" aria-label="Archivos en el storage"></div>
-      <div class="legend"><span style="--sw:var(--cool)">archivo activo (alto ≈ tamaño)</span><span style="--sw:var(--hot)">filas marcadas por un deletion vector</span><span class="md-old">sin referencia: solo sirve al time travel</span><span class="dash">borrado por VACUUM</span><span style="--sw:var(--ok)">escrito por la última operación</span></div>
+      <div class="legend"><span style="--sw:var(--cool)">archivo activo (alto ≈ tamaño)</span><span
+        style="--sw:var(--hot)">filas marcadas por un deletion vector</span><span class="md-old">sin
+        referencia: solo sirve al time travel</span><span class="dash">borrado por
+        VACUUM</span><span style="--sw:var(--ok)">escrito por la última operación</span></div>
       <div class="md-vers" id="md-vers" aria-label="Versiones de la tabla"></div>
       <div class="stepinfo" id="md-log" aria-live="polite"></div>
     </div>
     <p>Secuencias para probar:</p>
     <ul>
-      <li><b>Con y sin deletion vectors.</b> Pulsa DELETE dos veces con el interruptor encendido y mira <i>MB reescritos</i>. Reinicia, apágalo y repite. Sin DV, cada DELETE copia los archivos completos.</li>
-      <li><b>OPTIMIZE no lo arregla todo.</b> Haz tres INSERT, un DELETE y OPTIMIZE. Los archivos pequeños se juntan, pero los grandes con DV siguen marcados: no eran candidatos a compactación. REORG PURGE sí los reescribe.</li>
-      <li><b>VACUUM y time travel.</b> Después de un OPTIMIZE, pulsa VACUUM: no borra nada, porque los archivos viejos tienen menos de 7 días. Avanza 7 días y repite. Las versiones viejas pierden el time travel.</li>
+      <li><b>Con y sin deletion vectors.</b> Pulsa DELETE dos veces con el interruptor encendido y
+        mira <i>MB reescritos</i>. Reinicia, apágalo y repite. Sin DV, cada DELETE copia los
+        archivos completos.</li>
+      <li><b>OPTIMIZE no lo arregla todo.</b> Haz tres INSERT, un DELETE y OPTIMIZE. Los archivos
+        pequeños se juntan, pero los grandes con DV siguen marcados: no eran candidatos a
+        compactación. REORG PURGE sí los reescribe.</li>
+      <li><b>VACUUM y time travel.</b> Después de un OPTIMIZE, pulsa VACUUM: no borra nada, porque
+        los archivos viejos tienen menos de 7 días. Avanza 7 días y repite. Las versiones viejas
+        pierden el time travel.</li>
     </ul>
 
     <h3><span class="k">Por dentro · 2</span>Deletion vectors</h3>
-    <p>Sin deletion vectors, cambiar una fila obliga a reescribir el archivo Parquet completo que la contiene. Con deletion vectors, Databricks <b>marca</b> las filas borradas o cambiadas en metadatos y deja el archivo intacto. Las lecturas aplican esas marcas al vuelo para devolver el estado actual. En un <code>UPDATE</code>, las filas nuevas van a archivos de datos adicionales.</p>
+    <p>Sin deletion vectors, cambiar una fila obliga a reescribir el archivo Parquet completo que la
+      contiene. Con deletion vectors, Databricks <b>marca</b> las filas borradas o cambiadas en
+      metadatos y deja el archivo intacto. Las lecturas aplican esas marcas al vuelo para devolver
+      el estado actual. En un <code>UPDATE</code>, las filas nuevas van a archivos de datos
+      adicionales.</p>
     <ul>
-      <li><b>Qué operaciones los usan:</b> <code>DELETE</code>, <code>UPDATE</code> y <code>MERGE</code>. Con Photon, los tres desde DBR 12.2 LTS. Sin Photon: <code>DELETE</code> desde 12.2 LTS, <code>UPDATE</code> desde 14.1 y <code>MERGE</code> desde 14.3 LTS. Para leer tablas con DV hace falta DBR 12.2 LTS o superior.</li>
-      <li><b>Predictive I/O para updates.</b> Photon usa los DV para acelerar <code>DELETE</code>, <code>MERGE</code> y <code>UPDATE</code> en SQL warehouses serverless y pro, y en clusters con DBR 14.0 o superior.</li>
-      <li><b>Row-level concurrency.</b> Se activa sola con DBR 14.3 LTS o superior, tabla <b>sin particiones</b> y DV habilitados. Dos <code>UPDATE</code> que tocan filas distintas del mismo archivo dejan de chocar, y <code>OPTIMIZE</code> deja de chocar con <code>MERGE</code>/<code>UPDATE</code>/<code>DELETE</code> salvo que uses <code>ZORDER BY</code>. No hay una propiedad de tabla para activarla.</li>
-      <li><b>Cuándo vienen activados.</b> Depende del ajuste de workspace <b>Auto-Enable Deletion Vectors</b> (Settings, pestaña Advanced). Las opciones son Default, New UC managed and Databricks SQL tables, All new tables y Disabled. El valor de Default varía por región; la doc dice que cuando termine el despliegue Default pasará de Disabled a All new tables. Para activarlos a mano: <code>ALTER TABLE t SET TBLPROPERTIES ('delta.enableDeletionVectors' = true)</code>.</li>
-      <li><b>Compatibilidad.</b> Activar DV sube el protocolo de la tabla. Un cliente sin soporte de DV ya no podrá leerla. Desde DBR 14.1 puedes hacer <code>ALTER TABLE … DROP FEATURE deletionVectors</code>.</li>
+      <li><b>Qué operaciones los usan:</b> <code>DELETE</code>, <code>UPDATE</code> y
+        <code>MERGE</code>. Con Photon, los tres desde DBR 12.2 LTS. Sin Photon: <code>DELETE</code>
+        desde 12.2 LTS, <code>UPDATE</code> desde 14.1 y <code>MERGE</code> desde 14.3 LTS. Para
+        leer tablas con DV hace falta DBR 12.2 LTS o superior.</li>
+      <li><b>Predictive I/O para updates.</b> Photon usa los DV para acelerar <code>DELETE</code>,
+        <code>MERGE</code> y <code>UPDATE</code> en SQL warehouses serverless y pro, y en clusters
+        con DBR 14.0 o superior.</li>
+      <li><b>Row-level concurrency.</b> Se activa sola con DBR 14.3 LTS o superior, tabla <b>sin
+        particiones</b> y DV habilitados. Dos <code>UPDATE</code> que tocan filas distintas del
+        mismo archivo dejan de chocar, y <code>OPTIMIZE</code> deja de chocar con
+        <code>MERGE</code>/<code>UPDATE</code>/<code>DELETE</code> salvo que uses <code>ZORDER
+        BY</code>. No hay una propiedad de tabla para activarla.</li>
+      <li><b>Cuándo vienen activados.</b> Depende del ajuste de workspace <b>Auto-Enable Deletion
+        Vectors</b> (Settings, pestaña Advanced). Las opciones son Default, New UC managed and
+        Databricks SQL tables, All new tables y Disabled. El valor de Default varía por región; la
+        doc dice que cuando termine el despliegue Default pasará de Disabled a All new tables. Para
+        activarlos a mano: <code>ALTER TABLE t SET TBLPROPERTIES ('delta.enableDeletionVectors' =
+        true)</code>.</li>
+      <li><b>Compatibilidad.</b> Activar DV sube el protocolo de la tabla. Un cliente sin soporte de
+        DV ya no podrá leerla. Desde DBR 14.1 puedes hacer <code>ALTER TABLE … DROP FEATURE
+        deletionVectors</code>.</li>
     </ul>
 
     <h4>Aplicar los soft-deletes</h4>
-    <p>Las filas marcadas siguen físicamente en los archivos. Hay tres formas de reescribirlos: <code>OPTIMIZE</code>, <code>REORG TABLE … APPLY (PURGE)</code> o una escritura con auto compaction. La doc advierte que la compactación no garantiza aplicar todos los DV: si un archivo no es candidato a compactar, sus marcas se quedan. <code>REORG … APPLY (PURGE)</code> reescribe exactamente los archivos que tienen soft-deletes y es idempotente.</p>
-    <p>Para borrar un dato <b>de verdad</b> (por ejemplo, una solicitud de GDPR) necesitas dos pasos: <code>REORG … APPLY (PURGE)</code> para sacarlo de los archivos actuales y, cuando esos archivos viejos superen la retención, <code>VACUUM</code> para borrarlos del storage. En tablas grandes, <code>spark.databricks.delta.reorg.purgeMode = rows</code> limita el purge a los archivos con filas marcadas (el valor por defecto, <code>all</code>, también revisa columnas eliminadas).</p>
+    <p>Las filas marcadas siguen físicamente en los archivos. Hay tres formas de reescribirlos:
+      <code>OPTIMIZE</code>, <code>REORG TABLE … APPLY (PURGE)</code> o una escritura con auto
+      compaction. La doc advierte que la compactación no garantiza aplicar todos los DV: si un
+      archivo no es candidato a compactar, sus marcas se quedan. <code>REORG … APPLY (PURGE)</code>
+      reescribe exactamente los archivos que tienen soft-deletes y es idempotente.</p>
+    <p>Para borrar un dato <b>de verdad</b> (por ejemplo, una solicitud de GDPR) necesitas dos
+      pasos: <code>REORG … APPLY (PURGE)</code> para sacarlo de los archivos actuales y, cuando esos
+      archivos viejos superen la retención, <code>VACUUM</code> para borrarlos del storage. En
+      tablas grandes, <code>spark.databricks.delta.reorg.purgeMode = rows</code> limita el purge a
+      los archivos con filas marcadas (el valor por defecto, <code>all</code>, también revisa
+      columnas eliminadas).</p>
 
     <h3><span class="k">Por dentro · 3</span>OPTIMIZE y el tamaño de los archivos</h3>
-    <p><code>OPTIMIZE</code> reescribe archivos para mejorar el layout. En una tabla sin clustering hace <b>bin-packing</b>: junta archivos pequeños en archivos de tamaño parecido. Es idempotente: si lo corres dos veces seguidas, la segunda no hace nada. En una tabla con liquid clustering, además agrupa las filas por las clustering keys de forma incremental (eso está en <a href="liquid-clustering.html">Liquid clustering</a>). Los lectores no se interrumpen: un <code>SELECT</code> antes y después de <code>OPTIMIZE</code> devuelve lo mismo.</p>
+    <p><code>OPTIMIZE</code> reescribe archivos para mejorar el layout. En una tabla sin clustering
+      hace <b>bin-packing</b>: junta archivos pequeños en archivos de tamaño parecido. Es
+      idempotente: si lo corres dos veces seguidas, la segunda no hace nada. En una tabla con liquid
+      clustering, además agrupa las filas por las clustering keys de forma incremental (eso está en
+      <a href="liquid-clustering.html">Liquid clustering</a>). Los lectores no se interrumpen: un
+      <code>SELECT</code> antes y después de <code>OPTIMIZE</code> devuelve lo mismo.</p>
     <div class="tblwrap"><table>
-      <thead><tr><th>Tabla</th><th class="num">Objetivo</th><th class="num">Archivos</th></tr></thead>
+      <thead><tr><th>Tabla</th><th class="num">Objetivo</th><th
+        class="num">Archivos</th></tr></thead>
       <tbody>
         <tr><td>10 GB</td><td class="num">256 MB</td><td class="num">40</td></tr>
         <tr><td>1 TB</td><td class="num">256 MB</td><td class="num">4.096</td></tr>
@@ -99,63 +173,137 @@ extra_css: ["/assets/css/mantenimiento-delta.css"]
         <tr><td>10 TB o más</td><td class="num">1 GB</td><td class="num">24.437 (a 10 TB)</td></tr>
       </tbody>
     </table></div>
-    <p class="c">Autotuning: tamaño objetivo de archivo y número aproximado de archivos según el tamaño de la tabla, con los ejemplos de la doc. Entre 2,56 TB y 10 TB el objetivo crece de forma lineal.</p>
+    <p class="c">Autotuning: tamaño objetivo de archivo y número aproximado de archivos según el
+      tamaño de la tabla, con los ejemplos de la doc. Entre 2,56 TB y 10 TB el objetivo crece de
+      forma lineal.</p>
     <ul>
-      <li><b>Tablas managed de UC:</b> Databricks ajusta solo el tamaño de archivo (SQL warehouse o DBR 11.3 LTS+). Las recomendaciones de tuning manual no aplican. Si fijas <code>delta.targetFileSize</code>, en estas tablas solo lo respeta <code>OPTIMIZE</code>.</li>
-      <li><b><code>delta.tuneFileSizesForRewrites</code>:</b> en <code>true</code> ajusta el tamaño para que operaciones que reescriben archivos, como <code>MERGE</code>, vayan más rápido. Sin definir, Databricks detecta solo si la tabla reescribe mucho.</li>
-      <li><b>Auto compaction</b> junta archivos pequeños justo después de una escritura, en el mismo cluster que escribe. <b>Optimized writes</b> reparte los datos antes de escribir para producir menos archivos, a costa de un shuffle. Los dos están siempre activos en <code>MERGE</code>, <code>UPDATE</code> y <code>DELETE</code>. En tablas managed de UC hay <b>auto compaction en background</b> que no necesita predictive optimization: basta quitar las configuraciones legacy (<code>spark.databricks.delta.autoCompact.enabled</code> y la propiedad <code>delta.autoOptimize.autoCompact</code>).</li>
-      <li><b>Frecuencia:</b> sin predictive optimization, la doc sugiere empezar con un <code>OPTIMIZE</code> diario y ajustar. Para tablas de más de 1 TB, programarlo aunque tengas auto compaction.</li>
-      <li><b>Compute:</b> <code>OPTIMIZE</code> gasta CPU en codificar y decodificar Parquet. La doc recomienda instancias <b>compute optimized</b> con SSD. Ver <a href="azure.html">Azure Databricks</a>.</li>
+      <li><b>Tablas managed de UC:</b> Databricks ajusta solo el tamaño de archivo (SQL warehouse o
+        DBR 11.3 LTS+). Las recomendaciones de tuning manual no aplican. Si fijas
+        <code>delta.targetFileSize</code>, en estas tablas solo lo respeta
+        <code>OPTIMIZE</code>.</li>
+      <li><b><code>delta.tuneFileSizesForRewrites</code>:</b> en <code>true</code> ajusta el tamaño
+        para que operaciones que reescriben archivos, como <code>MERGE</code>, vayan más rápido. Sin
+        definir, Databricks detecta solo si la tabla reescribe mucho.</li>
+      <li><b>Auto compaction</b> junta archivos pequeños justo después de una escritura, en el mismo
+        cluster que escribe. <b>Optimized writes</b> reparte los datos antes de escribir para
+        producir menos archivos, a costa de un shuffle. Los dos están siempre activos en
+        <code>MERGE</code>, <code>UPDATE</code> y <code>DELETE</code>. En tablas managed de UC hay
+        <b>auto compaction en background</b> que no necesita predictive optimization: basta quitar
+        las configuraciones legacy (<code>spark.databricks.delta.autoCompact.enabled</code> y la
+        propiedad <code>delta.autoOptimize.autoCompact</code>).</li>
+      <li><b>Frecuencia:</b> sin predictive optimization, la doc sugiere empezar con un
+        <code>OPTIMIZE</code> diario y ajustar. Para tablas de más de 1 TB, programarlo aunque
+        tengas auto compaction.</li>
+      <li><b>Compute:</b> <code>OPTIMIZE</code> gasta CPU en codificar y decodificar Parquet. La doc
+        recomienda instancias <b>compute optimized</b> con SSD. Ver <a href="azure.html">Azure
+        Databricks</a>.</li>
     </ul>
-    <p>En <code>DESCRIBE HISTORY</code>, auto compaction, liquid clustering y <code>ZORDER</code> aparecen todos como <code>OPTIMIZE</code>. Se distinguen por <code>operationParameters</code>: <code>auto = true</code> es auto compaction, <code>clusterBy</code> con columnas es liquid clustering y <code>zOrderBy</code> con columnas es Z-order.</p>
+    <p>En <code>DESCRIBE HISTORY</code>, auto compaction, liquid clustering y <code>ZORDER</code>
+      aparecen todos como <code>OPTIMIZE</code>. Se distinguen por <code>operationParameters</code>:
+      <code>auto = true</code> es auto compaction, <code>clusterBy</code> con columnas es liquid
+      clustering y <code>zOrderBy</code> con columnas es Z-order.</p>
 
     <h3><span class="k">Por dentro · 4</span>VACUUM y la ventana de time travel</h3>
-    <p><code>VACUUM</code> borra del storage los archivos de datos que la tabla ya no referencia y que superan la retención. Hay dos retenciones distintas y conviene no mezclarlas:</p>
+    <p><code>VACUUM</code> borra del storage los archivos de datos que la tabla ya no referencia y
+      que superan la retención. Hay dos retenciones distintas y conviene no mezclarlas:</p>
     <div class="tblwrap"><table>
       <thead><tr><th>Propiedad</th><th>Por defecto</th><th>Controla</th></tr></thead>
       <tbody>
-        <tr><td><code>delta.deletedFileRetentionDuration</code></td><td>7 días</td><td>Qué archivos de datos puede borrar <code>VACUUM</code>. Define hasta dónde llega el time travel.</td></tr>
-        <tr><td><code>delta.logRetentionDuration</code></td><td>30 días</td><td>Cuánto historial (<code>DESCRIBE HISTORY</code>) se guarda. Los logs se borran solos tras los checkpoints; <code>VACUUM</code> no los toca.</td></tr>
+        <tr><td><code>delta.deletedFileRetentionDuration</code></td><td>7 días</td><td>Qué archivos
+          de datos puede borrar <code>VACUUM</code>. Define hasta dónde llega el time
+          travel.</td></tr>
+        <tr><td><code>delta.logRetentionDuration</code></td><td>30 días</td><td>Cuánto historial
+          (<code>DESCRIBE HISTORY</code>) se guarda. Los logs se borran solos tras los checkpoints;
+          <code>VACUUM</code> no los toca.</td></tr>
       </tbody>
     </table></div>
     <ul>
-      <li><b>Time travel bloqueado.</b> Desde DBR 18.0 (y desde DBR 12.2 en tablas managed de UC), una query de time travel a una versión más vieja que <code>deletedFileRetentionDuration</code> falla aunque los archivos sigan ahí. Para 30 días de historia, sube las dos propiedades: <code>deletedFileRetentionDuration</code> a 30 días y <code>logRetentionDuration</code> igual o mayor. Cuesta más storage.</li>
-      <li><b>Retención corta.</b> La doc recomienda al menos 7 días: un job largo podría tener archivos aún sin commit y <code>VACUUM</code> los borraría. Hay un safety check que bloquea retenciones menores; se desactiva con <code>spark.databricks.delta.retentionDurationCheck.enabled = false</code>, bajo tu responsabilidad.</li>
-      <li><b>Predictive optimization</b> usa la misma propiedad. Si la pones por debajo de 7 días, igual retiene 7 días cuando corre <code>VACUUM FULL</code>.</li>
-      <li><b>LITE y FULL.</b> <code>FULL</code> es el modo por defecto y lista todo el directorio. <code>VACUUM t LITE</code> (Public Preview, DBR 16.4 LTS+) usa el transaction log en vez de listar; no borra archivos que el log no conoce, como los de una transacción abortada, y exige un <code>VACUUM</code> exitoso dentro de la retención del log.</li>
-      <li><b>Qué más borra.</b> Todo lo que no gestiona Databricks dentro del directorio de la tabla, salvo carpetas que empiezan con <code>_</code> o <code>.</code>. Si guardas checkpoints de streaming ahí, usa <code>_checkpoints</code>. También borra datos viejos de change data feed (<code>_change_data</code>).</li>
-      <li><b>Disk cache.</b> Un cluster puede seguir sirviendo desde su caché local datos de archivos ya borrados por <code>VACUUM</code>. Reiniciar el cluster vacía la caché.</li>
+      <li><b>Time travel bloqueado.</b> Desde DBR 18.0 (y desde DBR 12.2 en tablas managed de UC),
+        una query de time travel a una versión más vieja que
+        <code>deletedFileRetentionDuration</code> falla aunque los archivos sigan ahí. Para 30 días
+        de historia, sube las dos propiedades: <code>deletedFileRetentionDuration</code> a 30 días y
+        <code>logRetentionDuration</code> igual o mayor. Cuesta más storage.</li>
+      <li><b>Retención corta.</b> La doc recomienda al menos 7 días: un job largo podría tener
+        archivos aún sin commit y <code>VACUUM</code> los borraría. Hay un safety check que bloquea
+        retenciones menores; se desactiva con
+        <code>spark.databricks.delta.retentionDurationCheck.enabled = false</code>, bajo tu
+        responsabilidad.</li>
+      <li><b>Predictive optimization</b> usa la misma propiedad. Si la pones por debajo de 7 días,
+        igual retiene 7 días cuando corre <code>VACUUM FULL</code>.</li>
+      <li><b>LITE y FULL.</b> <code>FULL</code> es el modo por defecto y lista todo el directorio.
+        <code>VACUUM t LITE</code> (Public Preview, DBR 16.4 LTS+) usa el transaction log en vez de
+        listar; no borra archivos que el log no conoce, como los de una transacción abortada, y
+        exige un <code>VACUUM</code> exitoso dentro de la retención del log.</li>
+      <li><b>Qué más borra.</b> Todo lo que no gestiona Databricks dentro del directorio de la
+        tabla, salvo carpetas que empiezan con <code>_</code> o <code>.</code>. Si guardas
+        checkpoints de streaming ahí, usa <code>_checkpoints</code>. También borra datos viejos de
+        change data feed (<code>_change_data</code>).</li>
+      <li><b>Disk cache.</b> Un cluster puede seguir sirviendo desde su caché local datos de
+        archivos ya borrados por <code>VACUUM</code>. Reiniciar el cluster vacía la caché.</li>
       <li><b>Previsualizar:</b> <code>VACUUM t DRY RUN</code> lista lo que borraría sin borrar.</li>
     </ul>
 
     <h3><span class="k">Por dentro · 5</span>Estadísticas y data skipping</h3>
-    <p>Al escribir, Databricks guarda por archivo el mínimo, el máximo, el número de nulos y el total de filas de cada columna con estadísticas. Al consultar, descarta los archivos cuyo rango no puede contener el filtro. Es el mecanismo que aprovecha liquid clustering; el simulador de rangos está en <a href="liquid-clustering.html">Liquid clustering</a>.</p>
+    <p>Al escribir, Databricks guarda por archivo el mínimo, el máximo, el número de nulos y el
+      total de filas de cada columna con estadísticas. Al consultar, descarta los archivos cuyo
+      rango no puede contener el filtro. Es el mecanismo que aprovecha liquid clustering; el
+      simulador de rangos está en <a href="liquid-clustering.html">Liquid clustering</a>.</p>
     <ul>
-      <li><b>Tablas external:</b> estadísticas en las <b>primeras 32 columnas</b> del schema. Para cambiarlo: <code>delta.dataSkippingNumIndexedCols</code> o <code>delta.dataSkippingStatsColumns</code> (DBR 13.3 LTS+, tiene prioridad). Cambiar estas propiedades no recalcula lo existente; desde DBR 14.3 LTS puedes forzarlo con <code>ANALYZE TABLE t COMPUTE DELTA STATISTICS</code>.</li>
-      <li><b>Tablas managed con predictive optimization:</b> recoge estadísticas de skipping en las columnas <b>más usadas en tus filtros</b>, sin el límite de 32. En el system table aparece como la operación <code>DATA_SKIPPING_COLUMN_SELECTION</code>.</li>
-      <li><b>ANALYZE.</b> Predictive optimization corre <code>ANALYZE</code> para las estadísticas que usa el optimizador. A mano: <code>ANALYZE TABLE … COMPUTE STATISTICS</code>.</li>
-      <li><b>Strings largos:</b> se truncan al recoger estadísticas. Si no filtras por ellos, sácalos de la lista.</li>
+      <li><b>Tablas external:</b> estadísticas en las <b>primeras 32 columnas</b> del schema. Para
+        cambiarlo: <code>delta.dataSkippingNumIndexedCols</code> o
+        <code>delta.dataSkippingStatsColumns</code> (DBR 13.3 LTS+, tiene prioridad). Cambiar estas
+        propiedades no recalcula lo existente; desde DBR 14.3 LTS puedes forzarlo con <code>ANALYZE
+        TABLE t COMPUTE DELTA STATISTICS</code>.</li>
+      <li><b>Tablas managed con predictive optimization:</b> recoge estadísticas de skipping en las
+        columnas <b>más usadas en tus filtros</b>, sin el límite de 32. En el system table aparece
+        como la operación <code>DATA_SKIPPING_COLUMN_SELECTION</code>.</li>
+      <li><b>ANALYZE.</b> Predictive optimization corre <code>ANALYZE</code> para las estadísticas
+        que usa el optimizador. A mano: <code>ANALYZE TABLE … COMPUTE STATISTICS</code>.</li>
+      <li><b>Strings largos:</b> se truncan al recoger estadísticas. Si no filtras por ellos,
+        sácalos de la lista.</li>
     </ul>
 
     <h3><span class="k">Managed vs external</span>Qué es automático y qué es manual</h3>
-    <p>Según la doc, una tabla external tiene la metadata gobernada por Unity Catalog, pero Unity Catalog no gestiona su ciclo de vida, optimización, ubicación ni layout. Cambia el tipo de tabla y mira qué operaciones pasan a ser tuyas:</p>
+    <p>Según la doc, una tabla external tiene la metadata gobernada por Unity Catalog, pero Unity
+      Catalog no gestiona su ciclo de vida, optimización, ubicación ni layout. Cambia el tipo de
+      tabla y mira qué operaciones pasan a ser tuyas:</p>
     <div class="console">
       <div class="ttl">Operaciones de mantenimiento según el tipo de tabla</div>
       <div class="chips" role="group" aria-label="Tipo de tabla" id="md-mx">
         <span class="lab">Tabla:</span>
-        <button type="button" data-md-mx="managed" aria-pressed="true">Managed de Unity Catalog</button>
-        <button type="button" data-md-mx="external" aria-pressed="false">External de Unity Catalog</button>
+        <button type="button" data-md-mx="managed" aria-pressed="true">Managed de Unity
+          Catalog</button>
+        <button type="button" data-md-mx="external" aria-pressed="false">External de Unity
+          Catalog</button>
       </div>
       <div class="verdict" id="md-mx-sum"></div>
       <div class="md-tasks" id="md-mx-list"></div>
     </div>
     <ul>
-      <li><b>Requisitos de predictive optimization:</b> workspace en plan Premium y región soportada, SQL warehouses o DBR 12.2 LTS+, y solo tablas managed de UC. Si tus storage accounts exigen conectividad privada, necesitas serverless private connectivity; sin ella, el system table marca operaciones como <code>FAILED: PRIVATE_LINK_SETUP_ERROR</code>.</li>
-      <li><b>Activación por defecto:</b> activado para cuentas creadas desde el 11 de noviembre de 2024. Para cuentas existentes hay un despliegue gradual que, según la doc, se espera completar en agosto de 2026. Compruébalo con <code>DESCRIBE CATALOG|SCHEMA|TABLE EXTENDED</code> (campo <code>Predictive Optimization</code>).</li>
-      <li><b>Herencia:</b> cuenta, catálogo, schema, tabla. <code>ALTER CATALOG|SCHEMA|TABLE … { ENABLE | DISABLE | INHERIT } PREDICTIVE OPTIMIZATION</code>. Un <code>DISABLE</code> explícito se mantiene aunque luego actives la cuenta.</li>
-      <li><b>Costo:</b> corre en serverless compute para jobs y se factura con un SKU de serverless jobs. En <code>system.billing.usage</code> se separa con <code>billing_origin_product = 'PREDICTIVE_OPTIMIZATION'</code>.</li>
-      <li><b>Por qué no corrió:</b> en DBR 18 LTS+, <code>DESCRIBE TABLE EXTENDED t AS JSON</code> trae <code>predictive_optimization_evaluations</code> con el último resultado de <code>COMPACTION</code>, <code>CLUSTERING</code>, <code>AUTO_CLUSTERING_COLUMN_SELECTION</code> y <code>VACUUM</code>. En Catalog Explorer, pestaña History, filtra Automatic runs y busca Not applied. Puede tardar hasta 24 horas.</li>
-      <li><b>Pasar a managed:</b> <code>ALTER TABLE t SET MANAGED</code> (DBR 17.3 LTS+) convierte una external conservando nombre, permisos e historial; predictive optimization queda activo salvo que lo hubieras apagado. Durante 14 días puedes volver atrás con <code>UNSET MANAGED</code>.</li>
+      <li><b>Requisitos de predictive optimization:</b> workspace en plan Premium y región
+        soportada, SQL warehouses o DBR 12.2 LTS+, y solo tablas managed de UC. Si tus storage
+        accounts exigen conectividad privada, necesitas serverless private connectivity; sin ella,
+        el system table marca operaciones como <code>FAILED: PRIVATE_LINK_SETUP_ERROR</code>.</li>
+      <li><b>Activación por defecto:</b> activado para cuentas creadas desde el 11 de noviembre de
+        2024. Para cuentas existentes hay un despliegue gradual que, según la doc, se espera
+        completar en agosto de 2026. Compruébalo con <code>DESCRIBE CATALOG|SCHEMA|TABLE
+        EXTENDED</code> (campo <code>Predictive Optimization</code>).</li>
+      <li><b>Herencia:</b> cuenta, catálogo, schema, tabla. <code>ALTER CATALOG|SCHEMA|TABLE … {
+        ENABLE | DISABLE | INHERIT } PREDICTIVE OPTIMIZATION</code>. Un <code>DISABLE</code>
+        explícito se mantiene aunque luego actives la cuenta.</li>
+      <li><b>Costo:</b> corre en serverless compute para jobs y se factura con un SKU de serverless
+        jobs. En <code>system.billing.usage</code> se separa con <code>billing_origin_product =
+        'PREDICTIVE_OPTIMIZATION'</code>.</li>
+      <li><b>Por qué no corrió:</b> en DBR 18 LTS+, <code>DESCRIBE TABLE EXTENDED t AS JSON</code>
+        trae <code>predictive_optimization_evaluations</code> con el último resultado de
+        <code>COMPACTION</code>, <code>CLUSTERING</code>,
+        <code>AUTO_CLUSTERING_COLUMN_SELECTION</code> y <code>VACUUM</code>. En Catalog Explorer,
+        pestaña History, filtra Automatic runs y busca Not applied. Puede tardar hasta 24
+        horas.</li>
+      <li><b>Pasar a managed:</b> <code>ALTER TABLE t SET MANAGED</code> (DBR 17.3 LTS+) convierte
+        una external conservando nombre, permisos e historial; predictive optimization queda activo
+        salvo que lo hubieras apagado. Durante 14 días puedes volver atrás con <code>UNSET
+        MANAGED</code>.</li>
     </ul>
 
     <h3><span class="k">Cómo se usa</span>Ejemplo para Free Edition</h3>
@@ -182,11 +330,27 @@ SELECT version, operationParameters.auto, operationParameters.clusterBy,
        operationMetrics.numRemovedFiles, operationMetrics.numAddedFiles
 FROM (DESCRIBE HISTORY workspace.default.ventas_mt)
 WHERE operation = 'OPTIMIZE';</code></pre>
-    <p>Repite el <code>DELETE</code> en una copia con <code>'delta.enableDeletionVectors' = false</code> y compara <code>numCopiedRows</code>: sin DV, esa métrica cuenta todas las filas que se copiaron para reescribir los archivos.</p>
-    <div class="verify"><b>Verifica</b> en tu workspace si Free Edition tiene predictive optimization activo y si tu usuario puede leer <code>system.storage.predictive_optimization_operations_history</code>. No encontré en la doc qué incluye Free Edition en estos dos puntos. Tampoco confirmé en la doc qué valores exactos de <code>operationMetrics</code> registra un <code>DELETE</code> con deletion vectors; observa los tuyos.</div>
+    <p>Repite el <code>DELETE</code> en una copia con <code>'delta.enableDeletionVectors' =
+      false</code> y compara <code>numCopiedRows</code>: sin DV, esa métrica cuenta todas las filas
+      que se copiaron para reescribir los archivos.</p>
+    <div class="verify"><b>Verifica</b> en tu workspace si Free Edition tiene predictive
+      optimization activo y si tu usuario puede leer
+      <code>system.storage.predictive_optimization_operations_history</code>. No encontré en la doc
+      qué incluye Free Edition en estos dos puntos. Tampoco confirmé en la doc qué valores exactos
+      de <code>operationMetrics</code> registra un <code>DELETE</code> con deletion vectors; observa
+      los tuyos.</div>
 
     <h4>Observar predictive optimization</h4>
-    <p>El system table <code>system.storage.predictive_optimization_operations_history</code> (Public Preview, retención de 180 días) registra cada operación. Columnas útiles: <code>catalog_name</code>, <code>schema_name</code>, <code>table_name</code>, <code>operation_type</code> (<code>COMPACTION</code>, <code>VACUUM</code>, <code>ANALYZE</code>, <code>CLUSTERING</code>, <code>AUTO_CLUSTERING_COLUMN_SELECTION</code>, <code>DATA_SKIPPING_COLUMN_SELECTION</code>, <code>COMPATIBILITY_MODE_REFRESH</code>, <code>DELETE</code>, <code>PURGE</code>), <code>operation_status</code>, <code>operation_metrics</code> (un map) y <code>usage_quantity</code> en <code>ESTIMATED_DBU</code>. Se actualiza en unas dos horas; el costo puede tardar hasta 24.</p>
+    <p>El system table <code>system.storage.predictive_optimization_operations_history</code>
+      (Public Preview, retención de 180 días) registra cada operación. Columnas útiles:
+      <code>catalog_name</code>, <code>schema_name</code>, <code>table_name</code>,
+      <code>operation_type</code> (<code>COMPACTION</code>, <code>VACUUM</code>,
+      <code>ANALYZE</code>, <code>CLUSTERING</code>, <code>AUTO_CLUSTERING_COLUMN_SELECTION</code>,
+      <code>DATA_SKIPPING_COLUMN_SELECTION</code>, <code>COMPATIBILITY_MODE_REFRESH</code>,
+      <code>DELETE</code>, <code>PURGE</code>), <code>operation_status</code>,
+      <code>operation_metrics</code> (un map) y <code>usage_quantity</code> en
+      <code>ESTIMATED_DBU</code>. Se actualiza en unas dos horas; el costo puede tardar hasta
+      24.</p>
 <pre><code><span class="c">-- Dónde se van los DBU de predictive optimization (consulta de la doc)</span>
 SELECT metastore_name, catalog_name, schema_name, table_name,
        SUM(usage_quantity) AS totalDbus
@@ -206,29 +370,91 @@ ORDER BY bytesVacuumed DESC;</code></pre>
 
     <h3><span class="k">Cuándo usarlo</span>Y cuándo no</h3>
     <ul>
-      <li><b>Tablas nuevas:</b> managed de UC con la configuración por defecto. La doc las recomienda para todo salvo dos casos: datos en formatos que managed no soporta (JSON, Avro…) o clientes externos que necesitan leer los archivos directamente.</li>
-      <li><b>Con predictive optimization activo,</b> quita los jobs programados de <code>OPTIMIZE</code> y <code>VACUUM</code> sobre esas tablas. Si necesitas más time travel, sube <code>delta.deletedFileRetentionDuration</code> antes de activarlo.</li>
-      <li><b>Deletion vectors sí</b> en tablas con <code>UPDATE</code>, <code>DELETE</code> o <code>MERGE</code> frecuentes. <b>No</b> si las leen clientes que no los soportan (la doc recomienda Disabled en ese caso), o si generas manifests con <code>GENERATE</code>.</li>
-      <li><b>Tablas external que no puedes migrar:</b> programa <code>OPTIMIZE</code> (diario para empezar), <code>VACUUM</code> regular y revisa <code>dataSkippingStatsColumns</code>.</li>
+      <li><b>Tablas nuevas:</b> managed de UC con la configuración por defecto. La doc las
+        recomienda para todo salvo dos casos: datos en formatos que managed no soporta (JSON, Avro…)
+        o clientes externos que necesitan leer los archivos directamente.</li>
+      <li><b>Con predictive optimization activo,</b> quita los jobs programados de
+        <code>OPTIMIZE</code> y <code>VACUUM</code> sobre esas tablas. Si necesitas más time travel,
+        sube <code>delta.deletedFileRetentionDuration</code> antes de activarlo.</li>
+      <li><b>Deletion vectors sí</b> en tablas con <code>UPDATE</code>, <code>DELETE</code> o
+        <code>MERGE</code> frecuentes. <b>No</b> si las leen clientes que no los soportan (la doc
+        recomienda Disabled en ese caso), o si generas manifests con <code>GENERATE</code>.</li>
+      <li><b>Tablas external que no puedes migrar:</b> programa <code>OPTIMIZE</code> (diario para
+        empezar), <code>VACUUM</code> regular y revisa <code>dataSkippingStatsColumns</code>.</li>
     </ul>
 
     <h3 class="solo"><span class="k">Con qué se confunde</span></h3>
     <ul>
-      <li><b>REORG PURGE y VACUUM.</b> <code>REORG … APPLY (PURGE)</code> reescribe los archivos actuales sin las filas marcadas y crea una versión nueva. Los archivos viejos siguen en el storage hasta que <code>VACUUM</code> los borre pasada la retención.</li>
-      <li><b>Auto compaction y predictive optimization.</b> Son independientes. Auto compaction corre síncrona en el cluster que escribe, después de la escritura. Predictive optimization corre asíncrona en serverless.</li>
-      <li><b>Retención de datos y retención del log.</b> <code>VACUUM</code> solo mira <code>deletedFileRetentionDuration</code> (7 días). El historial de 30 días puede seguir en <code>DESCRIBE HISTORY</code> aunque ya no puedas hacer time travel a esas versiones.</li>
-      <li><b>DROP TABLE.</b> En managed, los archivos se borran tras el periodo de recuperación (7 días por defecto) y mientras tanto existe <code>UNDROP TABLE</code>. En external, los archivos se quedan en el storage hasta que los borres tú.</li>
-      <li><b>Predictive optimization y ZORDER.</b> Su <code>OPTIMIZE</code> no hace Z-order e ignora los archivos ya ordenados con Z-order.</li>
+      <li><b>REORG PURGE y VACUUM.</b> <code>REORG … APPLY (PURGE)</code> reescribe los archivos
+        actuales sin las filas marcadas y crea una versión nueva. Los archivos viejos siguen en el
+        storage hasta que <code>VACUUM</code> los borre pasada la retención.</li>
+      <li><b>Auto compaction y predictive optimization.</b> Son independientes. Auto compaction
+        corre síncrona en el cluster que escribe, después de la escritura. Predictive optimization
+        corre asíncrona en serverless.</li>
+      <li><b>Retención de datos y retención del log.</b> <code>VACUUM</code> solo mira
+        <code>deletedFileRetentionDuration</code> (7 días). El historial de 30 días puede seguir en
+        <code>DESCRIBE HISTORY</code> aunque ya no puedas hacer time travel a esas versiones.</li>
+      <li><b>DROP TABLE.</b> En managed, los archivos se borran tras el periodo de recuperación (7
+        días por defecto) y mientras tanto existe <code>UNDROP TABLE</code>. En external, los
+        archivos se quedan en el storage hasta que los borres tú.</li>
+      <li><b>Predictive optimization y ZORDER.</b> Su <code>OPTIMIZE</code> no hace Z-order e ignora
+        los archivos ya ordenados con Z-order.</li>
     </ul>
 
     <h3 class="solo"><span class="k">Qué pasaría si</span></h3>
     <ul>
-      <li><b>Corres <code>VACUUM t RETAIN 1 HOURS</code>:</b> el safety check lo bloquea. Si lo desactivas, pierdes el time travel de casi todo y puedes romper un job largo que aún no hizo commit.</li>
-      <li><b>Activas DV y un lector usa un cliente Delta antiguo:</b> deja de poder leer la tabla, porque cambió el protocolo.</li>
-      <li><b>Borras filas por GDPR y solo corres <code>VACUUM</code>:</b> con DV, las filas siguen físicamente en archivos activos. Falta <code>REORG … APPLY (PURGE)</code> antes, y luego esperar la retención.</li>
-      <li><b>Tu tabla external nunca ve un <code>VACUUM</code>:</b> el storage crece con cada <code>UPDATE</code> y <code>OPTIMIZE</code>, aunque el tamaño lógico no cambie.</li>
-      <li><b>La tabla crece de 2 TB a 8 TB:</b> sube el tamaño objetivo de archivo, pero <code>OPTIMIZE</code> no rehace los archivos ya compactados con el objetivo anterior. Si necesitas que todos crezcan, fija <code>delta.targetFileSize</code>.</li>
+      <li><b>Corres <code>VACUUM t RETAIN 1 HOURS</code>:</b> el safety check lo bloquea. Si lo
+        desactivas, pierdes el time travel de casi todo y puedes romper un job largo que aún no hizo
+        commit.</li>
+      <li><b>Activas DV y un lector usa un cliente Delta antiguo:</b> deja de poder leer la tabla,
+        porque cambió el protocolo.</li>
+      <li><b>Borras filas por GDPR y solo corres <code>VACUUM</code>:</b> con DV, las filas siguen
+        físicamente en archivos activos. Falta <code>REORG … APPLY (PURGE)</code> antes, y luego
+        esperar la retención.</li>
+      <li><b>Tu tabla external nunca ve un <code>VACUUM</code>:</b> el storage crece con cada
+        <code>UPDATE</code> y <code>OPTIMIZE</code>, aunque el tamaño lógico no cambie.</li>
+      <li><b>La tabla crece de 2 TB a 8 TB:</b> sube el tamaño objetivo de archivo, pero
+        <code>OPTIMIZE</code> no rehace los archivos ya compactados con el objetivo anterior. Si
+        necesitas que todos crezcan, fija <code>delta.targetFileSize</code>.</li>
     </ul>
 
     <h3><span class="k">De dónde sale</span>Fuentes</h3>
-    <p class="src"><a href="https://docs.databricks.com/aws/en/tables/managed" target="_blank" rel="noopener">Unity Catalog managed tables</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/managed" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/optimizations/predictive-optimization" target="_blank" rel="noopener">Predictive optimization</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/predictive-optimization" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/features/deletion-vectors" target="_blank" rel="noopener">Deletion vectors</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/features/deletion-vectors" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/operations/vacuum" target="_blank" rel="noopener">Vacuum</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/operations/vacuum" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/operations/optimize" target="_blank" rel="noopener">Optimize</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/operations/optimize" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/tune-file-size" target="_blank" rel="noopener">Control data file size</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/tune-file-size" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/data-skipping" target="_blank" rel="noopener">Data skipping</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/data-skipping" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/tables/history" target="_blank" rel="noopener">Table history</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/history" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> y <a href="https://docs.databricks.com/aws/en/admin/system-tables/predictive-optimization" target="_blank" rel="noopener">Predictive optimization system table</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/admin/system-tables/predictive-optimization" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
+    <p class="src"><a href="https://docs.databricks.com/aws/en/tables/managed" target="_blank"
+      rel="noopener">Unity Catalog managed tables</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/tables/managed" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/optimizations/predictive-optimization"
+      target="_blank" rel="noopener">Predictive optimization</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/optimizations/predictive-optimization"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/tables/features/deletion-vectors" target="_blank"
+      rel="noopener">Deletion vectors</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/tables/features/deletion-vectors"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/tables/operations/vacuum" target="_blank"
+      rel="noopener">Vacuum</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/tables/operations/vacuum" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/tables/operations/optimize" target="_blank"
+      rel="noopener">Optimize</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/tables/operations/optimize" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/tables/tune-file-size" target="_blank"
+      rel="noopener">Control data file size</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/tables/tune-file-size" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/tables/data-skipping" target="_blank"
+      rel="noopener">Data skipping</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/tables/data-skipping" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/tables/history" target="_blank" rel="noopener">Table
+      history</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/tables/history"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> y <a
+      href="https://docs.databricks.com/aws/en/admin/system-tables/predictive-optimization"
+      target="_blank" rel="noopener">Predictive optimization system table</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/admin/system-tables/predictive-optimization"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
