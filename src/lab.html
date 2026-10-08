@@ -6,8 +6,6 @@ description: "Provocar skew en Free Edition y arreglarlo."
 ---
 
     <h2>Lab: provocar skew y verlo</h2>
-    <p class="src">Base: notebook oficial <a href="https://docs.databricks.com/aws/en/notebooks/source/aqe-demo.html" target="_blank" rel="noopener">AQE Demo</a> (crea una tabla <code>sales</code> donde el item 100 está en el 80% de las ventas).</p>
-
     <div class="essentials" role="note">
       <p class="essentials-title">Lo esencial en 1 minuto</p>
       <ul>
@@ -71,3 +69,6 @@ fase2.count()</code></pre>
       </li>
     </ol>
     <p><b>Qué deberías sacar del lab:</b> la clave caliente decide el tiempo del stage. AQE solo la parte en joins, y para ventanas o agregaciones sin parcial la solución es cambiar el algoritmo o hacer salting.</p>
+
+    <h3><span class="k">De dónde sale</span>Fuentes</h3>
+    <p class="src">Base: notebook oficial <a href="https://docs.databricks.com/aws/en/notebooks/source/aqe-demo.html" target="_blank" rel="noopener">AQE Demo</a> (crea una tabla <code>sales</code> donde el item 100 está en el 80% de las ventas).</p>

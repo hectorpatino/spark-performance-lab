@@ -6,7 +6,6 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
 ---
 
     <h2>Shuffle: mover filas entre máquinas</h2>
-    <p class="src">Fuentes: <a href="https://spark.apache.org/docs/latest/rdd-programming-guide.html#shuffle-operations" target="_blank" rel="noopener">Apache Spark · Shuffle operations</a> y <a href="https://spark.apache.org/docs/latest/web-ui.html" target="_blank" rel="noopener">Apache Spark · Web UI</a>. Son documentación oficial de Apache Spark, no de docs.databricks.com; Databricks da este concepto por sabido. La recomendación de Databricks para shuffle alto viene de <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener">Spark stage high I/O</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
     <div class="essentials" role="note">
       <p class="essentials-title">Lo esencial en 1 minuto</p>
       <ul>
@@ -112,7 +111,7 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
     <p>En la pestaña SQL / DataFrame, el nodo <code>Exchange</code> trae las mismas ideas: <i>shuffle bytes written</i>, <i>shuffle records written</i>, <i>shuffle write time</i>, <i>remote bytes read</i>, <i>local bytes read</i>, <i>fetch wait time</i> y <i>data size</i>.</p>
     <div class="verify">En serverless (Free Edition) no hay Spark UI; usas el query profile. No confirmé en la doc qué nombre exacto tiene cada una de estas métricas en el query profile. <b>Verifícalo</b> abriendo el perfil de una query con <code>groupBy</code> en tu workspace.</div>
 
-    <h3><span class="k">Cuándo hay shuffle y cuándo no</span></h3>
+    <h3 class="solo"><span class="k">Cuándo hay shuffle y cuándo no</span></h3>
     <div class="tblwrap"><table>
       <thead><tr><th>Operación</th><th>¿Shuffle?</th></tr></thead>
       <tbody>
@@ -128,7 +127,7 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
     </table></div>
     <p class="c" style="font-size:.85rem">La doc de Spark lista como operaciones que pueden causar shuffle las de reparticionado (<code>repartition</code>, <code>coalesce</code>), las <i>ByKey</i> (salvo contar) y los joins. La tabla aplica eso a la API de DataFrame. El detalle de <code>coalesce</code> sin shuffle en DataFrame es conocimiento de Spark que no verifiqué en docs.databricks.com.</p>
 
-    <h3><span class="k">Con qué se confunde</span></h3>
+    <h3 class="solo"><span class="k">Con qué se confunde</span></h3>
     <ul>
       <li><b>Shuffle write vs Output.</b> Shuffle write es intermedio, va al disco local del executor y se pierde con el cluster. Output es lo que escribes a la tabla final en el storage.</li>
       <li><b>Shuffle write vs spill.</b> El write ocurre siempre que hay shuffle. El spill solo ocurre cuando lo que se organiza no cabe en memoria. Un stage puede tener 50 GB de write y 0 de spill, y eso es sano.</li>
@@ -136,10 +135,13 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
       <li><b>Shuffle read total vs por task.</b> El total te dice cuánto mueves. La distribución por task (Min/Median/Max) te dice si está repartido o hay skew (ver <a href="diagnostico.html">Diagnóstico</a>).</li>
     </ul>
 
-    <h3><span class="k">Qué pasaría si</span></h3>
+    <h3 class="solo"><span class="k">Qué pasaría si</span></h3>
     <ul>
       <li><b>El stage tiene shuffle alto:</b> Databricks recomienda <code>spark.sql.shuffle.partitions=auto</code>.</li>
       <li><b>Pocas particiones para mucho shuffle:</b> cada reduce task lee demasiado, aparece spill. Apunta a 128–200 MB por task (ver <a href="remedios.html">Remedios</a>).</li>
       <li><b>Muchísimas particiones para poco shuffle:</b> el número de bloques es map tasks × particiones, y cada reduce task hace muchas lecturas diminutas. Esto es razonamiento mío, no de la doc; AQE lo mitiga uniendo particiones pequeñas.</li>
       <li><b>Haces broadcast de la tabla pequeña:</b> la grande no se mueve. Es la forma más barata de evitar un shuffle en un join.</li>
     </ul>
+
+    <h3><span class="k">De dónde sale</span>Fuentes</h3>
+    <p class="src"><a href="https://spark.apache.org/docs/latest/rdd-programming-guide.html#shuffle-operations" target="_blank" rel="noopener">Apache Spark · Shuffle operations</a> y <a href="https://spark.apache.org/docs/latest/web-ui.html" target="_blank" rel="noopener">Apache Spark · Web UI</a>. Son documentación oficial de Apache Spark, no de docs.databricks.com; Databricks da este concepto por sabido. La recomendación de Databricks para shuffle alto viene de <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener">Spark stage high I/O</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>

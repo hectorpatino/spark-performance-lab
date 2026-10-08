@@ -304,42 +304,42 @@ AdaptiveSparkPlan isFinalPlan=true
   /* ---------- 0a-1. del código a los stages ---------- */
   if (document.getElementById('dag-out')) { try {
   const Q={
-    narrow:{code:`(spark.read.table("A")
+    narrow:{code:`(spark.read.table("ventas")
    .filter("pais = 'CO'")
    .select("id", "monto")
-   .write.saveAsTable("A_co"))`,
-      jobs:[{label:'Job 1 · la acción write',stages:[{n:'Stage 1',ops:['Scan A','Filter','Project','Write'],tasks:'80 tasks (una por archivo de ~128 MB)'}]}],
+   .write.saveAsTable("ventas_co"))`,
+      jobs:[{label:'Job 1 · la acción write',stages:[{n:'Stage 1',ops:['Scan ventas','Filter','Project','Write'],tasks:'80 tasks (una por archivo de ~128 MB)'}]}],
       info:'<b>Un solo stage.</b> Filter y select son transformaciones narrow: cada task trabaja con su partición sin necesitar filas de otras. No hay Exchange, así que no hay frontera de stage. 80 tasks con 32 cores son 3 waves (32 + 32 + 16).'},
-    agg:{code:`(spark.read.table("A")
+    agg:{code:`(spark.read.table("ventas")
    .groupBy("cliente_id").count()
    .write.saveAsTable("conteo"))`,
       jobs:[{label:'Job 1 · la acción write',stages:[
-        {n:'Stage 1',ops:['Scan A','HashAggregate (parcial)','Exchange · write'],tasks:'80 tasks · map'},
+        {n:'Stage 1',ops:['Scan ventas','HashAggregate (parcial)','Exchange · write'],tasks:'80 tasks · map'},
         {sep:'shuffle'},
         {n:'Stage 2',ops:['Exchange · read','HashAggregate (final)','Write'],tasks:'200 tasks · reduce (o menos con AQE)'}]}],
       info:'<b>Dos stages.</b> El groupBy necesita juntar las filas de cada cliente, y eso obliga a un shuffle. El Stage 1 agrega lo que puede dentro de cada partición y escribe el shuffle. El Stage 2 no empieza hasta que terminan las 80 tasks del Stage 1.'},
-    smj:{code:`A = spark.read.table("A")
-B = spark.read.table("B")
-A.join(B, "cliente_id").write.saveAsTable("AB")`,
+    smj:{code:`ventas = spark.read.table("ventas")
+clientes = spark.read.table("clientes")
+ventas.join(clientes, "cliente_id").write.saveAsTable("ventas_clientes")`,
       jobs:[{label:'Job 1 · la acción write',stages:[
-        {n:'Stage 1',ops:['Scan A','Exchange · write'],tasks:'80 tasks'},
-        {n:'Stage 2',ops:['Scan B','Exchange · write'],tasks:'40 tasks'},
+        {n:'Stage 1',ops:['Scan ventas','Exchange · write'],tasks:'80 tasks'},
+        {n:'Stage 2',ops:['Scan clientes','Exchange · write'],tasks:'40 tasks'},
         {sep:'shuffle ×2'},
-        {n:'Stage 3',ops:['Exchange · read (A y B)','Sort','SortMergeJoin','Write'],tasks:'200 tasks'}]}],
+        {n:'Stage 3',ops:['Exchange · read (ventas y clientes)','Sort','SortMergeJoin','Write'],tasks:'200 tasks'}]}],
       info:'<b>Tres stages.</b> Los dos lados del join se reparten por <code>cliente_id</code>, cada uno en su propio stage. Los Stages 1 y 2 son independientes y pueden correr a la vez. El Stage 3 espera a los dos.'},
     bhj:{code:`from pyspark.sql.functions import broadcast
-A.join(broadcast(B_peq), "cliente_id") \\
- .write.saveAsTable("AB")`,
+ventas.join(broadcast(clientes_vip), "cliente_id") \\
+ .write.saveAsTable("ventas_vip")`,
       jobs:[
-        {label:'Job aparte · construir el broadcast',stages:[{n:'Stage 1',ops:['Scan B_peq','BroadcastExchange'],tasks:'pocas tasks → se junta y se copia a cada executor'}]},
-        {label:'Job principal · la acción write',stages:[{n:'Stage 2',ops:['Scan A','BroadcastHashJoin','Write'],tasks:'80 tasks · A no se mueve'}]}],
-      info:'<b>La tabla grande no hace shuffle.</b> La pequeña se recoge y se copia entera a cada executor (normalmente lo verás como un job aparte en el Spark UI). Luego cada task de A hace el join con su copia local. Por eso el broadcast es la forma más barata de evitar un shuffle.'},
-    aggsort:{code:`(spark.read.table("A")
+        {label:'Job aparte · construir el broadcast',stages:[{n:'Stage 1',ops:['Scan clientes_vip','BroadcastExchange'],tasks:'pocas tasks → se junta y se copia a cada executor'}]},
+        {label:'Job principal · la acción write',stages:[{n:'Stage 2',ops:['Scan ventas','BroadcastHashJoin','Write'],tasks:'80 tasks · ventas no se mueve'}]}],
+      info:'<b>La tabla grande no hace shuffle.</b> La pequeña se recoge y se copia entera a cada executor (normalmente lo verás como un job aparte en el Spark UI). Luego cada task de ventas hace el join con su copia local. Por eso el broadcast es la forma más barata de evitar un shuffle.'},
+    aggsort:{code:`(spark.read.table("ventas")
    .groupBy("cliente_id").count()
    .orderBy("count", ascending=False)
    .write.saveAsTable("ranking"))`,
       jobs:[{label:'Job(s) · la acción write',stages:[
-        {n:'Stage 1',ops:['Scan A','HashAggregate (parcial)','Exchange · hash'],tasks:'80 tasks'},
+        {n:'Stage 1',ops:['Scan ventas','HashAggregate (parcial)','Exchange · hash'],tasks:'80 tasks'},
         {sep:'shuffle'},
         {n:'Stage 2',ops:['HashAggregate (final)','Exchange · range'],tasks:'200 tasks'},
         {sep:'shuffle'},

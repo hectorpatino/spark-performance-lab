@@ -27,7 +27,7 @@
   var items = heads.map(function (h) {
     var clone = h.cloneNode(true);
     var k = clone.querySelector('.k'); if (k) k.remove();
-    var text = clone.textContent.trim();
+    var text = clone.textContent.trim() || h.textContent.trim();
     var id = h.id || slugify(text) || 'seccion';
     while (used[id]) id += '-2';
     used[id] = true; h.id = id;

@@ -4,10 +4,12 @@
    consola de monitoreo en ambos temas; el resto de la página es un documento claro y sobrio. */
 
 :root{
-  --bg:#FAFBFC; --surface:#FFFFFF; --side:#F3F5F8; --ink:#16212C; --muted:#5A6774; --line:#E1E6EB;
-  --code:#F1F4F7; --accent:#2356D4; --accent-soft:#E8EEFC;
-  --cool:#11718A; --cool-soft:#E3F1F4; --hot:#C9450C; --hot-soft:#FCEBE2;
-  --ok:#177A4D; --bad:#B42318; --warn:#946200;
+  /* Paleta tomada de la DAG Visualization del Spark UI: azul de los bloques de operaciones
+     (acento, enlaces) y rosa de las cajas de stage (lo que corta o pide atención). */
+  --bg:#F6F7F5; --surface:#FFFFFF; --side:#EDEFEC; --ink:#18212B; --muted:#56616C; --line:#DCE0DB;
+  --code:#EDF0EC; --accent:#1D5F8A; --accent-soft:#E2EDF4;
+  --cool:#11718A; --cool-soft:#E3F1F4; --hot:#B4435A; --hot-soft:#F7E8EB;
+  --ok:#2F7A55; --bad:#B42318; --warn:#8A6100;
   --p0:#11718A; --p1:#6B4FB0; --p2:#A86A0B; --p3:#2E64B8;
   --f-display:"Newsreader",Georgia,"Times New Roman",serif;
   --f-body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
@@ -16,15 +18,15 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0C1218; --surface:#121A23; --side:#0F161E; --ink:#E3EAF1; --muted:#94A3B2; --line:#243240;
-  --code:#101922; --accent:#86A8FF; --accent-soft:#1A2540;
-  --cool:#4BB8CF; --cool-soft:#122C34; --hot:#FF8A4C; --hot-soft:#3A2418;
+  --bg:#0E1419; --surface:#141C23; --side:#10171D; --ink:#E3EAF0; --muted:#97A4B0; --line:#25313B;
+  --code:#111A21; --accent:#7DB4DC; --accent-soft:#16283A;
+  --cool:#4BB8CF; --cool-soft:#122C34; --hot:#E8798D; --hot-soft:#3A1C24;
   --ok:#5BD69A; --bad:#FF8B80; --warn:#F2C35E;
   --p0:#4BB8CF; --p1:#B59CF0; --p2:#E9B44C; --p3:#6FA4F2; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0C1218; --surface:#121A23; --side:#0F161E; --ink:#E3EAF1; --muted:#94A3B2; --line:#243240;
-  --code:#101922; --accent:#86A8FF; --accent-soft:#1A2540;
-  --cool:#4BB8CF; --cool-soft:#122C34; --hot:#FF8A4C; --hot-soft:#3A2418;
+  --bg:#0E1419; --surface:#141C23; --side:#10171D; --ink:#E3EAF0; --muted:#97A4B0; --line:#25313B;
+  --code:#111A21; --accent:#7DB4DC; --accent-soft:#16283A;
+  --cool:#4BB8CF; --cool-soft:#122C34; --hot:#E8798D; --hot-soft:#3A1C24;
   --ok:#5BD69A; --bad:#FF8B80; --warn:#F2C35E;
   --p0:#4BB8CF; --p1:#B59CF0; --p2:#E9B44C; --p3:#6FA4F2; color-scheme:dark}
 
@@ -56,7 +58,7 @@ a:hover{text-decoration-thickness:2px}
 .doc{min-width:0}
 .onpage{display:none}
 @media (min-width:1280px){
-  .main{grid-template-columns:minmax(0,46rem) 12.5rem;justify-content:start;padding-left:4rem}
+  .main{grid-template-columns:minmax(0,52.5rem) 12.5rem;justify-content:start;gap:3rem;padding-left:2.5rem;padding-right:2.5rem}
   .onpage{display:block;position:sticky;top:3rem;align-self:start;font-size:.84rem;max-height:calc(100vh - 6rem);overflow-y:auto}
   .onpage p{margin:0 0 .5rem;font-weight:600;color:var(--ink)}
   .onpage ul{list-style:none;margin:0;padding:0;border-left:1px solid var(--line)}
@@ -75,18 +77,37 @@ a:hover{text-decoration-thickness:2px}
 }
 @media (prefers-reduced-motion:reduce){.sidebar{transition:none}}
 
+/* ---------- riel de lección (≥1280px) ----------
+   La etiqueta de cada h3 sale al margen izquierdo, sobre una línea vertical: la estructura
+   de la lección (problema, concepto, simulador, por dentro…) se lee de un vistazo.
+   Las secciones cuyo h3 va seguido de un simulador llevan un rombo rosa en vez del punto. */
+@media (min-width:1280px){
+  .doc{--rail:8.5rem;position:relative;padding-left:var(--rail)}
+  .doc::before{content:"";position:absolute;left:calc(var(--rail) - 1.25rem);top:0;bottom:0;width:1px;background:linear-gradient(transparent,var(--line) 14rem)}
+  .doc>h3:not(.solo){position:relative}
+  .doc>h3:not(.solo) .k{position:absolute;right:calc(100% + 2rem);top:.45rem;width:calc(var(--rail) - 2.5rem);margin:0;text-align:right;font-size:.8rem;line-height:1.3;text-wrap:balance}
+  .doc>h3:not(.solo) .k::after{content:"";position:absolute;right:-1rem;top:.28rem;width:7px;height:7px;box-sizing:border-box;border-radius:50%;background:var(--bg);border:1.5px solid var(--muted)}
+  .doc>h3:has(+ .console,+ p + .console) .k{color:var(--hot)}
+  .doc>h3:has(+ .console,+ p + .console) .k::after{border:0;border-radius:1px;width:8px;height:8px;right:calc(-1rem - .5px);background:var(--hot);transform:rotate(45deg)}
+  .doc>h3.solo{position:relative}
+  .doc>h3.solo::before{content:"";position:absolute;left:calc(-1.25rem - 3.5px);top:.62rem;width:7px;height:7px;border-radius:50%;background:var(--bg);border:1.5px solid var(--muted);box-sizing:border-box}
+  body[data-slug="index"] .doc{padding-left:0}
+  body[data-slug="index"] .doc::before{content:none}
+}
+
 /* ---------- tipografía del documento ---------- */
-h1,.doc>h2:first-child{font:600 clamp(2rem,4.4vw,2.6rem)/1.1 var(--f-display);letter-spacing:-.015em;margin:0 0 .6rem;text-wrap:balance}
-h2{font:600 1.65rem/1.2 var(--f-display);letter-spacing:-.01em;margin:2.8rem 0 .6rem;text-wrap:balance}
-h3{font:600 1.18rem/1.3 var(--f-body);margin:2.6rem 0 .5rem;text-wrap:balance;letter-spacing:-.005em}
-h3 .k{display:block;font:500 .84rem/1.3 var(--f-body);color:var(--muted);margin-bottom:.2rem;letter-spacing:0}
+h1,.doc>h2:first-child{font:600 clamp(2rem,4.4vw,2.44rem)/1.1 var(--f-display);letter-spacing:-.015em;margin:0 0 .8rem;text-wrap:balance}
+h2{font:600 1.95rem/1.2 var(--f-display);letter-spacing:-.01em;margin:3rem 0 .6rem;text-wrap:balance}
+h3{font:600 1.5625rem/1.25 var(--f-display);margin:3rem 0 .5rem;text-wrap:balance;letter-spacing:-.008em}
+h3 .k{display:block;font:500 .84rem/1.3 var(--f-body);color:var(--muted);margin-bottom:.25rem;letter-spacing:0}
+h3.solo .k{display:inline;font:inherit;color:inherit;margin:0}
 h4{font:600 1.02rem/1.35 var(--f-body);margin:1.4rem 0 .4rem}
 p{margin:.65rem 0;max-width:70ch}
 li{margin:.3rem 0;max-width:68ch}
 ul,ol{padding-left:1.3rem;margin:.6rem 0}
 b,strong{font-weight:600}
-.lede{font-size:1.12rem;line-height:1.6;color:var(--muted);max-width:62ch;margin:.4rem 0 0}
-.src{font-size:.84rem;line-height:1.55;color:var(--muted);margin:.3rem 0 1.6rem;padding-bottom:1.2rem;border-bottom:1px solid var(--line);max-width:none}
+.lede{font-size:1.25rem;line-height:1.55;color:var(--muted);max-width:62ch;margin:.4rem 0 0}
+.src{font-size:.84rem;line-height:1.55;color:var(--muted);margin:.3rem 0 0;max-width:none}
 .src a{color:var(--muted);text-decoration-color:color-mix(in srgb,var(--muted) 50%,transparent)}
 .src a:hover{color:var(--accent)}
 .c{color:var(--muted)}
@@ -229,15 +250,15 @@ svg .loc{fill:var(--cool)} svg .rem{fill:var(--hot)}
 
 /* ---------- portada ---------- */
 .hero{padding:.5rem 0 1rem}
-.flow{list-style:none;margin:1.4rem 0 0;padding:0;counter-reset:f;position:relative}
-.flow::before{content:"";position:absolute;left:.95rem;top:1.2rem;bottom:1.2rem;width:2px;background:var(--line)}
-.flow li{counter-increment:f;position:relative;margin:0 0 .7rem;max-width:none;padding-left:2.9rem}
-.flow li::before{content:counter(f);position:absolute;left:0;top:1rem;width:1.95rem;height:1.95rem;border-radius:50%;background:var(--bg);border:2px solid var(--ink);color:var(--ink);font:600 .85rem/1.75rem var(--f-body);text-align:center;z-index:1}
-.flow a{display:block;padding:.85rem 1rem;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);text-decoration:none}
-.flow a:hover{border-color:var(--accent)}
-.flow a b{display:block;font-size:1.02rem;margin-bottom:.15rem}
-.flow a span{display:block;font-size:.9rem;color:var(--muted)}
-.flow a em{display:block;font-style:normal;font-size:.84rem;font-weight:600;color:var(--accent);margin-top:.35rem}
+.flow{list-style:none;margin:1.4rem 0 0;padding:0;counter-reset:f;border-bottom:1px solid var(--line)}
+.flow li{counter-increment:f;margin:0;max-width:none;border-top:1px solid var(--line)}
+.flow a{display:grid;grid-template-columns:3.2rem minmax(0,1fr);column-gap:.4rem;padding:1.15rem 0 1.2rem;color:var(--ink);text-decoration:none}
+.flow a::before{content:counter(f);grid-row:1 / span 3;font:500 2.44rem/1 var(--f-display);color:var(--muted);font-variant-numeric:lining-nums}
+.flow a b{display:block;font:600 1.25rem/1.3 var(--f-display);margin-bottom:.25rem}
+.flow a span{display:block;font-size:.95rem;color:var(--muted);max-width:62ch}
+.flow a em{display:block;font-style:normal;font-size:.88rem;font-weight:600;color:var(--accent);margin-top:.45rem}
+.flow a:hover b{color:var(--accent)}
+.flow a:hover em{text-decoration:underline}
 .contents{display:grid;grid-template-columns:repeat(auto-fit,minmax(13.5rem,1fr));gap:1.6rem 2rem;margin:1rem 0 0}
 .contents h3{margin:0 0 .5rem;font-size:1rem;padding-bottom:.45rem;border-bottom:1px solid var(--line)}
 .contents ul{list-style:none;margin:0;padding:0}
@@ -261,16 +282,15 @@ footer.site a{color:var(--muted)}
   body{font-size:15.5px}
   h1,.doc>h2:first-child{font-size:1.85rem}
   h2{font-size:1.4rem;margin-top:2.2rem}
-  h3{margin-top:2.1rem}
+  h3{margin-top:2.1rem;font-size:1.35rem}
   .lede{font-size:1.03rem}
   .console{margin-left:-6px;margin-right:-6px;padding:.95rem .85rem 1rem;border-radius:10px}
   .case{padding:1rem .9rem}
   .pager{grid-template-columns:1fr}
   .pager .next{grid-column:1}
   pre{font-size:.78rem;padding:.8rem .85rem}
-  .flow li{padding-left:2.5rem}
-  .flow::before{left:.8rem}
-  .flow li::before{width:1.7rem;height:1.7rem;font-size:.8rem;line-height:1.45rem}
+  .flow a{grid-template-columns:2.3rem minmax(0,1fr)}
+  .flow a::before{font-size:1.95rem}
   td,th{padding:.5rem .5rem}
 }
 
@@ -389,4 +409,5 @@ pre.has-copy{position:relative;padding-right:4.6rem}
 .essentials-title{margin:0 0 .45rem;font:600 .95rem/1.3 var(--f-body);color:var(--accent)}
 .essentials ul{margin:.2rem 0 .6rem;padding-left:1.15rem}
 .essentials li{margin:.28rem 0;font-size:.95rem}
-.essentials-one{margin:.5rem 0 0;padding-top:.55rem;border-top:1px dashed color-mix(in srgb,var(--accent) 30%,var(--line));font-size:.95rem}
+.essentials-one{margin:.7rem 0 0;padding-top:.7rem;border-top:1px solid color-mix(in srgb,var(--accent) 25%,var(--line));font:500 1.125rem/1.45 var(--f-display);max-width:none}
+.essentials-one b{font:600 .88rem/1.3 var(--f-body);display:block;margin-bottom:.15rem;color:var(--accent)}

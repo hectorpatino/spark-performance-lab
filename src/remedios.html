@@ -6,8 +6,6 @@ description: "Qué probar contra el spill y el skew, en orden: medir, dejar que 
 ---
 
     <h2>Remedios para spill y skew, en el orden en que se prueban</h2>
-    <p class="src">Fuentes: <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener">Spark stage high I/O</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank" rel="noopener">Adaptive query execution</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/aqe" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/sql/user/queries/performance-insights" target="_blank" rel="noopener">Query performance insights</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/sql/user/queries/performance-insights" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/spark/conf#serverless" target="_blank" rel="noopener">Spark confs en serverless</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/spark/conf#configure-spark-properties-for-serverless-notebooks-and-jobs" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a></p>
-
     <div class="essentials" role="note">
       <p class="essentials-title">Lo esencial en 1 minuto</p>
       <ul>
@@ -111,7 +109,7 @@ final = fase1.groupBy("customer_id").agg(F.max("m").alias("last_txn_date"))</cod
       <li>Los pasos 3 y 4 (filtrar, broadcast, pre-agregar, salting) son cambios de código y funcionan igual.</li>
     </ul>
 
-    <h3><span class="k">Qué pasaría si</span></h3>
+    <h3 class="solo"><span class="k">Qué pasaría si</span></h3>
     <ul>
       <li><b>Haces salting en una agregación no combinable</b> (una mediana exacta, por ejemplo): la fase 2 no puede reconstruir el resultado a partir de resultados parciales. El salting en dos fases solo vale para funciones combinables como <code>max</code>, <code>sum</code> o <code>count</code>.</li>
       <li><b>Usas salting con AQE ya resolviendo el join:</b> añades réplica y código sin ganar nada. Mira el plan antes (<code>isSkew=true</code>).</li>
@@ -126,3 +124,6 @@ final = fase1.groupBy("customer_id").agg(F.max("m").alias("last_txn_date"))</cod
         <li>Shuffle alto → <code>auto</code> y salting como último recurso siguen vigentes.</li>
       </ul>
       Lo que dice sobre particionado, Z-order, OPTIMIZE y VACUUM está actualizado en <a href="liquid-clustering.html">Liquid clustering</a> y <a href="mantenimiento-delta.html">Mantenimiento de Delta</a>.</div>
+
+    <h3><span class="k">De dónde sale</span>Fuentes</h3>
+    <p class="src"><a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener">Spark stage high I/O</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage-io" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank" rel="noopener">Adaptive query execution</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/aqe" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/sql/user/queries/performance-insights" target="_blank" rel="noopener">Query performance insights</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/sql/user/queries/performance-insights" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/spark/conf#serverless" target="_blank" rel="noopener">Spark confs en serverless</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/spark/conf#configure-spark-properties-for-serverless-notebooks-and-jobs" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a></p>

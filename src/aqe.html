@@ -6,8 +6,6 @@ description: "Adaptive Query Execution: qué arregla solo y dónde no actúa."
 ---
 
     <h2>AQE: el arreglo automático y sus límites</h2>
-    <p class="src">Fuentes: <a href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank" rel="noopener">Adaptive query execution</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/aqe" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/archive/legacy/skew-join" target="_blank" rel="noopener">Skew join optimization using skew hints</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/archive/legacy/skew-join" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> (página archivada)</p>
-
     <div class="essentials" role="note">
       <p class="essentials-title">Lo esencial en 1 minuto</p>
       <ul>
@@ -107,7 +105,7 @@ tamaño &gt; skewedPartitionThresholdInBytes   <span class="c">-- default 256MB<
     </table></div>
     <p class="c">En serverless solo puedes cambiar <code>spark.sql.shuffle.partitions</code> de esta tabla, y allí su default ya es <code>auto</code> (<a href="https://docs.databricks.com/aws/en/spark/conf#serverless" target="_blank" rel="noopener">Spark confs en serverless</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/spark/conf#configure-spark-properties-for-serverless-notebooks-and-jobs" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</p>
 
-    <h3><span class="k">Con qué se confunde</span></h3>
+    <h3 class="solo"><span class="k">Con qué se confunde</span></h3>
     <ul>
       <li><b>Broadcast hint vs AQE.</b> La doc recomienda seguir usando el hint de broadcast si conoces la query: el hint evita el shuffle desde el plan inicial. AQE respeta los hints.</li>
       <li><b>Skew hint vs AQE.</b> Para skew, la doc recomienda AQE sobre el hint (ver <a href="#skew-hints">Skew hints</a> al final de esta página).</li>
@@ -138,3 +136,6 @@ SELECT /*+ SKEW('orders', ('o_custId', 'o_storeRegionId'), ((0, 1001), (1, 1002)
       </tbody>
     </table></div>
     <p><b>No confundir.</b> "Los hints son legacy" vale para <code>SKEW()</code>, no para todos. El hint de <b>broadcast</b> se sigue recomendando cuando conoces la query (FAQ de la página de AQE; detalle en <a href="joins.html">Estrategias de join</a>).</p>
+
+    <h3><span class="k">De dónde sale</span>Fuentes</h3>
+    <p class="src"><a href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank" rel="noopener">Adaptive query execution</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/aqe" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a href="https://docs.databricks.com/aws/en/archive/legacy/skew-join" target="_blank" rel="noopener">Skew join optimization using skew hints</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/archive/legacy/skew-join" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> (página archivada)</p>

@@ -10,14 +10,14 @@
     filter:  { k: 'n', code: 'df = df.filter("monto > 100")', plan: 'Filter' },
     select:  { k: 'n', code: 'df = df.select("cliente_id", "monto")', plan: 'Project' },
     groupBy: { k: 'w', code: 'df = df.groupBy("cliente_id").agg(F.sum("monto").alias("monto"))', plan: 'Aggregate' },
-    join:    { k: 'w', code: 'df = df.join(B, "cliente_id")', plan: 'Join' },
+    join:    { k: 'w', code: 'df = df.join(clientes, "cliente_id")', plan: 'Join' },
     orderBy: { k: 'w', code: 'df = df.orderBy("monto")', plan: 'Sort' },
     count:   { k: 'a', code: 'df.count()', plan: 'Aggregate (count)' },
     show:    { k: 'a', code: 'df.show()', plan: 'Limit 21' },
     collect: { k: 'a', code: 'filas = df.collect()', plan: 'Collect' },
     write:   { k: 'a', code: 'df.write.saveAsTable("salida")', plan: 'Write' }
   };
-  const HEAD = ['from pyspark.sql import functions as F', 'df = spark.read.table("A")', 'B  = spark.read.table("B")'];
+  const HEAD = ['from pyspark.sql import functions as F', 'df = spark.read.table("ventas")', 'clientes = spark.read.table("clientes")'];
   const fI = document.getElementById('tr-f'), pI = document.getElementById('tr-p');
   const svg = document.getElementById('tr-svg'), codeEl = document.getElementById('tr-code'), info = document.getElementById('tr-info');
   const playBtn = document.getElementById('tr-play');
@@ -38,7 +38,7 @@
       const stages = [], notes = [];
       // los padres se crean antes que el hijo: así numera Spark los stages
       const open = (ops, tasks, parents, why) => ({ id: sid++, ops, tasks, parents, why });
-      let cur = open(['Scan A'], files, [], `una por archivo de A (${files})`);
+      let cur = open(['Scan ventas'], files, [], `una por archivo de ventas (${files})`);
       const cut = (tail, next) => { cur.ops.push(tail); stages.push(cur); cur = next(cur.id); };
       lin.forEach((x, n) => {
         const last = n === lin.length - 1;
@@ -46,7 +46,7 @@
         else if (x.op === 'groupBy') { cur.ops.push('HashAggregate (parcial)'); cut('Exchange', p => open(['HashAggregate (final)'], sp, [p], `spark.sql.shuffle.partitions = ${sp}`)); }
         else if (x.op === 'join') {
           cur.ops.push('Exchange'); stages.push(cur);
-          const a = cur.id, b = open(['Scan B', 'Exchange'], B_FILES, [], `una por archivo de B (${B_FILES})`);
+          const a = cur.id, b = open(['Scan clientes', 'Exchange'], B_FILES, [], `una por archivo de clientes (${B_FILES})`);
           stages.push(b);
           cur = open(['Sort', 'SortMergeJoin'], sp, [a, b.id], `spark.sql.shuffle.partitions = ${sp}`);
         }
@@ -64,7 +64,7 @@
       // nivel = cuándo puede correr el stage dentro del job (los que no dependen entre sí, a la vez)
       const lvl = {}; stages.forEach(st => { lvl[st.id] = st.parents.length ? Math.max(...st.parents.map(p => lvl[p])) + 1 : 0; st.lvl = lvl[st.id]; });
       jobs.push({ id: jobs.length, line: i, action: s, lin, stages, notes,
-        plan: ['Scan A', ...lin.map(x => OPS[x.op].plan), OPS[s].plan] });
+        plan: ['Scan ventas', ...lin.map(x => OPS[x.op].plan), OPS[s].plan] });
     });
     app = { jobs, files, sp, tasks: tid, stages: sid, lazy: steps.filter(s => OPS[s].k !== 'a').length };
     if (!sel || (sel.t === 'job' && !jobs[sel.id]) || (sel.t === 'stage' && sel.id >= sid)) sel = jobs.length ? { t: 'job', id: jobs.length - 1 } : null;
@@ -153,7 +153,7 @@
     if (sel.t === 'job') {
       const j = app.jobs[sel.id], ex = j.stages.length - 1;
       let h = `<p><b>Job ${j.id}</b> lo lanza <code>${esc(OPS[j.action].code)}</code>. Su <b>plan lógico</b> es todo el linaje hasta esa acción: <code>${j.plan.join(' › ')}</code>. Catalyst lo optimiza, elige un plan físico y el scheduler lo corta en <b>${j.stages.length} stage${j.stages.length > 1 ? 's' : ''}</b>${ex ? `, uno más por cada Exchange (${ex})` : ' porque no hay ningún Exchange'}. En total, ${j.stages.reduce((a, s) => a + s.tasks, 0)} tasks.</p>`;
-      if (j.id > 0) h += `<p>Igual que el Job 0, empieza leyendo A desde cero: sin <code>cache()</code>, cada acción recalcula su linaje entero. Si el shuffle de un job anterior sirve, el Spark UI muestra esos stages como <i>skipped</i>.</p>`;
+      if (j.id > 0) h += `<p>Igual que el Job 0, empieza leyendo ventas desde cero: sin <code>cache()</code>, cada acción recalcula su linaje entero. Si el shuffle de un job anterior sirve, el Spark UI muestra esos stages como <i>skipped</i>.</p>`;
       j.notes.forEach(n => { h += `<p>${n}</p>`; });
       info.innerHTML = h;
     } else {

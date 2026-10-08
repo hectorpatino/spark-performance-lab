@@ -6,8 +6,6 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
 ---
 
     <h2>Tasks, cores y waves</h2>
-    <p class="src">Fuentes: <a href="https://spark.apache.org/docs/latest/cluster-overview.html#glossary" target="_blank" rel="noopener">Apache Spark · Cluster overview (glosario)</a>, <a href="https://spark.apache.org/docs/latest/web-ui.html" target="_blank" rel="noopener">Apache Spark · Web UI</a>, <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage" target="_blank" rel="noopener">Databricks · Look at longest stage</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/compute/configure" target="_blank" rel="noopener">Databricks · Compute configuration</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/configure" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> y la <a href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide#cluster-usage" target="_blank" rel="noopener">guía de optimización (Cluster usage)</a>.</p>
-
     <div class="essentials" role="note">
       <p class="essentials-title">Lo esencial en 1 minuto</p>
       <ul>
@@ -133,15 +131,18 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
     </div>
     <p>El tiempo baja a escalones: solo mejora cuando quitas una wave entera. Entre escalón y escalón, cada worker extra no acelera nada y solo sube el coste. Los puntos verdes son las configuraciones donde la última wave va llena; son las más baratas para su tiempo.</p>
 
-    <h3><span class="k">Con qué se confunde</span></h3>
+    <h3 class="solo"><span class="k">Con qué se confunde</span></h3>
     <ul>
       <li><b>Workers vs executors vs cores.</b> En Databricks hay 1 executor por worker. Los slots para tasks son los cores de esos executors. Lo que cuenta para las waves son los cores totales, no los workers.</li>
       <li><b>Waves y skew.</b> Con skew, una task dura mucho más que las demás y el problema es esa task. Más cores no la parten. Cómo detectarlo, en <a href="diagnostico.html">Diagnóstico</a>; cómo arreglarlo, en <a href="aqe.html">AQE</a> y <a href="remedios.html">Remedios</a>.</li>
     </ul>
 
-    <h3><span class="k">Qué pasaría si</span></h3>
+    <h3 class="solo"><span class="k">Qué pasaría si</span></h3>
     <ul>
       <li><b>Duplicas los workers con 200 tasks y pasas de 128 a 256 cores:</b> el stage pasa de 2 waves a 1, pero 56 cores no tienen nada que hacer. Pagas más y ganas menos de lo que esperabas.</li>
       <li><b>Pones shuffle.partitions = cores + 1:</b> casi duplicas el tiempo del stage por una sola task.</li>
       <li><b>Usas <code>auto</code></b>: Databricks elige el número de particiones según el plan y el tamaño de la entrada. Es la recomendación para shuffle alto.</li>
     </ul>
+
+    <h3><span class="k">De dónde sale</span>Fuentes</h3>
+    <p class="src"><a href="https://spark.apache.org/docs/latest/cluster-overview.html#glossary" target="_blank" rel="noopener">Apache Spark · Cluster overview (glosario)</a>, <a href="https://spark.apache.org/docs/latest/web-ui.html" target="_blank" rel="noopener">Apache Spark · Web UI</a>, <a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage" target="_blank" rel="noopener">Databricks · Look at longest stage</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a href="https://docs.databricks.com/aws/en/compute/configure" target="_blank" rel="noopener">Databricks · Compute configuration</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/compute/configure" target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> y la <a href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide#cluster-usage" target="_blank" rel="noopener">guía de optimización (Cluster usage)</a>.</p>

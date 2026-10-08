@@ -32,7 +32,7 @@ No test suite or linter. Besides the Pages deploy, the only CI is `.github/workf
 
 ## Content conventions
 
-- Each topic page opens with an `h2`, a `<p class="src">` listing sources, and a `<div class="essentials">` block ("Lo esencial en 1 minuto" + "Si solo recuerdas una cosa").
+- Each topic page opens with an `h2` and a `<div class="essentials">` block ("Lo esencial en 1 minuto" + "Si solo recuerdas una cosa"), and ends with `<h3><span class="k">De dónde sale</span>Fuentes</h3>` followed by a `<p class="src">` listing the official sources.
 - Every docs.databricks.com citation is paired with its learn.microsoft.com/azure/databricks equivalent as `<a class="az" ...>Azure</a>`. External links use `target="_blank" rel="noopener"`.
-- Section headings use `<h3><span class="k">kicker</span>Title</h3>`; definitions use `<p class="def">`; simulators sit in `<div class="console">`.
+- Section headings use `<h3><span class="k">kicker</span>Title</h3>` (on ≥1280px the kicker moves to the left "lesson rail"; a heading that is only a kicker gets `class="solo"`); definitions use `<p class="def">`; simulators sit in `<div class="console">`.
 - Claims must come from the cited official documentation; recheck facts (defaults, thresholds, serverless limits) against the docs rather than from memory.
