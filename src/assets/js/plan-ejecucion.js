@@ -30,7 +30,7 @@
     const files = +fI.value, sp = +pI.value;
     document.getElementById('tr-f-o').textContent = files;
     document.getElementById('tr-p-o').textContent = sp;
-    let sid = 0, tid = 0;
+    let sid = 0, ntasks = 0;
     const jobs = [];
     steps.forEach((s, i) => {
       if (OPS[s].k !== 'a') return;
@@ -68,12 +68,12 @@
       else if (s === 'collect') { cur.ops.push(op('collect()', 'manda las filas al driver')); notes.push('<code>collect()</code> trae todas las filas al driver. Con datos grandes, ahí empieza un OOM del driver.'); }
       else if (s === 'show') { cur.ops.push(op('show()', '21 filas')); if (!topk) { cur.tasks = 1; cur.why = '<code>show()</code> lee primero 1 partición y solo pide más si no le alcanzan las 21 filas'; } }
       stages.push(cur);
-      stages.forEach(st => { st.t0 = tid; tid += st.tasks; });
+      stages.forEach(st => { ntasks += st.tasks; });
       // nivel = cuándo puede correr el stage dentro del job (los que no dependen entre sí, a la vez)
       const lvl = {}; stages.forEach(st => { lvl[st.id] = st.parents.length ? Math.max(...st.parents.map(p => lvl[p])) + 1 : 0; st.lvl = lvl[st.id]; });
       jobs.push({ id: jobs.length, line: i, action: s, lin, stages, notes });
     });
-    app = { jobs, files, sp, tasks: tid, stages: sid, lazy: steps.filter(s => OPS[s].k !== 'a').length };
+    app = { jobs, files, sp, tasks: ntasks, stages: sid, lazy: steps.filter(s => OPS[s].k !== 'a').length };
     if (!sel || (sel.t === 'job' && !jobs[sel.id]) || (sel.t === 'stage' && sel.id >= sid)) sel = jobs.length ? { t: 'job', id: jobs.length - 1 } : null;
   }
 
@@ -128,7 +128,7 @@
         const shown = st.tasks <= 5 ? st.tasks : 4, gt = el('g', { class: 'tr-tasks' });
         gEdges.appendChild(el('line', { class: 'tr-edge', x1: 258, y1: y, x2: 270, y2: y }));
         for (let t = 0; t < shown; t++) {
-          const g = node('tr-task', 270 + t * 15.5, y - 7, 13, 14, [[t, 'tt']], `Task index ${t} · TID ${st.t0 + t}`);
+          const g = node('tr-task', 270 + t * 15.5, y - 7, 13, 14, [[t, 'tt']], `Task ${t} de ${st.tasks} del Stage ${st.id}`);
           gt.appendChild(g);
         }
         if (st.tasks > shown) gt.appendChild(el('text', { x: 270 + shown * 15.5 + 1, y: y + 3, class: 's' }, '+' + (st.tasks - shown)));
@@ -175,7 +175,7 @@
       const j = jobOfStage(sel.id), st = j.stages.find(s => s.id === sel.id);
       const part = st.ops.some(o => !o.c), child = j.stages.find(x => x.parents.includes(st.id));
       info.innerHTML = `<p><b>Stage ${st.id}</b> (Job ${j.id}) ejecuta: ${stageHtml(st)}.</p>
-        <p><b>${st.tasks} task${st.tasks > 1 ? 's' : ''}</b>: ${st.why}. Las tasks las fija el número de particiones, no los cores. Los cores solo deciden cuántas corren a la vez. TIDs ${st.t0}–${st.t0 + st.tasks - 1}.</p>
+        <p><b>${st.tasks} task${st.tasks > 1 ? 's' : ''}</b>: ${st.why}. Las tasks las fija el número de particiones, no los cores. Los cores solo deciden cuántas corren a la vez.</p>
         <p>${st.parents.length ? `No empieza hasta que ${st.parents.length > 1 ? 'terminan los Stages ' + st.parents.join(' y ') : 'termina el Stage ' + st.parents[0]}, porque lee su shuffle.` : 'Lee directo de la tabla, así que puede empezar en cuanto arranca el job.'}${st.sh ? ' Termina escribiendo un shuffle: ahí se corta el stage.' : ''}${part && child ? ` El cálculo parcial lo termina el Stage ${child.id} con <code>${esc(child.ops[0].c)}</code>.` : ''}</p>`;
     }
   }
