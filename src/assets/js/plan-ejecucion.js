@@ -250,3 +250,16 @@
   refresh();
   } catch (e) { console.error('Simulador del árbol de ejecución', e); }
 })();
+
+/* Cuántos stages tiene cada query: el resultado queda tapado hasta que el lector lo pide */
+(function () {
+  const box = document.getElementById('dag-guess');
+  if (!box) return;
+  try {
+    const body = box.querySelector('.guess-body'), btn = document.getElementById('dag-show');
+    const show = on => { box.classList.toggle('is-hidden', !on); body.inert = !on; };
+    btn.addEventListener('click', () => show(true));
+    // cada query nueva vuelve a taparse, para pensarla antes de verla
+    document.querySelectorAll('#dag-q [data-q]').forEach(b => b.addEventListener('click', () => show(false)));
+  } catch (e) { console.error('Resultado tapado del simulador de stages', e); }
+})();

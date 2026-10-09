@@ -30,3 +30,11 @@ svg .tr-tasks.done .tr-task rect{fill:color-mix(in srgb,var(--ok) 40%,var(--surf
 #tr-code .c{color:var(--muted)}
 #tr-add button:disabled{opacity:.35;cursor:not-allowed}
 #tr-info p{margin:.35rem 0}
+/* Cuántos stages tiene cada query: resultado oculto hasta pulsar el botón. Panel opaco de alto
+   fijo: ni la silueta ni la altura del DAG delatan cuántos stages hay */
+.guess-cover{display:none}
+.guess.is-hidden .guess-body{display:none}
+.guess.is-hidden .guess-cover{display:flex;min-height:14rem;flex-direction:column;align-items:center;justify-content:center;gap:.8rem;padding:1.5rem 1rem;text-align:center;background:var(--code);border:1px solid var(--line);border-radius:8px}
+.guess-cover p{margin:0;font-weight:600;max-width:28rem}
+.guess-cover button{font:600 .88rem var(--f-body);padding:.5rem 1rem;border-radius:999px;border:1px solid var(--ink);background:var(--ink);color:var(--surface);cursor:pointer}
+.guess-cover button:hover{filter:brightness(1.1)}

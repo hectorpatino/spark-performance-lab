@@ -224,9 +224,12 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
     </table></div>
     <p class="c" style="font-size:.85rem">La doc de Spark lista como operaciones que pueden causar
       shuffle las de reparticionado (<code>repartition</code>, <code>coalesce</code>), las
-      <i>ByKey</i> (salvo contar) y los joins. La tabla aplica eso a la API de DataFrame. El detalle
-      de <code>coalesce</code> sin shuffle en DataFrame es conocimiento de Spark que no verifiqué en
-      docs.databricks.com.</p>
+      <i>ByKey</i> (salvo contar) y los joins. La tabla aplica eso a la API de DataFrame. Que
+      <code>coalesce</code> no haga shuffle en DataFrame lo dice la <a
+      href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.coalesce.html"
+      target="_blank" rel="noopener">doc de PySpark</a>: cada partición nueva toma varias de las
+      actuales. Por eso, con <code>coalesce(1)</code> todo el cálculo previo corre en un solo nodo;
+      <code>repartition(1)</code> añade un shuffle pero deja ese cálculo en paralelo.</p>
 
     <h3 class="solo"><span class="k">Con qué se confunde</span></h3>
     <ul>

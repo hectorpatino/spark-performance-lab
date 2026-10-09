@@ -89,7 +89,7 @@
       "partición",
       "particiones"
     ],
-    "d": "Trozo de los datos que procesa una task. Particiones de shuffle: spark.sql.shuffle.partitions."
+    "d": "En Spark, trozo de filas de un DataFrame que procesa una task; sale de la lectura, de un shuffle o de repartition. En una tabla (PARTITIONED BY) es otra cosa: una carpeta por valor de columna."
   },
   {
     "t": [

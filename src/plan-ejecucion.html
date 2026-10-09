@@ -24,8 +24,8 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
           target="_blank" rel="noopener"
           title="La misma página en la documentación de Azure Databricks">Azure</a></li>
         <li>Las transformaciones <b>narrow</b> (<code>filter</code>, <code>select</code>,
-          <code>withColumn</code>) procesan cada partición por su cuenta, sin mover datos. Por eso
-          varias seguidas van en el mismo stage.</li>
+          <code>withColumn</code>) procesan cada partición (el trozo de filas que le toca a una
+          task) por su cuenta, sin mover datos. Por eso varias seguidas van en el mismo stage.</li>
         <li>Las transformaciones <b>wide</b> (<code>groupBy</code>, <code>orderBy</code>, un
           <code>join</code> sin broadcast) necesitan filas que están en otras particiones. Por eso
           obligan a un <a href="shuffle.html">shuffle</a>: redistribuir los datos entre executors.
@@ -73,6 +73,9 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
           transformación wide: su shuffle abre un stage nuevo</td></tr>
         <tr><td><b>Task</b></td><td>El trabajo sobre una partición, en un core</td><td>Una por
           partición del stage</td></tr>
+        <tr><td><b>Partición</b></td><td>Un trozo de las filas de un DataFrame. Cada task procesa
+          una</td><td>La lectura, un shuffle, o <code>repartition</code> / <code>coalesce</code>
+          (ver <a href="#particiones">De dónde sale cada partición</a>)</td></tr>
         <tr><td><b>Plan lógico</b></td><td>Qué hay que calcular, sin decir cómo. Lo ves con
           <code>explain(True)</code></td><td>Tu código</td></tr>
         <tr><td><b>Plan físico</b></td><td>Cómo se calcula: <code>HashAggregate</code>,
@@ -88,21 +91,12 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
     <p>Los dos controles fijan cuántas tasks hay:</p>
     <ul>
       <li><b>Particiones de lectura de ventas:</b> las tasks del stage que lee <code>ventas</code>.
-        Spark no reparte por archivo: hace trozos de hasta 128 MB
-        (<code>spark.sql.files.maxPartitionBytes</code>). Varios archivos pequeños pueden ir en una
-        partición, y uno grande se parte en varias. Además, Spark intenta tener al menos tantas
-        particiones como el paralelismo del compute (<a
-        href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#tuning-partitions"
-        target="_blank" rel="noopener"><code>spark.sql.files.minPartitionNum</code></a>). Por eso
-        una tabla pequeña puede leerse en trozos de menos de 128 MB, y la misma tabla puede dar
-        otro número de tasks en otro compute.</li>
-      <li><b><a
-        href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#tuning-partitions"
-        target="_blank" rel="noopener">shuffle.partitions</a>:</b> las tasks del stage que viene
-        después de un shuffle por clave (<code>groupBy</code>, <code>join</code>,
-        <code>orderBy</code>): Spark reparte las filas por esa clave en ese número de particiones.
-        El <code>count()</code> no tiene clave por la que repartir. Junta los conteos parciales en
-        una sola partición, así que su stage tiene 1 task sea cual sea este valor.</li>
+        En un compute real las decide el tamaño de los archivos (ver <a href="#particiones">De
+        dónde sale cada partición</a>).</li>
+      <li><b>shuffle.partitions:</b> las tasks del stage que viene después de un shuffle por clave
+        (<code>groupBy</code>, <code>join</code>, <code>orderBy</code>). El <code>count()</code> no
+        tiene clave por la que repartir: junta los conteos parciales en una sola partición, así que
+        su stage tiene 1 task sea cual sea este valor.</li>
     </ul>
     <div class="console">
       <div class="ttl">Tu notebook · tablas ventas y clientes</div>
@@ -168,8 +162,8 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
     </ul>
 
     <h3><span class="k">Simulador</span>Cuántos stages tiene cada query</h3>
-    <p>Elige una query y mira en cuántos stages se parte y cómo se reparten sus tasks entre los
-      cores.</p>
+    <p>Con lo que haz logrado aprender hasta esta sección, elige una query y, antes de mirar el resultado, piensa en cuántos stages se parte y cuántas
+      tasks tiene cada uno. Luego destápalo y mira cómo se reparten esas tasks entre los cores.</p>
     <div class="console">
       <div class="ttl">Elige una query · ventas: 10 GB (80 archivos de ~128 MB) · clientes: 5 GB ·
         shuffle.partitions = 200</div>
@@ -181,6 +175,12 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
         <button type="button" data-q="aggsort" aria-pressed="false">groupBy + orderBy</button>
       </div>
       <pre id="dag-code" style="margin:.6rem 0"></pre>
+      <div class="guess is-hidden" id="dag-guess">
+      <div class="guess-cover">
+        <p>¿Cuántos stages tendrá esta query y cuántas tasks cada uno?</p>
+        <button type="button" id="dag-show">Ya lo pensé: mostrar el Spark UI</button>
+      </div>
+      <div class="guess-body" inert>
       <div id="dag-out" class="dag"></div>
       <div class="stepinfo" id="dag-info"></div>
       <div class="ttl" style="margin-top:1.2rem">Cómo se ejecuta ese job en el tiempo</div>
@@ -198,6 +198,8 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
       </div>
       <div id="jt-ui" hidden></div>
       <div class="verdict" id="jt-verdict"></div>
+      </div>
+      </div>
     </div>
     <p>Cambia de query arriba y mira la línea de tiempo: cada color es un stage. Con <i>join
       sort-merge</i>, los Stages 1 y 2 comparten los cores al mismo tiempo, y el 3 no arranca hasta
@@ -213,11 +215,61 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
         cabe en un stage, y Spark lo fusiona en un bloque <code>WholeStageCodegen</code>. El stage
         siguiente no empieza hasta que el anterior termina todas sus tasks: cualquiera de ellas
         puede tener filas que necesita.</li>
-      <li><b>Cada stage tiene una task por partición</b>, como en los controles del simulador. AQE
-        puede unir particiones pequeñas después de un shuffle, y entonces salen menos tasks.</li>
+      <li><b>Cada stage tiene una task por partición</b> (ver <a href="#particiones">De dónde sale
+        cada partición</a>).</li>
     </ol>
     <p>Qué pasa después, cuando esas tasks se reparten entre los cores, está en <a
       href="stages.html">Tasks, cores y waves</a>.</p>
+
+    <h3 id="particiones"><span class="k">Concepto clave</span>De dónde sale cada partición</h3>
+    <p class="def"><b>Partición</b>: un trozo de las filas de un DataFrame. Cada task procesa una,
+      así que el número de particiones de un stage es su número de tasks.</p>
+    <p>Las particiones salen de cuatro sitios:</p>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Origen</th><th>Cuántas salen</th><th>Lo controla</th></tr></thead>
+      <tbody>
+        <tr><td>Leer archivos o una tabla</td><td>Trozos de hasta 128 MB</td><td><a
+          href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#tuning-partitions"
+          target="_blank" rel="noopener"><code>spark.sql.files.maxPartitionBytes</code></a></td></tr>
+        <tr><td>Un shuffle (<code>groupBy</code>, <code>join</code>,
+          <code>orderBy</code>)</td><td>200 por defecto; AQE puede unir las pequeñas</td><td><a
+          href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#tuning-partitions"
+          target="_blank" rel="noopener"><code>spark.sql.shuffle.partitions</code></a></td></tr>
+        <tr><td><code>repartition(n)</code></td><td>n, con un shuffle</td><td>Tu código</td></tr>
+        <tr><td><code>coalesce(n)</code></td><td>n, sin shuffle; solo sirve para bajar el
+          número</td><td>Tu código</td></tr>
+      </tbody>
+    </table></div>
+    <p><b>Al leer, Spark no hace una partición por archivo.</b> Varios archivos pequeños pueden ir
+      en una partición, y uno grande se parte en varias. Además, Spark intenta tener al menos tantas
+      particiones como el paralelismo del compute (<a
+      href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#tuning-partitions"
+      target="_blank" rel="noopener"><code>spark.sql.files.minPartitionNum</code></a>). Por eso
+      una tabla pequeña puede leerse en trozos de menos de 128 MB, y la misma tabla puede dar otro
+      número de tasks en otro compute.</p>
+    <p>Los 128 MB son bytes del archivo en disco, ya comprimidos: en memoria ese trozo suele ocupar
+      más (ver <a href="memoria-oom.html">Memoria y OOM</a>).</p>
+    <p>La excepción son los archivos que no se pueden partir, como un CSV con gzip, o un JSON o CSV
+      leído con <code>multiLine</code>: cada uno va a <a
+      href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/one-spark-task"
+      target="_blank" rel="noopener">una sola task</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/one-spark-task"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>, pese lo que
+      pese.</p>
+    <p><b>Tú también puedes cambiarlas.</b> <code>repartition(n)</code> redistribuye todas las filas
+      con un shuffle. <a
+      href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.coalesce.html"
+      target="_blank" rel="noopener"><code>coalesce(n)</code></a> junta varias particiones en
+      una sin shuffle; si pides más de las que hay, se queda igual. Como no corta el stage, un
+      <code>coalesce(1)</code> hace que todo el cálculo previo corra en una sola task;
+      <code>repartition(1)</code> paga un shuffle, pero lo de antes sigue en paralelo y solo el
+      stage final queda en <a
+      href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/one-spark-task"
+      target="_blank" rel="noopener">una sola task</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/one-spark-task"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>.</p>
 
     <h3 id="explain"><span class="k">Cómo se usa</span>Leer el plan con explain()</h3>
     <p><code>explain()</code> imprime el plan de un DataFrame sin ejecutarlo: no lanza ningún job.
@@ -279,13 +331,15 @@ AdaptiveSparkPlan isFinalPlan=false
       <li><b>Job vs acción.</b> En principio, una acción da un job. Con AQE y broadcast es normal
         ver varios jobs por una sola acción, porque cada query stage se lanza aparte (ejemplo con
         un <code>count()</code> en <a href="aqe.html#una-accion-dos-jobs">AQE</a>).</li>
-      <li><b>Task vs partición.</b> Es una relación 1:1 dentro de un stage. Cambiar las particiones
-        es cambiar las tasks: un <code>repartition(1)</code> deja un stage de <a
-        href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/one-spark-task"
-        target="_blank" rel="noopener">una sola task</a> <a class="az"
-        href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/one-spark-task"
-        target="_blank" rel="noopener"
-        title="La misma página en la documentación de Azure Databricks">Azure</a>.</li>
+      <li><b>Partición de Spark vs partición de tabla.</b> Comparten nombre, pero son cosas
+        distintas. La de esta página es un trozo de filas que procesa una task. La de una tabla
+        (<code>PARTITIONED BY</code>) guarda los datos en carpetas, una por valor de la columna
+        de partición. Con menos de 1 TB, Databricks <a
+        href="https://docs.databricks.com/aws/en/tables/partitions" target="_blank"
+        rel="noopener">recomienda no particionar</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/tables/partitions" target="_blank"
+        rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>
+        la tabla (ver <a href="liquid-clustering.html">Liquid clustering</a>).</li>
       <li><b>Transformación vs acción.</b> Una transformación devuelve otro DataFrame y no ejecuta
         nada. Una acción devuelve un resultado al driver o escribe datos, y es lo único que lanza
         jobs.</li>
@@ -321,6 +375,12 @@ AdaptiveSparkPlan isFinalPlan=false
       target="_blank" rel="noopener">Apache Spark · Tuning partitions</a>, <a
       href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#coalescing-post-shuffle-partitions"
       target="_blank" rel="noopener">Apache Spark · Coalescing post shuffle partitions</a>, <a
+      href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.coalesce.html"
+      target="_blank" rel="noopener">PySpark · DataFrame.coalesce</a>, <a
+      href="https://docs.databricks.com/aws/en/tables/partitions" target="_blank"
+      rel="noopener">Databricks · When to partition tables</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/tables/partitions" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
       href="https://spark.apache.org/docs/latest/web-ui.html" target="_blank" rel="noopener">Apache
       Spark · Web UI</a>, <a href="https://docs.databricks.com/aws/en/pyspark/#data-processing"
       target="_blank" rel="noopener">Databricks · PySpark (transformaciones y acciones)</a> <a
