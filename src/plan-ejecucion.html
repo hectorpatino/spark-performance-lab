@@ -63,7 +63,7 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
       <thead><tr><th>Término</th><th>Qué es</th><th>Lo crea</th></tr></thead>
       <tbody>
         <tr><td><b>Application</b></td><td>Tu programa Spark: un <b>driver</b> y sus
-          <b>executors</b>. Los números de job y de stage siguen subiendo mientras
+          <b>executors</b> (ver <a href="arquitectura.html">Arquitectura de Spark</a>). Los números de job y de stage siguen subiendo mientras
           viva</td><td>Crear la <code>SparkSession</code> (en Databricks, al arrancar el
           compute)</td></tr>
         <tr><td><b>Job</b></td><td>Todo lo que Spark ejecuta para responder a una
@@ -218,8 +218,8 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
       <li><b>Cada stage tiene una task por partición</b> (ver <a href="#particiones">De dónde sale
         cada partición</a>).</li>
     </ol>
-    <p>Qué pasa después, cuando esas tasks se reparten entre los cores, está en <a
-      href="stages.html">Tasks, cores y waves</a>.</p>
+    <p>Cómo reparte el scheduler esas tasks entre los cores está en <a href="stages.html">Tasks,
+      cores y waves</a>.</p>
 
     <h3 id="particiones"><span class="k">Concepto clave</span>De dónde sale cada partición</h3>
     <p class="def"><b>Partición</b>: un trozo de las filas de un DataFrame. Cada task procesa una,

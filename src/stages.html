@@ -10,7 +10,8 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
       <p class="essentials-title">Lo esencial en 1 minuto</p>
       <ul>
         <li>Cada stage tiene una task por partición (ver <a href="plan-ejecucion.html">Plan de
-          ejecución</a>). El scheduler las reparte en los cores libres.</li>
+          ejecución</a>). El scheduler (la parte del driver que reparte el trabajo) las manda a
+          los cores libres.</li>
         <li><code>waves = ⌈tasks ÷ cores⌉</code>. Si las tasks duran parecido, el stage tarda más o
           menos waves × duración de una task.</li>
         <li>Pon las shuffle partitions en un múltiplo de los cores totales (sin ajuste fino, de 2 a
@@ -36,9 +37,9 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
       <tbody>
         <tr><td><b>Task</b></td><td>Una unidad de trabajo que se envía a un executor. Procesa <b>una
           partición</b></td><td>Una por partición del stage</td></tr>
-        <tr><td><b>Executor</b></td><td>Proceso en un worker que ejecuta tasks en varios hilos y
-          guarda datos en memoria o disco. Databricks corre <b>un executor por worker</b></td><td>El
-          cluster</td></tr>
+        <tr><td><b>Executor</b></td><td>Proceso en un worker que ejecuta tasks. Databricks corre
+          <b>un executor por worker</b> (ver <a href="arquitectura.html">Arquitectura de
+          Spark</a>)</td><td>El cluster</td></tr>
         <tr><td><b>Core / slot</b></td><td>Un hueco donde corre una task a la vez (por defecto, 1
           task = 1 core)</td><td>Los cores de los workers</td></tr>
         <tr><td><b>Wave</b></td><td>Una ronda de tasks que corren a la vez. <b>Término no oficial y

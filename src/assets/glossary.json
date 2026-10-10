@@ -35,6 +35,25 @@
   },
   {
     "t": [
+      "driver"
+    ],
+    "d": "Proceso que ejecuta tu programa Spark: interpreta los comandos del notebook, arma el plan y reparte las tasks entre los executors. En Databricks corre en el nodo driver."
+  },
+  {
+    "t": [
+      "scheduler"
+    ],
+    "d": "Parte del driver que reparte el trabajo: divide cada job en stages y manda sus tasks a los executors, una a cada core libre."
+  },
+  {
+    "t": [
+      "worker",
+      "workers"
+    ],
+    "d": "Máquina del cluster que ejecuta código de la aplicación. Databricks corre un executor por worker, así que usa los dos términos como sinónimos."
+  },
+  {
+    "t": [
       "executor",
       "executors"
     ],
