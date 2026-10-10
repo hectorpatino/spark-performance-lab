@@ -37,3 +37,19 @@ No test suite or linter. Besides the Pages deploy, the only CI is `.github/workf
 - Section headings use `<h3><span class="k">kicker</span>Title</h3>` (on ≥1280px the kicker moves to the left "lesson rail"; a heading that is only a kicker gets `class="solo"`); definitions use `<p class="def">`; simulators sit in `<div class="console">`.
 - Claims must come from the cited official documentation; recheck facts (defaults, thresholds, serverless limits) against the docs rather than from memory.
 - The manual teaches the DataFrame / SQL API. Don't cite the RDD programming guide or RDD API docs, unless the behavior is Spark Core functionality that DataFrames run on (shuffle mechanics, the scheduler running one task per partition) and no DataFrame, SQL or Databricks page documents it. Then say so next to the link, e.g. "(guía de RDD; el mecanismo es el mismo para DataFrames)". Code examples use DataFrame or SQL, never the RDD API or `sparkContext`.
+
+## Agents
+
+Subagents live in `.claude/agents/`. The shared verification rules are the `fuentes-oficiales` skill.
+
+- `experto-motor-spark`, `experto-diagnostico`, `experto-observabilidad`, `experto-delta`, `experto-plataforma`: topic specialists. They check claims against official docs and propose content with sources. They are read-only.
+- `redactor-manual`: writes and edits pages, following the conventions above and the `technical-writer` criteria.
+- `editor-tecnico`: runs the `technical-writer` review and does not edit.
+- `ingeniero-junior`: reads pages as the target reader (basic SQL, Spark and Databricks), using only the site, and reports whether each page is useful.
+
+Usual flow for new content:
+1. A specialist gathers the facts.
+2. `redactor-manual` writes the page.
+3. `ingeniero-junior` and `editor-tecnico` review it in parallel.
+4. The user approves the changes.
+5. `redactor-manual` applies them.
