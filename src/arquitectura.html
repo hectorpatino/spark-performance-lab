@@ -51,8 +51,8 @@ extra_css: ["/assets/css/arquitectura.css"]
           corre el <i>Spark master</i>, que coordina a los executors</td></tr>
         <tr><td><b>Worker</b></td><td>Una máquina del cluster que puede ejecutar código de la
           aplicación</td><td>Los nodos worker del compute</td></tr>
-        <tr><td><b>Executor</b></td><td>El proceso de tu aplicación en un worker. Corre tasks en
-          varios hilos y guarda datos en memoria o disco</td><td>Uno por worker</td></tr>
+        <tr><td><b>Executor</b></td><td>El proceso de tu aplicación en un worker. Corre cada task en
+          un hilo, tantas a la vez como cores tiene, y guarda datos en memoria o disco</td><td>Uno por worker</td></tr>
         <tr><td><b>Task</b></td><td>Una unidad de trabajo que se envía a un executor. Procesa una
           partición</td><td>En un core de un executor (ver <a href="stages.html">Tasks, cores y
           waves</a>)</td></tr>
@@ -62,10 +62,36 @@ extra_css: ["/assets/css/arquitectura.css"]
       href="plan-ejecucion.html">Plan de ejecución</a>.</p>
 
     <h3><span class="k">Simulador</span>¿Corre en el driver o en los executors?</h3>
-    <p>Elige una línea del notebook y mira qué parte del compute trabaja y qué vuelve al driver. El
-      compute tiene 1 driver y 3 workers de 4 cores (números ilustrativos).</p>
+    <p>Elige una línea del notebook y mira qué parte del compute trabaja y qué vuelve al driver.
+      Antes, los números del simulador (son ilustrativos):</p>
+    <ul>
+      <li><b>3 workers de 4 cores: 12 cores para tasks.</b> Databricks corre un executor por worker,
+        así que cada worker es un executor con 4 cores. Las tasks solo corren en esos executors. El
+        driver también tiene cores, pero no corren tasks y no cuentan en estos 12 (la excepción es
+        single node; ver abajo).</li>
+      <li><b>Cada core corre una task a la vez</b> (es el valor por defecto, <code>spark.task.cpus =
+        1</code>). Cada worker corre hasta 4 tasks a la vez, no una. Entre los 3, hasta 12 a la
+        vez.</li>
+      <li><b>La tabla <code>ventas</code> se lee en 16 particiones, así que el stage que la lee tiene
+        16 tasks</b>, una por partición. El número lo decide sobre todo el tamaño de los datos: trozos
+        de hasta 128 MB. Spark intenta además, sin garantizarlo, tener al menos tantas particiones
+        como cores, pero no las ajusta para que cuadren con ellos (ver <a
+        href="plan-ejecucion.html">Plan de ejecución</a>). En otras páginas, <code>ventas</code>
+        tiene otros tamaños.</li>
+      <li><b>Como hay más tasks que cores, 4 esperan su turno.</b> Cada core toma la siguiente en
+        cuanto termina la suya, sin esperar a los demás cores. Mientras corren esas 4 últimas, los
+        otros 8 cores, al acabar su task, se quedan sin trabajo (ver <a href="stages.html">Tasks, cores y
+        waves</a>). Qué core toma cada task lo decide el scheduler; en el simulador es un reparto
+        de ejemplo.</li>
+      <li><b>Lo que sí espera es el stage siguiente.</b> No empieza hasta que el anterior termina
+        todas sus tasks. En <code>count()</code>, la task que suma los conteos espera a las 16.</li>
+      <li><b>El simulador cuenta stages y tasks, no jobs.</b> Cuántos jobs ves en el Spark UI por
+        una acción depende de AQE, que viene activo en Databricks, y de la acción: por eso las
+        cifras dicen «1 o más». Los stages y las tasks no cambian por eso (ver <a
+        href="plan-ejecucion.html">Plan de ejecución</a>).</li>
+    </ul>
     <div class="console">
-      <div class="ttl">Elige una línea · 1 driver · 3 workers × 4 cores</div>
+      <div class="ttl">Elige una línea · 1 driver · 3 workers × 4 cores = 12 cores para tasks</div>
       <div class="chips" role="group" aria-label="Línea del notebook" id="ar-q">
         <button type="button" data-l="py" aria-pressed="true">Python normal</button>
         <button type="button" data-l="read" aria-pressed="false">spark.read</button>
@@ -78,20 +104,32 @@ extra_css: ["/assets/css/arquitectura.css"]
       </div>
       <pre id="ar-code" style="margin:.6rem 0"></pre>
       <div class="ar-map">
-        <div class="ar-node ar-driver" id="ar-driver">
-          <h4>Driver <span>nodo driver</span></h4>
-          <ul>
-            <li data-p="py">Python del notebook</li>
-            <li data-p="plan">SparkSession · plan</li>
-            <li data-p="sched">Scheduler</li>
-          </ul>
-          <div class="ar-mem"><span>Memoria del driver</span><div><i id="ar-mem"></i></div></div>
+        <div class="ar-compute">
+          <p class="ar-tag">Compute</p>
+          <div class="ar-node ar-driver" id="ar-driver">
+            <h4>Driver <span>nodo driver</span></h4>
+            <ul>
+              <li data-p="py">Python del notebook</li>
+              <li data-p="plan">SparkSession · plan</li>
+              <li data-p="sched">Scheduler <small id="ar-tasks"></small></li>
+            </ul>
+            <div class="ar-mem"><span>Memoria del driver</span><div><i id="ar-mem"></i></div></div>
+          </div>
+          <div class="ar-links" aria-hidden="true">
+            <div id="ar-down">tasks</div>
+            <div id="ar-up">resultado</div>
+          </div>
+          <div class="ar-workers" id="ar-workers"></div>
         </div>
-        <div class="ar-links" aria-hidden="true">
-          <div id="ar-down">tasks</div>
-          <div id="ar-up">resultado</div>
+        <div class="ar-node ar-store" id="ar-store"><h4>Almacenamiento en la nube <span>fuera del compute · tabla ventas</span></h4></div>
+      </div>
+      <div class="ar-play">
+        <p class="ar-phase" id="ar-phase" aria-hidden="true"></p>
+        <div class="ar-ctl" id="ar-ctl">
+          <button type="button" id="ar-prev" aria-label="Paso anterior">‹</button>
+          <button type="button" id="ar-replay" aria-pressed="false">Pausar</button>
+          <button type="button" id="ar-next" aria-label="Paso siguiente">›</button>
         </div>
-        <div class="ar-workers" id="ar-workers"></div>
       </div>
       <div class="stats" id="ar-stats"></div>
       <div class="stepinfo" id="ar-info" aria-live="polite"></div>
@@ -102,6 +140,9 @@ extra_css: ["/assets/css/arquitectura.css"]
         nada.</li>
       <li>Compara <i>write</i> con <i>collect()</i>. Los dos ponen a trabajar a los mismos
         executors, pero solo <code>collect()</code> llena la memoria del driver.</li>
+      <li>Con cualquier acción, mira la caja <i>Almacenamiento en la nube</i>. Está fuera del
+        compute, y cada task lee su partición directamente desde ahí. Las filas solo pasan por el driver con <code>collect()</code> y
+        <code>toPandas()</code>.</li>
       <li>Con <i>toPandas()</i>, mira la segunda línea: el <code>groupby</code> de pandas es Python
         normal y corre solo en el driver.</li>
     </ul>
@@ -112,12 +153,12 @@ extra_css: ["/assets/css/arquitectura.css"]
         El Python que no usa Spark se queda ahí.</li>
       <li><b>Las transformaciones solo construyen el plan.</b> Hasta la acción, el driver no lanza
         ningún job.</li>
-      <li><b>La acción crea un job.</b> El driver optimiza el plan, y el scheduler lo divide en
+      <li><b>La acción crea un job; con AQE, suele dar varios.</b> El driver optimiza el plan, y el scheduler lo divide en
         stages: uno más por cada shuffle (ver <a href="plan-ejecucion.html">Plan de
         ejecución</a>).</li>
       <li><b>El scheduler manda las tasks a los executors.</b> Hay una por partición, y cada core
-        corre una a la vez. Los executors viven mientras vive la aplicación y corren las tasks en
-        varios hilos (ver <a href="stages.html">Tasks, cores y waves</a>).</li>
+        corre una a la vez, cada una en un hilo del executor. Los executors viven mientras vive la
+        aplicación (ver <a href="stages.html">Tasks, cores y waves</a>).</li>
       <li><b>El resultado vuelve al driver.</b> Puede ser un número (<code>count()</code>), unas
         pocas filas (<code>show()</code>), todas las filas (<code>collect()</code>) o ninguna
         (<code>write</code>).</li>
@@ -126,11 +167,13 @@ extra_css: ["/assets/css/arquitectura.css"]
     <h3><span class="k">En Databricks</span>Cómo se traduce en tu compute</h3>
     <ul>
       <li><b>Compute clásico con varios nodos.</b> Un nodo driver y uno o más workers. Todo el
-        procesamiento distribuido ocurre en los workers. Con cero workers solo funcionan los
-        comandos que no son de Spark; los de Spark fallan.</li>
-      <li><b>Single node.</b> No hay workers. El driver hace de master y de worker, y Spark corre
-        en local con un hilo executor por core lógico, menos uno para el driver. Está pensado
-        para pocos datos o cargas que no se distribuyen.</li>
+        procesamiento distribuido ocurre en los workers. Si lo dejas en cero workers sin marcar
+        <i>Single node</i>, solo funcionan los comandos que no son de Spark; los de Spark
+        fallan.</li>
+      <li><b>Single node.</b> Es un modo aparte, que se marca al crear el compute. No hay workers:
+        el driver hace de master y de worker, y Spark corre en local con un hilo executor por core
+        (la doc dice <i>core lógico</i>), menos uno para el driver. Aquí sí corren tasks en el
+        nodo driver. Está pensado para pocos datos o cargas que no se distribuyen.</li>
       <li><b>El driver guarda el estado de todos los notebooks conectados.</b> Por eso Databricks
         recomienda desconectar los que no uses. Con instancias spot, el driver siempre es
         on-demand (ver <a href="azure.html">Azure Databricks</a>).</li>
@@ -188,7 +231,16 @@ extra_css: ["/assets/css/arquitectura.css"]
       href="https://learn.microsoft.com/azure/databricks/compute/configure#worker-node-type"
       target="_blank" rel="noopener"
       title="La misma página en la documentación de Azure Databricks">Azure</a> (driver, workers,
-      single node), <a href="https://docs.databricks.com/aws/en/spark/connect-vs-classic"
+      single node), <a
+      href="https://docs.databricks.com/aws/en/lakehouse-architecture/cost-optimization/best-practices"
+      target="_blank" rel="noopener">Databricks · Best practices for cost optimization</a> <a
+      class="az"
+      href="https://learn.microsoft.com/azure/databricks/lakehouse-architecture/cost-optimization/best-practices"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> (un executor por
+      worker), <a href="https://spark.apache.org/docs/latest/configuration.html#scheduling"
+      target="_blank" rel="noopener">Apache Spark · Configuration</a> (<code>spark.task.cpus</code>,
+      1 core por task), <a href="https://docs.databricks.com/aws/en/spark/connect-vs-classic"
       target="_blank" rel="noopener">Databricks · Compare Spark Connect to Spark Classic</a> <a
       class="az" href="https://learn.microsoft.com/azure/databricks/spark/connect-vs-classic"
       target="_blank" rel="noopener"
