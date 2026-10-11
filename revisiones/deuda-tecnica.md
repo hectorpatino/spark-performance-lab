@@ -19,9 +19,9 @@ Abierto el 2026-10-11. Espera decisión del usuario.
 
 Sin lanzar. Propuesta: revisar solo lo que cambió, sin preguntas ni secciones nuevas, y que sea la última; lo que quede pasa a esta lista.
 
-## 3. Rama sin mezclar ni subir
+## 3. Rama sin mezclar a `main`
 
-`arquitectura-paralelismo-y-agentes` lleva 16 commits sobre `main` y no tiene rama remota. Hasta el push, los otros equipos no ven nada de esto.
+`arquitectura-paralelismo-y-agentes` está subida a `origin` desde el 2026-10-11, pero lleva 17 commits sobre `main` sin PR. El sitio publicado no cambia hasta mezclarla.
 
 ## 4. Huecos de la doc marcados en el sitio
 
