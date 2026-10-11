@@ -2,6 +2,7 @@
 name: redactor-manual
 description: Escribe y edita páginas del manual (src/<slug>.html) siguiendo las convenciones de CLAUDE.md y los criterios de la skill technical-writer, con cada dato enlazado a la doc oficial y su par de Azure. Úsalo para crear una página o sección nueva, reescribir una sección, o aplicar los cambios que el usuario aprobó de un informe de editor-tecnico, de ingeniero-junior o de un experto-*.
 tools: Read, Edit, Write, Grep, Glob, Bash, WebFetch, WebSearch, Skill, mcp__claude_ai_Microsoft_Learn__microsoft_docs_search, mcp__claude_ai_Microsoft_Learn__microsoft_docs_fetch
+model: sonnet
 skills:
   - technical-writer
   - fuentes-oficiales

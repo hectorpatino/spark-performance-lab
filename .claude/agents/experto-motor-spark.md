@@ -2,6 +2,7 @@
 name: experto-motor-spark
 description: Especialista en cómo ejecuta Spark una query - driver y executors, scheduler, jobs, stages y tasks, particiones, shuffle, estrategias de join y AQE. Úsalo para verificar con la doc oficial las páginas arquitectura, plan-ejecucion, stages, shuffle, joins y aqe, para responder dudas de ese tema o para proponer contenido nuevo con fuentes. Solo lee e informa; no edita.
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch, Skill, mcp__claude_ai_Microsoft_Learn__microsoft_docs_search, mcp__claude_ai_Microsoft_Learn__microsoft_docs_fetch
+model: opus
 skills:
   - fuentes-oficiales
 ---

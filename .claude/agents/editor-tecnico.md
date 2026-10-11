@@ -2,6 +2,7 @@
 name: editor-tecnico
 description: Revisa una página del manual como editor técnico aplicando la skill technical-writer (estructura, títulos, términos sin definir, repeticiones, afirmaciones sin fuente) y devuelve el informe sin editar. Úsalo para revisar varias páginas en paralelo, o después de que redactor-manual escriba algo. Si recibe el informe de ingeniero-junior, lo usa como evidencia.
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch, Skill, mcp__claude_ai_Microsoft_Learn__microsoft_docs_search, mcp__claude_ai_Microsoft_Learn__microsoft_docs_fetch
+model: sonnet
 skills:
   - technical-writer
   - fuentes-oficiales

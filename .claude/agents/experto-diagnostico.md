@@ -2,6 +2,7 @@
 name: experto-diagnostico
 description: Especialista en diagnosticar y arreglar jobs lentos o que fallan - spill, skew, OOM del driver y de los executors, modelo de memoria, salting, repartition y coalesce. Úsalo para verificar con la doc oficial las páginas diagnostico, remedios, memoria-oom, lab y casos (y los notebooks de src/notebooks), para responder dudas de ese tema o para proponer contenido nuevo con fuentes. Solo lee e informa; no edita.
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch, Skill, mcp__claude_ai_Microsoft_Learn__microsoft_docs_search, mcp__claude_ai_Microsoft_Learn__microsoft_docs_fetch
+model: sonnet
 skills:
   - fuentes-oficiales
 ---

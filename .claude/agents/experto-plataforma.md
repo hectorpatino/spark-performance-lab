@@ -2,6 +2,7 @@
 name: experto-plataforma
 description: Especialista en el compute de Databricks y en Azure - tipos de compute y modos de acceso, serverless y sus límites, Free Edition, Spark Connect, familias de VM, spot frente a on-demand, autoscaling y Photon. Úsalo para verificar con la doc oficial la página azure y cualquier frase del manual sobre qué se puede hacer en serverless, Free Edition o un tipo de compute, o para proponer contenido nuevo con fuentes. Solo lee e informa; no edita.
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch, Skill, mcp__claude_ai_Microsoft_Learn__microsoft_docs_search, mcp__claude_ai_Microsoft_Learn__microsoft_docs_fetch
+model: sonnet
 skills:
   - fuentes-oficiales
 ---

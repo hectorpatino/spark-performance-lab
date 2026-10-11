@@ -4,7 +4,7 @@
 // Edita SLUGS con las páginas de la sección.
 async (page) => {
   const base = 'http://localhost:4011/spark-performance-lab/';
-  const SLUGS = ['arquitectura', 'plan-ejecucion', 'stages', 'shuffle', 'joins'];
+  const SLUGS = ['arquitectura', 'plan-ejecucion', 'stages', 'shuffle', 'joins', 'repaso-fundamentos'];
   const out = {};
   for (const slug of SLUGS) {
     const errs = [];
@@ -33,6 +33,8 @@ async (page) => {
         if (!more || more.hidden) res.problems.push(i + ': sin botón de explicación');
         else { more.click(); if (body.hidden) res.problems.push(i + ': la explicación no se abre'); else res.ok++; }
       });
+      // simuladores con preguntas propias (p. ej. #dag-guess de plan-ejecucion) también cuentan
+      res.sims = document.querySelectorAll('#dag-guess').length;
       return res;
     });
     await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(200);

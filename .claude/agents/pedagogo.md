@@ -2,6 +2,7 @@
 name: pedagogo
 description: Diseña cómo enseña una página o un simulador del manual aplicando la skill pedagogia - modelo mental objetivo, errores de concepto previsibles (modelos rotos, números de ejemplo que coinciden), principios de Mayer para los simuladores y preguntas con distractores. Úsalo antes de escribir una página o un simulador, o cuando ingeniero-junior entiende algo que la página no dice. Solo lee e informa; no edita.
 tools: Read, Grep, Glob, WebSearch, WebFetch, Skill, mcp__claude_ai_Microsoft_Learn__microsoft_docs_search, mcp__claude_ai_Microsoft_Learn__microsoft_docs_fetch
+model: sonnet
 skills:
   - pedagogia
   - fuentes-oficiales

@@ -2,6 +2,7 @@
 name: verificador-fuentes
 description: Verifica afirmaciones técnicas sueltas contra la documentación oficial aplicando la skill fuentes-oficiales (Databricks con su par de Azure, Apache Spark, PySpark) y devuelve el veredicto con la cita exacta. Sirve para cualquier tema del manual. Úsalo para comprobar un default, un umbral, un límite de serverless o una frase concreta antes de escribirla, o para discutir si una fuente respalda lo que dice el manual. Solo lee e informa; no edita.
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch, Skill, mcp__claude_ai_Microsoft_Learn__microsoft_docs_search, mcp__claude_ai_Microsoft_Learn__microsoft_docs_fetch
+model: opus
 skills:
   - fuentes-oficiales
 ---
