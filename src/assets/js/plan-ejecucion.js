@@ -59,14 +59,14 @@
           cur = open([op('join(clientes, "cliente_id")')], sp, [a, b.id], SP);
         }
         else if (x.op === 'orderBy') {
-          if (last && s === 'show') { topk = true; cur.ops.push(op('orderBy("monto")', 'las 21 primeras de cada partición')); notes.push('<code>orderBy</code> seguido de <code>show()</code> no hace shuffle: cada partición saca sus 21 primeras filas y el driver junta esos tops.'); }
-          else { cut('por rangos de monto', p => open([op('orderBy("monto")', 'ordena cada rango')], sp, [p], SP)); notes.push('Por el <code>orderBy</code>, antes de este job verás en el Spark UI un job corto de <b>muestreo</b>: Spark lee una muestra para decidir los rangos de cada partición.'); }
+          if (last && s === 'show') { topk = true; cur.ops.push(op('orderBy("monto")', 'las primeras filas de cada partición')); notes.push('<code>orderBy</code> seguido de <code>show()</code> no necesita ordenar toda la tabla: Spark se queda con las primeras filas de cada partición y las junta (operador <code>TakeOrderedAndProject</code>). Puede haber un shuffle pequeño, pero no un orden global.'); }
+          else { cut('por rangos de monto', p => open([op('orderBy("monto")', 'ordena cada rango')], sp, [p], SP)); notes.push('Por el <code>orderBy</code>, Spark reparte por rangos, y para decidir los rangos toma una muestra de los datos (la doc lo explica en <code>repartitionByRange</code>). En el Spark UI ese muestreo puede verse como un job corto; la doc no lo dice.'); }
         }
       });
-      if (s === 'count') { cur.ops.push(op(null, 'conteo parcial de cada partición')); cut('a 1 partición', p => open([op('count()', 'suma los conteos parciales')], 1, [p], '<code>count()</code> junta los conteos parciales en una sola partición, así que hay una sola task')); }
+      if (s === 'count') { cur.ops.push(op(null, 'conteo parcial de cada partición')); cut('de los conteos parciales', p => open([op('count()', 'suma los conteos parciales')], 1, [p], '<code>count()</code> no reparte por ninguna clave: este stage suma los conteos parciales con 1 task (ver <a href="#explain">Leer el plan</a>)')); }
       else if (s === 'write') cur.ops.push(op('write.saveAsTable("salida")'));
       else if (s === 'collect') { cur.ops.push(op('collect()', 'manda las filas al driver')); notes.push('<code>collect()</code> trae todas las filas al driver. Con datos grandes, ahí empieza un OOM del driver.'); }
-      else if (s === 'show') { cur.ops.push(op('show()', '21 filas')); if (!topk) { cur.tasks = 1; cur.why = '<code>show()</code> lee primero 1 partición y solo pide más si no le alcanzan las 21 filas'; } }
+      else if (s === 'show') { cur.ops.push(op('show()', '20 filas por defecto')); if (!topk) { cur.tasks = 1; cur.why = '1 es ilustrativo (ver <a href="arquitectura.html">Arquitectura</a>)'; } }
       stages.push(cur);
       stages.forEach(st => { ntasks += st.tasks; });
       // nivel = cuándo puede correr el stage dentro del job (los que no dependen entre sí, a la vez)
@@ -167,15 +167,15 @@
       h += j.stages.length > 1
         ? `<p><b>${tot} tasks</b>, que se suman stage por stage:</p><ul>${j.stages.map(st => `<li><b>${st.tasks}</b> del Stage ${st.id}: ${st.why}</li>`).join('')}</ul>`
         : `<p><b>${tot} task${tot > 1 ? 's' : ''}</b>: ${j.stages[0].why}.</p>`;
-      if (j.stages.some(st => st.tasks === app.sp && /shuffle\.partitions/.test(st.why))) h += `<p><code>spark.sql.shuffle.partitions</code> decide en cuántas particiones se reparten los datos en un shuffle (por un <code>groupBy</code>, un <code>join</code> o un <code>orderBy</code>). Cada partición es una task del stage que lee ese shuffle. Spark usa 200 por defecto; con AQE, que une particiones pequeñas, el Spark UI puede mostrar menos.</p>`;
-      if (j.id > 0) h += `<p>Igual que el Job 0, empieza leyendo ventas desde cero: sin <code>cache()</code>, cada acción recalcula su linaje entero. Si el shuffle de un job anterior sirve, el Spark UI muestra esos stages como <i>skipped</i>.</p>`;
+      if (j.stages.some(st => st.tasks === app.sp && /shuffle\.partitions/.test(st.why))) h += `<p><code>spark.sql.shuffle.partitions</code> decide en cuántas particiones reparte un shuffle, y cada una es una task del stage que lo lee. Aquí lo eliges tú; el de tu compute está en <a href="#particiones">De dónde sale cada partición</a>.</p>`;
+      if (j.id > 0) h += `<p>Igual que el Job 0, empieza leyendo ventas desde cero: un DataFrame es un plan, no datos, así que cada acción vuelve a ejecutar su plan desde la lectura (para guardar un resultado entre acciones, ver <a href="#cache"><code>cache()</code></a>). Si Spark no necesita volver a calcular algún stage, el Spark UI lo muestra como <i>skipped</i> (ver <a href="#skipped">Skipped stages</a>).</p>`;
       j.notes.forEach(n => { h += `<p>${n}</p>`; });
       info.innerHTML = h;
     } else {
       const j = jobOfStage(sel.id), st = j.stages.find(s => s.id === sel.id);
       const part = st.ops.some(o => !o.c), child = j.stages.find(x => x.parents.includes(st.id));
       info.innerHTML = `<p><b>Stage ${st.id}</b> (Job ${j.id}) ejecuta: ${stageHtml(st)}.</p>
-        <p><b>${st.tasks} task${st.tasks > 1 ? 's' : ''}</b>: ${st.why}. Las tasks las fija el número de particiones, no los cores. Los cores solo deciden cuántas corren a la vez.</p>
+        <p><b>${st.tasks} task${st.tasks > 1 ? 's' : ''}</b>: ${st.why}. Las tasks las fija el número de particiones. Los cores deciden cuántas corren a la vez.</p>
         <p>${st.parents.length ? `No empieza hasta que ${st.parents.length > 1 ? 'terminan los Stages ' + st.parents.join(' y ') : 'termina el Stage ' + st.parents[0]}, porque lee su shuffle.` : 'Lee directo de la tabla, así que puede empezar en cuanto arranca el job.'}${st.sh ? ' Termina escribiendo un shuffle: ahí se corta el stage.' : ''}${part && child ? ` El cálculo parcial lo termina el Stage ${child.id} con <code>${esc(child.ops[0].c)}</code>.` : ''}</p>`;
     }
   }
@@ -251,15 +251,61 @@
   } catch (e) { console.error('Simulador del árbol de ejecución', e); }
 })();
 
-/* Cuántos stages tiene cada query: el resultado queda tapado hasta que el lector lo pide */
+
+/* Cuántos stages tiene cada query: el lector elige una opción, ve solo el comentario de esa
+   opción y después destapa el Spark UI (mismo estilo que .guess.q, pero con una pregunta por query) */
 (function () {
   const box = document.getElementById('dag-guess');
   if (!box) return;
   try {
-    const body = box.querySelector('.guess-body'), btn = document.getElementById('dag-show');
-    const show = on => { box.classList.toggle('is-hidden', !on); body.inert = !on; };
-    btn.addEventListener('click', () => show(true));
+    const ask = document.getElementById('dag-ask'), optsEl = document.getElementById('dag-opts');
+    const fb = document.getElementById('dag-fb'), more = document.getElementById('dag-show');
+    const body = box.querySelector('.guess-body');
+    // por query: pregunta, letra correcta y [letra, opción, comentario]; cada error es un modelo roto
+    const Q = {
+      narrow: { q: '<code>filter</code> + <code>select</code> y <code>write</code> sobre <code>ventas</code>: ¿cuántos stages y cuántas tasks?', ans: 'a', o: [
+        ['a', '1 stage de 80 tasks.', '<code>filter</code> y <code>select</code> son narrow: cada task trabaja su partición sin pedir filas a otras. Sin <code>Exchange</code> no hay frontera de stage, y las tasks salen de las 80 particiones de lectura.'],
+        ['b', '2 stages: uno por transformación.', 'Suponías que cada transformación abre un stage; falla porque un stage solo se corta en un <code>Exchange</code>, y <code>filter</code> y <code>select</code> no mueven datos.'],
+        ['c', '1 stage de 200 tasks.', 'Suponías que <code>shuffle.partitions</code> fija las tasks de todos los stages; falla porque aquí no hay shuffle: las tasks salen de las 80 particiones de lectura.']] },
+      agg: { q: '<code>groupBy("cliente_id").count()</code> y <code>write</code>: ¿cuántas tasks tiene el último stage?', ans: 'c', o: [
+        ['a', '1 task: <code>count</code> lo junta en una partición.', 'Confundías <code>groupBy().count()</code> con <code>df.count()</code>; falla porque <code>groupBy().count()</code> cuenta por cliente y reparte el resultado por <code>cliente_id</code> en las particiones del shuffle.'],
+        ['b', '80 tasks, las mismas de la lectura.', 'Suponías que las tasks de lectura siguen después del shuffle; falla porque el shuffle reparte los datos en <code>shuffle.partitions</code> particiones, y el stage que lo lee tiene una task por partición.'],
+        ['c', '200 tasks, las de <code>shuffle.partitions</code>.', 'El <code>groupBy</code> obliga a un shuffle, y el stage que lo lee tiene una task por partición del shuffle: 200 aquí. AQE puede unir las pequeñas, y entonces el Spark UI muestra menos.']] },
+      smj: { q: 'Join sort-merge de <code>ventas</code> y <code>clientes</code>, y <code>write</code>: ¿cuántos stages?', ans: 'b', o: [
+        ['a', '2 stages: el join es un solo shuffle.', 'Suponías que el join es un solo shuffle; falla porque cada lado se reparte por <code>cliente_id</code> en su propio stage. Normalmente hay un <code>Exchange</code> en cada lado, y el join va en un stage más.'],
+        ['b', '3 stages: uno por lado y el del join.', 'Un stage lee <code>ventas</code> y la reparte por <code>cliente_id</code>, otro hace lo mismo con <code>clientes</code>, y un tercero lee los dos shuffles y hace el join. Los dos primeros no dependen entre sí.'],
+        ['c', '1 stage: el join no mueve datos.', 'Suponías que el join junta las filas donde están; falla porque las filas de un mismo <code>cliente_id</code> están en particiones distintas de cada tabla. Para juntarlas, Spark reparte las dos tablas por la clave con un shuffle.']] },
+      bhj: { q: 'Join broadcast con <code>clientes_vip</code> (una tabla pequeña) y <code>write</code>: ¿cuántos stages ejecuta la query, sumando sus jobs?', ans: 'b', o: [
+        ['a', '1 stage: sin shuffle, todo va junto.', 'Suponías que sin <code>Exchange</code> de shuffle todo cabe en un stage; falla porque <code>clientes_vip</code> también hay que leerla. Se lee en su propio stage, que termina en el <code>BroadcastExchange</code>. Ese stage cuenta aunque salga en otro job.'],
+        ['b', '2 stages: uno por cada tabla.', 'Un stage lee <code>clientes_vip</code> y la copia entera a cada executor (<code>BroadcastExchange</code>). Otro lee <code>ventas</code> y hace el join con su copia, sin shuffle. El de <code>ventas</code> espera a que la copia esté lista. El stage del broadcast puede salir en otro job: por eso la pregunta suma los jobs de la query.'],
+        ['c', '3 stages, como en el sort-merge.', 'Suponías que todo join reparte las dos tablas por la clave; falla porque con broadcast <code>ventas</code> no se mueve. No hay <code>Exchange</code> de shuffle ni un stage aparte para el join: cada task de <code>ventas</code> hace el join con su copia de <code>clientes_vip</code>.']] },
+      aggsort: { q: '<code>groupBy</code> + <code>orderBy</code> y <code>write</code>: ¿cuántos stages?', ans: 'a', o: [
+        ['a', '3: el <code>orderBy</code> añade otro shuffle, por rangos.', 'El <code>groupBy</code> reparte por <code>cliente_id</code>, y el <code>orderBy</code> vuelve a repartir, esta vez por rangos de <code>count</code>, para que cada task ordene su tramo. Dos <code>Exchange</code>, tres stages.'],
+        ['b', '2: el <code>orderBy</code> ordena dentro del stage del <code>groupBy</code>.', 'Suponías que ordenar es narrow; falla porque un orden global necesita filas de todas las particiones: Spark las reparte por rangos de <code>count</code> con otro <code>Exchange</code>.'],
+        ['c', '2: el <code>orderBy</code> lo hace el driver al final.', 'Suponías que el driver ordena el resultado; falla porque el <code>write</code> lo hacen las tasks en los executors. Para ordenar en paralelo, Spark reparte las filas por rangos con otro shuffle.']] }
+    };
+    function load(k) {
+      const q = Q[k]; if (!q) return;
+      ask.innerHTML = q.q;
+      optsEl.textContent = '';
+      fb.hidden = true; fb.innerHTML = '';
+      more.hidden = true; body.hidden = true; body.inert = true;
+      const btns = q.o.map(([l, txt, why]) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.dataset.opt = l; b.setAttribute('aria-pressed', 'false');
+        b.innerHTML = `${l}) ${txt}`;
+        b.addEventListener('click', () => {
+          btns.forEach(x => { const me = x === b; x.setAttribute('aria-pressed', me); x.classList.toggle('ok', me && l === q.ans); x.classList.toggle('no', me && l !== q.ans); });
+          fb.innerHTML = `<p><b>${l}) ${l === q.ans ? 'Sí' : 'No'}.</b> ${why}</p>`; fb.hidden = false;
+          if (body.hidden) more.hidden = false;
+        });
+        optsEl.appendChild(b); return b;
+      });
+    }
+    more.addEventListener('click', () => { body.hidden = false; body.inert = false; more.hidden = true; });
     // cada query nueva vuelve a taparse, para pensarla antes de verla
-    document.querySelectorAll('#dag-q [data-q]').forEach(b => b.addEventListener('click', () => show(false)));
-  } catch (e) { console.error('Resultado tapado del simulador de stages', e); }
+    document.querySelectorAll('#dag-q [data-q]').forEach(b => b.addEventListener('click', () => load(b.dataset.q)));
+    const on = document.querySelector('#dag-q [aria-pressed="true"]');
+    load(on ? on.dataset.q : 'narrow');
+  } catch (e) { console.error('Predicción del simulador de stages', e); }
 })();

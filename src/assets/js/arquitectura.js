@@ -5,25 +5,25 @@
   const WORKERS = 3, CORES = 4;
   // parts: piezas del driver que trabajan; exec: si trabajan los executors;
   // mem: cuánto llena la memoria del driver (0-100) y su nivel;
-  // tasks: cuántas tasks reparte el scheduler (una por partición; ventas se lee en 16, a propósito
-  // distinto de los 12 cores); ret: qué vuelve y adónde
+  // tasks: cuántas tasks reparte el scheduler (una por partición; ventas se lee en 14, a propósito
+  // distinto de los 12 cores y de los 4 cores por worker); st: stages y tasks que muestran las cifras; ret: qué vuelve y adónde
   // (uno = un valor, pocas = unas filas, todas = todas las filas, store = al almacenamiento)
   const L = {
-    py: { code: 'total = 2 + 2\nprint(total)', parts: ['py'], exec: false, jobs: '0', back: '—', mem: 2, lvl: 'ok',
+    py: { code: 'total = 2 + 2\nprint(total)', parts: ['py'], exec: false, st: '0 · no hay job', back: '—', mem: 2, lvl: 'ok',
       info: '<b>Solo el driver.</b> Es Python sin Spark: el nodo driver interpreta cada comando del notebook, y este no lanza ningún job. Los workers no se enteran.' },
-    read: { code: 'df = spark.read.table("ventas")', parts: ['plan'], exec: false, jobs: '0', back: '—', mem: 2, lvl: 'ok',
+    read: { code: 'df = spark.read.table("ventas")', parts: ['plan'], exec: false, st: '0 · no hay job', back: '—', mem: 2, lvl: 'ok',
       info: '<b>El driver anota el plan.</b> Leer una tabla devuelve un DataFrame sin leer los datos. Los executors siguen sin trabajo hasta que llegue una acción.' },
-    filter: { code: 'df = df.filter("monto > 100")', parts: ['plan'], exec: false, jobs: '0', back: '—', mem: 2, lvl: 'ok',
-      info: '<b>Tampoco corre nada.</b> <code>filter</code> es una transformación narrow: el driver añade un paso al plan. Puedes encadenar muchas y los executors no hacen nada hasta la acción.' },
-    count: { code: 'df.count()', parts: ['plan', 'sched'], exec: true, jobs: '1 o más', back: '1 número', mem: 3, lvl: 'ok', tasks: 16, ret: 'uno',
-      info: '<b>Ahora trabajan los executors.</b> <code>count()</code> es una acción. El driver optimiza el plan y el scheduler lo divide en stages y tasks. Cada task corre en un core de un executor: lee su partición, filtra y cuenta sus filas. Las filas no salen de su executor: solo viajan los conteos parciales, en un shuffle pequeño, hasta una sola task que los suma (ver <a href="plan-ejecucion.html">Plan de ejecución</a>). Al driver vuelve un número.' },
-    show: { code: 'df.show()', parts: ['plan', 'sched'], exec: true, jobs: '1 o más', back: 'Hasta 21 filas', mem: 4, lvl: 'ok', tasks: 1, ret: 'pocas',
-      info: '<b>Trabajo pequeño, resultado pequeño.</b> <code>show()</code> muestra 20 filas por defecto y pide 21, para saber si hay más. Spark lee primero una partición. Si no le alcanzan las filas, lo vuelve a intentar leyendo más particiones. Al driver vuelven como mucho esas 21 filas.' },
-    write: { code: 'df.write.saveAsTable("salida")', parts: ['plan', 'sched'], exec: true, jobs: '1 o más', back: 'Ninguna fila', mem: 3, lvl: 'ok', tasks: 16, ret: 'store',
+    filter: { code: 'df = df.filter("monto > 100")', parts: ['plan'], exec: false, st: '0 · no hay job', back: '—', mem: 2, lvl: 'ok',
+      info: '<b>Tampoco corre nada.</b> <code>filter</code> es una transformación: el driver añade un paso al plan. Puedes encadenar muchas y los executors no hacen nada hasta la acción.' },
+    count: { code: 'df.count()', parts: ['plan', 'sched'], exec: true, st: '14 tasks + suma final', back: '1 número', mem: 3, lvl: 'ok', tasks: 14, ret: 'uno',
+      info: '<b>Ahora trabajan los executors.</b> <code>count()</code> es una acción. El driver optimiza el plan y el scheduler lo divide en stages y tasks. Cada task corre en un core de un executor: lee su partición, filtra y cuenta sus filas. Las filas no salen de su executor: solo viajan los conteos parciales. Después, una task final suma los 14 conteos (ver <a href="plan-ejecucion.html#explain">lo que se ve en el Spark UI</a>). Al driver vuelve un número.' },
+    show: { code: 'df.show()', parts: ['plan', 'sched'], exec: true, st: '1 stage · 1 task (ilustrativo)', back: 'Hasta 20 filas', mem: 4, lvl: 'ok', tasks: 1, ret: 'pocas',
+      info: '<b>Resultado pequeño.</b> <code>show()</code> muestra 20 filas por defecto. Cuántas particiones lee para conseguirlas no lo documentan ni Spark ni Databricks: aquí es 1 task, como ejemplo. En el Spark UI lo ves en las tasks de su stage. Al driver vuelven como mucho esas 20 filas.' },
+    write: { code: 'df.write.saveAsTable("salida")', parts: ['plan', 'sched'], exec: true, st: '1 stage · 14 tasks', back: 'Ninguna fila', mem: 3, lvl: 'ok', tasks: 14, ret: 'store',
       info: '<b>Las filas se quedan en los executors.</b> Cada task escribe sus archivos en el almacenamiento. Al driver no vuelve ninguna fila.' },
-    collect: { code: 'filas = df.collect()', parts: ['plan', 'sched'], exec: true, jobs: '1 o más', back: 'Todas las filas', mem: 96, lvl: 'bad', tasks: 16, ret: 'todas',
-      info: '<b>Todo el resultado viaja al driver.</b> Los executors calculan en paralelo, pero todas las filas acaban en la memoria de una sola máquina. La doc de PySpark avisa que solo se use si el resultado es pequeño. Con datos grandes, aquí empieza un OOM del driver. Más workers no ayudan: el límite es el driver.' },
-    pandas: { code: 'pdf = df.toPandas()\npdf.groupby("cliente_id").sum()', parts: ['plan', 'sched', 'py'], exec: true, jobs: '1 o más', back: 'Todas las filas', mem: 96, lvl: 'bad', tasks: 16, ret: 'todas',
+    collect: { code: 'filas = df.collect()', parts: ['plan', 'sched'], exec: true, st: '1 stage · 14 tasks', back: 'Todas las filas', mem: 96, lvl: 'bad', tasks: 14, ret: 'todas',
+      info: '<b>Todo el resultado viaja al driver.</b> Los executors calculan en paralelo, pero todas las filas acaban en la memoria de una sola máquina. La doc de PySpark avisa que solo se use si el resultado es pequeño. Con datos grandes, aquí empieza un OOM del driver. Más workers no ayudan cuando el límite es el driver.' },
+    pandas: { code: 'pdf = df.toPandas()\npdf.groupby("cliente_id").sum()', parts: ['plan', 'sched', 'py'], exec: true, st: '1 stage · 14 tasks', back: 'Todas las filas', mem: 96, lvl: 'bad', tasks: 14, ret: 'todas',
       info: '<b>Igual que <code>collect()</code>, y después solo el driver.</b> <code>toPandas()</code> trae todas las filas a la memoria del driver. La segunda línea es pandas, o sea Python normal: corre en el driver, sin executors.' }
   };
 
@@ -44,7 +44,8 @@
   // SLOW alarga todos los tiempos; LOOP_PAUSE es la espera antes de repetir la acción
   const SLOW = 1.6, LOOP_PAUSE = 2500;
   const replay = document.getElementById('ar-replay');
-  let run = 0, cur = 'py', paused = false, visible = true;
+  // done: el paso actual terminó (Reanudar sigue en el siguiente, no lo repite)
+  let run = 0, cur = 'py', paused = false, visible = true, done = false;
 
   // Centro de un elemento en coordenadas de .ar-map (sirve igual en columnas y apilado)
   function center(el) {
@@ -72,11 +73,13 @@
   function setParts(ps) {
     drv.querySelectorAll('[data-p]').forEach(li => li.classList.toggle('on', ps.includes(li.dataset.p)));
   }
+  // Enciende los cores de la lista (o los n primeros del orden de reparto) y apaga el resto
   function setCores(n) {
-    order.forEach((c, i) => c.classList.toggle('run', i < n));
+    const on = Array.isArray(n) ? n : order.slice(0, n);
+    cores.forEach(c => c.classList.toggle('run', on.includes(c)));
     box.querySelectorAll('.ar-exec').forEach(w => {
-      const on = !!w.querySelector('.ar-cores i.run');
-      w.classList.toggle('on', on); w.classList.toggle('idle', !on);
+      const busy = !!w.querySelector('.ar-cores i.run');
+      w.classList.toggle('on', busy); w.classList.toggle('idle', !busy);
     });
   }
 
@@ -92,19 +95,26 @@
   function buildSteps(k) {
     const l = L[k], n = cores.length;
     // Primera tanda: una task por core libre. Si sobran tasks, esperan y las toman los primeros
-    // cores que terminan (aquí, los primeros del orden de reparto)
+    // cores que terminan (aquí, los primeros del orden de reparto: con 2, uno en cada worker)
     const first = order.slice(0, Math.min(l.tasks, n)), rest = Math.max(0, l.tasks - n);
     const second = order.slice(0, rest), used = first.concat(second);
+    // Los cores que siguen con su task cuando llegan las pendientes. Terminan escalonados, en un
+    // orden mezclado para que no parezca que acaban por worker: se recorren a saltos de `hop`,
+    // primo con su número y que no sea múltiplo de los workers
+    const others = first.filter(c => !second.includes(c));
+    const gcd = (a, b) => b ? gcd(b, a % b) : a;
+    const hop = [7, 5, 1].find(h => h === 1 || (gcd(h, others.length) === 1 && h % WORKERS));
+    const offOrder = others.map((c, i) => others[(i * hop) % others.length]);
     const one = l.tasks === 1, tasksEl = document.getElementById('ar-tasks');
-    const label = w => '· ' + plural(l.tasks) + (w ? ` (${w} en espera)` : '') + (l.ret === 'uno' ? ' + 1 después' : '');
+    const label = w => '· ' + plural(l.tasks) + (w ? ` (${w} en espera)` : '');
     const s = [
       { text: 'El driver optimiza el plan', set: () => setParts(['plan']) },
       { text: l.ret === 'uno'
-          ? `El scheduler divide la acción en stages. Primer stage: ${plural(l.tasks)}, una por partición de ventas. Tras un shuffle, un segundo stage de 1 task`
-          : one ? 'El scheduler reparte 1 task: show() lee primero una sola partición' : `El scheduler reparte ${plural(l.tasks)}, una por partición de ventas`,
+          ? `El scheduler divide la acción en stages. El primero tiene ${plural(l.tasks)}, una por partición de ventas`
+          : one ? 'El scheduler reparte las tasks de show() (1, ilustrativo)' : `El scheduler reparte ${plural(l.tasks)}, una por partición de ventas`,
         set: () => { setParts(['plan', 'sched']); tasksEl.textContent = label(0); } },
       { text: rest
-          ? `${first.length} tasks van a los ${n} cores, una por core. Las otras ${rest} esperan su turno`
+          ? `${first.length} tasks van a los ${n} cores, una por core. Las otras ${rest} esperan a que se libere un core`
           : `${one ? 'La task va' : 'Cada task va'} a un core libre: ${plural(l.tasks)} en ${n} cores. ${n - l.tasks} cores se quedan sin trabajo`,
         set: () => { down.classList.add('on'); tasksEl.textContent = label(rest); },
         anim: () => Promise.all(first.map((c, i) => fly(part('sched'), c, 'task', i * 70))),
@@ -114,12 +124,29 @@
         set: () => store.classList.add('on'),
         anim: () => Promise.all(first.map((c, i) => fly(store, c, 'data', i * 50))).then(() => wait(500)) }
     ];
+    // Segunda tanda en dos pasos: (a) terminan tantas tasks como esperan y sus cores se apagan;
+    // (b) las pendientes van a esos cores mientras los demás siguen y se apagan escalonados.
+    // No hay barrera: las pendientes no esperan a que acabe la primera tanda entera
     if (rest) s.push(
-      { text: `Las ${rest} tasks que esperaban van a los primeros ${rest} cores que se liberan, sin esperar a los demás. Los otros ${n - rest} cores, al acabar su task, se quedan sin trabajo`,
-        anim: () => Promise.all(second.map((c, i) => fly(part('sched'), c, 'task', i * 70)))
-          .then(() => { tasksEl.textContent = label(0); return Promise.all(second.map((c, i) => fly(store, c, 'data', i * 50))); })
-          .then(() => { setCores(rest); return wait(900); }),
-        after: () => { setCores(rest); tasksEl.textContent = label(0); } });
+      { text: `Terminan ${plural(rest)}: esos cores quedan libres. Los otros ${others.length} siguen trabajando`,
+        anim: live => wait(500).then(() => { if (live()) setCores(others); return wait(1100); }),
+        after: () => setCores(others) },
+      { text: `Las ${rest} tasks que esperaban van a esos cores, sin esperar a los otros ${others.length}. Esos terminan cada uno a su ritmo. El reparto es de ejemplo`,
+        anim: live => Promise.all(second.map((c, i) => fly(part('sched'), c, 'task', i * 70)))
+          .then(() => { if (!live()) return; tasksEl.textContent = label(0); return Promise.all(second.map((c, i) => fly(store, c, 'data', i * 50))); })
+          .then(async () => {
+            if (!live()) return;
+            setCores(first);
+            const on = first.slice();
+            for (const c of offOrder) {
+              await wait(260);
+              if (!live()) return;
+              on.splice(on.indexOf(c), 1);
+              setCores(on);
+            }
+            return wait(900);
+          }),
+        after: () => { setCores(second); tasksEl.textContent = label(0); } });
     const end = () => { mem.style.width = l.mem + '%'; mem.className = l.lvl; setCores(0); store.classList.toggle('on', l.ret === 'store'); };
     if (l.ret === 'store') {
       s.push({ text: 'Cada task escribe sus archivos en el almacenamiento. Al driver no vuelve ninguna fila',
@@ -128,8 +155,8 @@
       // count(): cada task cuenta su partición; solo los conteos viajan, a una task final
       const last = order[0];
       s.push(
-        { text: `Cuando terminan las ${l.tasks} tasks, empieza el segundo stage: los ${l.tasks} conteos (no las filas) van a una sola task`,
-          set: () => setCores(0),
+        { text: `Terminan las ${l.tasks} tasks del primer stage. Lo habitual es un segundo stage que lleva los ${l.tasks} conteos (no las filas) a una sola task`,
+          set: () => { setCores(0); tasksEl.textContent = '· 1 task (segundo stage)'; },
           anim: () => Promise.all([fly(part('sched'), last, 'task', 0),
             ...used.map((c, i) => fly(c, last, 'res', 200 + i * 60))]),
           after: () => setCores(1) },
@@ -137,7 +164,7 @@
           anim: () => fly(last, drv.querySelector('.ar-mem'), 'res', 0), after: end });
     } else {
       const dots = l.ret === 'pocas' ? [used[0], used[0], used[0]] : used.flatMap(c => [c, c, c]);
-      s.push({ text: l.ret === 'todas' ? 'Todas las filas viajan al driver' : 'Al driver vuelven como mucho 21 filas',
+      s.push({ text: l.ret === 'todas' ? 'Todas las filas viajan al driver' : 'Al driver vuelven como mucho 20 filas',
         set: () => {
           up.classList.add('on');
           if (l.ret === 'todas') { mem.className = 'bad'; mem.style.transitionDuration = reduce ? '' : 2 * SLOW + 's'; mem.style.width = l.mem + '%'; }
@@ -150,14 +177,29 @@
     return s;
   }
 
-  // Estado inicial de una línea: código, cifras, explicación y el compute en reposo
+  // Cifras y explicación de una línea. En las acciones salen al llegar al último paso, junto a lo
+  // que se acaba de ver; una vez a la vista se quedan mientras no cambies de línea
+  const stats = document.getElementById('ar-stats'), info = document.getElementById('ar-info');
+  let shown = null;
+  function showResult(k) {
+    const l = L[k];
+    if (shown === k) return;
+    shown = k;
+    stats.innerHTML =
+      `<div><b>${l.st}</b><span>stages · tasks</span></div><div><b>${l.exec ? 'Sí' : 'No'}</b><span>trabajan los executors</span></div><div><b>${l.back}</b><span>vuelve al driver</span></div>`;
+    info.innerHTML = `<p>${l.info}</p>`;
+  }
+
+  // Estado inicial de una línea: código, compute en reposo y, si no hay acción, cifras y explicación
   function reset(k) {
     const l = L[k];
     stopDots();
     document.getElementById('ar-code').textContent = l.code;
-    document.getElementById('ar-stats').innerHTML =
-      `<div><b>${l.jobs}</b><span>jobs de Spark</span></div><div><b>${l.exec ? 'Sí' : 'No'}</b><span>trabajan los executors</span></div><div><b>${l.back}</b><span>vuelve al driver</span></div>`;
-    document.getElementById('ar-info').innerHTML = `<p>${l.info}</p>`;
+    if (!l.exec) showResult(k);
+    else if (shown !== k) {
+      stats.innerHTML = '';
+      info.innerHTML = '<p>Sigue los pasos: al terminar aparecen aquí las cifras y la explicación.</p>';
+    }
     drv.classList.add('on');
     up.textContent = l.exec ? l.back.toLowerCase() : 'resultado';
     up.classList.toggle('bad', l.lvl === 'bad');
@@ -191,13 +233,15 @@
     steps.slice(0, from).forEach(st => { st.set && st.set(); st.after && st.after(); });
     for (let i = from; i < steps.length; i++) {
       const st = steps[i];
-      step = i;
+      step = i; done = false;
       prev.disabled = i === 0; next.disabled = i === steps.length - 1;
       phase.textContent = `${i + 1}/${steps.length} · ${st.text}`;
       st.set && st.set();
-      await (st.anim ? st.anim() : wait(700));
+      await (st.anim ? st.anim(live) : wait(700));
       if (!live()) return;
       st.after && st.after();
+      done = true;
+      if (i === steps.length - 1) showResult(k);
       if (!auto) return;
     }
     // Se repite sola mientras no esté en pausa; fuera de pantalla espera sin animar
@@ -211,11 +255,16 @@
   q.querySelectorAll('[data-l]').forEach(b => b.addEventListener('click', () => {
     q.querySelectorAll('[data-l]').forEach(x => x.setAttribute('aria-pressed', x === b));
     steps = [];
-    play(b.dataset.l, 0, !paused);
+    // Predicción: una acción se queda en el paso 1, en pausa, hasta que pulses Reanudar o ›.
+    // Con movimiento reducido no hay controles: se muestra entera
+    const k = b.dataset.l;
+    if (L[k].exec && !reduce) { setPaused(true); play(k, 0, false); }
+    else play(k, 0, !paused);
   }));
   replay.addEventListener('click', () => {
     setPaused(!paused);
-    if (paused) { run++; stopDots(); } else play(cur, step, true);
+    if (paused) { run++; stopDots(); }
+    else play(cur, done && step < steps.length - 1 ? step + 1 : step, true);
   });
   prev.addEventListener('click', () => { setPaused(true); play(cur, Math.max(0, step - 1), false); });
   next.addEventListener('click', () => { setPaused(true); play(cur, Math.min(steps.length - 1, step + 1), false); });

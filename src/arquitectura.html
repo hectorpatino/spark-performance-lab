@@ -18,15 +18,16 @@ extra_css: ["/assets/css/arquitectura.css"]
         <li>El scheduler (la parte del driver que reparte el trabajo) divide cada job en stages y
           manda sus tasks a los cores de los executors.</li>
         <li>Las transformaciones solo anotan el plan en el driver. Los executors no trabajan hasta
-          que llega una acción.</li>
-        <li><code>collect()</code> y <code>toPandas()</code> traen todas las filas a la memoria del
-          driver. Más workers no lo arreglan.</li>
-        <li>En serverless, tu notebook es un cliente de Spark Connect: manda el plan a un servidor
-          remoto. Solo admite APIs de Spark Connect, no la API de RDD.</li>
+          que llega una acción. Hay excepciones; por ejemplo, leer CSV o JSON infiriendo el
+          esquema, que recorre los datos una vez.</li>
+        <li><code>collect()</code> y <code>toPandas()</code> traen todas las filas del resultado a
+          la memoria del driver.</li>
+        <li>En serverless no hay Spark UI ni eliges los cores (ver <a href="#serverless">En
+          serverless</a>).</li>
       </ul>
       <p class="essentials-one"><b>Si solo recuerdas una cosa:</b> antes de culpar al cluster,
-        pregúntate si esa línea corre en el driver o en los executors. Más workers solo aceleran lo
-        que corre en los executors.</p>
+        pregúntate si esa línea corre en el driver o en los executors. Más workers ayudan con lo
+        que corre en los executors, no con lo que vuelve al driver.</p>
     </div>
 
     <h3><span class="k">Qué problema resuelve</span>Dónde corre cada línea de tu notebook</h3>
@@ -35,20 +36,17 @@ extra_css: ["/assets/css/arquitectura.css"]
       La diferencia no es el tamaño del cluster, sino dónde corre cada línea. Algunas corren solo en
       el driver, que es una sola máquina. Otras se reparten entre todos los executors.</p>
 
-    <h3><span class="k">Definiciones cortas</span>Quién hace qué</h3>
+    <h3 id="quien-hace-que"><span class="k">Definiciones cortas</span>Quién hace qué</h3>
     <div class="tblwrap"><table>
       <thead><tr><th>Pieza</th><th>Qué hace</th><th>Dónde está en Databricks</th></tr></thead>
       <tbody>
-        <tr><td><b>Driver</b></td><td>El proceso que ejecuta tu programa y crea el
-          <code>SparkContext</code>. Coordina a los executors</td><td>El nodo driver. Guarda el
+        <tr><td><b>Driver</b></td><td>El proceso que ejecuta tu programa y coordina a los
+          executors</td><td>El nodo driver. Guarda el
           estado de los notebooks conectados e interpreta cada comando que ejecutas</td></tr>
         <tr><td><b>SparkSession</b></td><td>El punto de entrada para usar DataFrames y
           SQL</td><td>La variable <code>spark</code> del notebook, que ya viene creada</td></tr>
         <tr><td><b>Scheduler</b></td><td>La parte del driver que divide cada job en stages y manda
           sus tasks a los executors</td><td>Dentro del driver</td></tr>
-        <tr><td><b>Cluster manager</b></td><td>El servicio que consigue los recursos del cluster
-          para cada aplicación (en Spark: standalone, YARN o Kubernetes)</td><td>El nodo driver
-          corre el <i>Spark master</i>, que coordina a los executors</td></tr>
         <tr><td><b>Worker</b></td><td>Una máquina del cluster que puede ejecutar código de la
           aplicación</td><td>Los nodos worker del compute</td></tr>
         <tr><td><b>Executor</b></td><td>El proceso de tu aplicación en un worker. Corre cada task en
@@ -65,31 +63,51 @@ extra_css: ["/assets/css/arquitectura.css"]
     <p>Elige una línea del notebook y mira qué parte del compute trabaja y qué vuelve al driver.
       Antes, los números del simulador (son ilustrativos):</p>
     <ul>
-      <li><b>3 workers de 4 cores: 12 cores para tasks.</b> Databricks corre un executor por worker,
-        así que cada worker es un executor con 4 cores. Las tasks solo corren en esos executors. El
+      <li><b>3 workers de 4 cores: 12 cores para tasks.</b> Cada worker es un executor con 4
+        cores. Las tasks solo corren en esos executors. El
         driver también tiene cores, pero no corren tasks y no cuentan en estos 12 (la excepción es
         single node; ver abajo).</li>
       <li><b>Cada core corre una task a la vez</b> (es el valor por defecto, <code>spark.task.cpus =
         1</code>). Cada worker corre hasta 4 tasks a la vez, no una. Entre los 3, hasta 12 a la
         vez.</li>
-      <li><b>La tabla <code>ventas</code> se lee en 16 particiones, así que el stage que la lee tiene
-        16 tasks</b>, una por partición. El número lo decide sobre todo el tamaño de los datos: trozos
-        de hasta 128 MB. Spark intenta además, sin garantizarlo, tener al menos tantas particiones
-        como cores, pero no las ajusta para que cuadren con ellos (ver <a
-        href="plan-ejecucion.html">Plan de ejecución</a>). En otras páginas, <code>ventas</code>
-        tiene otros tamaños.</li>
-      <li><b>Como hay más tasks que cores, 4 esperan su turno.</b> Cada core toma la siguiente en
-        cuanto termina la suya, sin esperar a los demás cores. Mientras corren esas 4 últimas, los
-        otros 8 cores, al acabar su task, se quedan sin trabajo (ver <a href="stages.html">Tasks, cores y
-        waves</a>). Qué core toma cada task lo decide el scheduler; en el simulador es un reparto
-        de ejemplo.</li>
-      <li><b>Lo que sí espera es el stage siguiente.</b> No empieza hasta que el anterior termina
-        todas sus tasks. En <code>count()</code>, la task que suma los conteos espera a las 16.</li>
-      <li><b>El simulador cuenta stages y tasks, no jobs.</b> Cuántos jobs ves en el Spark UI por
-        una acción depende de AQE, que viene activo en Databricks, y de la acción: por eso las
-        cifras dicen «1 o más». Los stages y las tasks no cambian por eso (ver <a
-        href="plan-ejecucion.html">Plan de ejecución</a>).</li>
+      <li><b>La tabla <code>ventas</code> se lee en 14 particiones, así que el stage que la lee tiene
+        14 tasks</b>, una por partición. De dónde sale ese 14: <a
+        href="plan-ejecucion.html#particiones">De dónde sale cada partición</a>. En otras páginas,
+        <code>ventas</code> tiene otros tamaños.</li>
+      <li><b>Como hay 14 tasks y 12 cores, 2 esperan a que se libere un core</b> (cómo se
+        reparten: <a href="stages.html#waves">Tasks, cores y waves</a>). Y el stage siguiente no
+        empieza hasta que este termina sus 14 tasks.</li>
+      <li><b>El simulador cuenta stages y tasks, no jobs.</b> En el Spark UI una acción puede
+        verse como varios jobs (por qué: <a href="plan-ejecucion.html#varios-jobs">Plan de
+        ejecución · Job vs acción</a>).</li>
     </ul>
+    <div class="guess q" data-guess data-answer="b">
+      <div class="guess-cover">
+        <p><b>Predice:</b> <code>df.count()</code>, con <code>df</code> ya filtrado, sobre
+          <code>ventas</code> (14 particiones, 12 cores). Para llegar al total, ¿qué viaja entre
+          executors?</p>
+        <div class="guess-opts" role="group" aria-label="Opciones">
+          <button type="button" data-opt="a">a) Todas las filas filtradas, a una task que las
+            cuenta</button>
+          <button type="button" data-opt="b">b) Un conteo por task: 14 números</button>
+          <button type="button" data-opt="c">c) Nada: el driver lee la tabla y la cuenta</button>
+        </div>
+      </div>
+      <div class="guess-fb" data-for="a"><p><b>No.</b> Suponías que contar exige juntar las filas;
+        falla porque cada task puede contar su partición donde está, y solo hace falta sumar
+        los resultados.</p></div>
+      <div class="guess-fb" data-for="b"><p><b>Sí.</b> Cada task cuenta las filas de su partición;
+        lo que viaja son 14 números, no las filas.</p></div>
+      <div class="guess-fb" data-for="c"><p><b>No.</b> Suponías que el driver hace el trabajo;
+        falla porque el driver solo planea: las 14 tasks corren en los executors y cada una lee su
+        partición del almacenamiento.</p></div>
+      <div class="guess-body">
+        <p><b>Compruébalo:</b> elige <i>count()</i> y avanza con <b>›</b>.</p>
+        <p>El stage que lee <code>ventas</code> tiene 14 tasks, una por partición: cada una cuenta
+          sus filas. Después, una task final suma los 14 conteos (ver <a
+          href="plan-ejecucion.html#explain">lo que se ve en el Spark UI</a>).</p>
+      </div>
+    </div>
     <div class="console">
       <div class="ttl">Elige una línea · 1 driver · 3 workers × 4 cores = 12 cores para tasks</div>
       <div class="chips" role="group" aria-label="Línea del notebook" id="ar-q">
@@ -134,17 +152,18 @@ extra_css: ["/assets/css/arquitectura.css"]
       <div class="stats" id="ar-stats"></div>
       <div class="stepinfo" id="ar-info" aria-live="polite"></div>
     </div>
-    <p>Prueba esto:</p>
+    <p>Después, explora por tu cuenta:</p>
     <ul>
-      <li>Pasa de <i>filter</i> a <i>count()</i>: hasta la acción, los executors no hacen
-        nada.</li>
+      <li>Pasa de <i>spark.read</i> a <i>filter</i> y luego a <i>count()</i>. ¿En qué línea
+        empiezan a trabajar los executors?</li>
       <li>Compara <i>write</i> con <i>collect()</i>. Los dos ponen a trabajar a los mismos
-        executors, pero solo <code>collect()</code> llena la memoria del driver.</li>
-      <li>Con cualquier acción, mira la caja <i>Almacenamiento en la nube</i>. Está fuera del
-        compute, y cada task lee su partición directamente desde ahí. Las filas solo pasan por el driver con <code>collect()</code> y
-        <code>toPandas()</code>.</li>
-      <li>Con <i>toPandas()</i>, mira la segunda línea: el <code>groupby</code> de pandas es Python
-        normal y corre solo en el driver.</li>
+        executors. ¿Cuál de los dos llena la memoria del driver?</li>
+      <li>Con cualquier acción, mira la caja <i>Almacenamiento en la nube</i>, que está fuera del
+        compute. ¿Las filas que lee cada task pasan por el driver?</li>
+      <li>Elige <i>show()</i> y compáralo con <i>collect()</i>. ¿Cuántas filas vuelven al driver
+        en cada uno?</li>
+      <li>Con <i>toPandas()</i>, mira la segunda línea del código. ¿Qué parte del compute
+        corre el <code>groupby</code> de pandas?</li>
     </ul>
 
     <h3><span class="k">Cómo funciona por dentro</span>El recorrido de una acción</h3>
@@ -152,40 +171,111 @@ extra_css: ["/assets/css/arquitectura.css"]
       <li><b>El driver ejecuta tu celda.</b> El nodo driver interpreta cada comando del notebook.
         El Python que no usa Spark se queda ahí.</li>
       <li><b>Las transformaciones solo construyen el plan.</b> Hasta la acción, el driver no lanza
-        ningún job.</li>
-      <li><b>La acción crea un job; con AQE, suele dar varios.</b> El driver optimiza el plan, y el scheduler lo divide en
-        stages: uno más por cada shuffle (ver <a href="plan-ejecucion.html">Plan de
-        ejecución</a>).</li>
+        ningún job. Hay excepciones; por ejemplo, leer CSV o JSON con inferencia de esquema:
+        Spark recorre los datos una vez para deducir el esquema (<a
+        href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.csv.html"
+        target="_blank" rel="noopener">DataFrameReader.csv</a>).</li>
+      <li><b>La acción crea un job (en el Spark UI pueden salir varios; <a
+        href="plan-ejecucion.html#varios-jobs">ver por qué</a>).</b> El driver optimiza el plan, y
+        el scheduler lo divide en stages: uno más por cada <a href="shuffle.html">shuffle</a> (ver
+        <a href="plan-ejecucion.html">Plan de ejecución</a>).</li>
       <li><b>El scheduler manda las tasks a los executors.</b> Hay una por partición, y cada core
-        corre una a la vez, cada una en un hilo del executor. Los executors viven mientras vive la
-        aplicación (ver <a href="stages.html">Tasks, cores y waves</a>).</li>
+        corre una a la vez, cada una en un hilo del executor (ver <a href="stages.html">Tasks,
+        cores y waves</a>). Cada aplicación tiene sus propios executors. En Databricks, si el
+        compute tiene autoscaling, los workers y sus executors se añaden y se retiran según la
+        carga (<a href="https://docs.databricks.com/aws/en/compute/configure#enable-autoscaling"
+        target="_blank" rel="noopener">Enable autoscaling</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/configure#enable-autoscaling"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
       <li><b>El resultado vuelve al driver.</b> Puede ser un número (<code>count()</code>), unas
         pocas filas (<code>show()</code>), todas las filas (<code>collect()</code>) o ninguna
         (<code>write</code>).</li>
     </ol>
+    <p><b><code>display()</code> está entre <code>show()</code> y <code>collect()</code>.</b>
+      <code>display(df)</code> también es una acción, igual que <code>show()</code> (<a
+      href="https://docs.databricks.com/aws/en/pyspark/#data-processing" target="_blank"
+      rel="noopener">PySpark on Databricks</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/pyspark/#data-processing"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>).
+      <code>show()</code> imprime 20 filas por defecto. <code>display(df)</code> muestra una tabla
+      de hasta 10.000 filas o 2 MB (lo que se alcance antes) y avisa cuando trunca.
+      <code>collect()</code> trae <b>todas</b> las filas a la memoria del driver (<a
+      href="https://docs.databricks.com/aws/en/notebooks/notebook-limitations#notebook-cell-outputs"
+      target="_blank" rel="noopener">Notebook cell outputs</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/notebooks/notebook-limitations#notebook-cell-outputs"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>).</p>
 
     <h3><span class="k">En Databricks</span>Cómo se traduce en tu compute</h3>
     <ul>
       <li><b>Compute clásico con varios nodos.</b> Un nodo driver y uno o más workers. Todo el
-        procesamiento distribuido ocurre en los workers. Si lo dejas en cero workers sin marcar
-        <i>Single node</i>, solo funcionan los comandos que no son de Spark; los de Spark
-        fallan.</li>
+        procesamiento distribuido ocurre en los workers. Para correr Spark hace falta al menos un
+        worker: con cero, los comandos de Spark fallan. Un compute multinodo no se puede dejar en
+        0 workers; para eso está <i>Single node</i> (<a
+        href="https://docs.databricks.com/aws/en/compute/configure#worker-node-type"
+        target="_blank" rel="noopener">Compute configuration reference</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/configure#worker-node-type"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
       <li><b>Single node.</b> Es un modo aparte, que se marca al crear el compute. No hay workers:
-        el driver hace de master y de worker, y Spark corre en local con un hilo executor por core
-        (la doc dice <i>core lógico</i>), menos uno para el driver. Aquí sí corren tasks en el
-        nodo driver. Está pensado para pocos datos o cargas que no se distribuyen.</li>
+        el driver hace de master y de worker, y Spark corre en local con un hilo executor por core,
+        menos uno para el driver. Aquí sí corren tasks en el nodo driver. Está pensado para pocos
+        datos o cargas que no se distribuyen.</li>
+      <li id="photon"><b>Photon está activo en casi todo compute de Databricks.</b> Photon es el
+        motor de ejecución vectorizado de Databricks: procesa los datos por lotes de columnas, no
+        fila a fila, y está escrito en C++. Está activo en serverless y en los SQL warehouses (el
+        compute para queries SQL), y por defecto en el compute clásico. Si creas el compute con la
+        Clusters API o la Jobs API, tienes que activarlo tú (<code>runtime_engine</code> =
+        <code>PHOTON</code>). Catalyst (el optimizador de Spark) sigue planeando la query; Photon
+        cambia quién la ejecuta, así que en el plan ves operadores de Photon en lugar de algunos de
+        Spark. Este manual describe el motor de Spark sin Photon. Para saber si tu query corrió en
+        Photon, en compute clásico mira el DAG de la pestaña SQL / DataFrame del Spark UI: sus
+        operadores salen en naranja. En serverless, míralo en el <a
+        href="query-profile.html">query profile</a> (<a
+        href="https://docs.databricks.com/aws/en/compute/photon" target="_blank"
+        rel="noopener">What is Photon?</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/photon" target="_blank"
+        rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).
+        Qué cambia en los joins: <a href="joins.html#photon">Joins · Con Photon</a>.</li>
       <li><b>El driver guarda el estado de todos los notebooks conectados.</b> Por eso Databricks
-        recomienda desconectar los que no uses. Con instancias spot, el driver siempre es
-        on-demand (ver <a href="azure.html">Azure Databricks</a>).</li>
-      <li><b>Serverless y compute estándar usan Spark Connect.</b> Es un protocolo gRPC: el
-        cliente construye las transformaciones y las manda como planes sin resolver a un servidor
-        Spark remoto. Lo usan serverless y, en compute estándar, los notebooks de Python desde
-        Databricks Runtime 14.3 (los de Scala desde 13.3). Como el análisis se aplaza hasta la
-        ejecución, una columna que no existe puede fallar en la acción y no al definir la
-        transformación.</li>
-      <li><b>En serverless solo hay APIs de Spark Connect.</b> La API de RDD no está disponible,
-        tampoco el Spark UI: en su lugar se usa el <a href="query-profile.html">query
-        profile</a>.</li>
+        recomienda desconectar los que no uses.</li>
+      <li id="spark-connect"><b>Serverless siempre usa Spark Connect.</b> Spark Connect es un
+        protocolo cliente-servidor. El cliente construye las transformaciones y las manda a un
+        servidor Spark remoto como planes sin analizar (Spark aún no ha comprobado que existan las
+        tablas y columnas). Como el análisis se aplaza, una columna que no existe falla en la
+        acción, o al pedir el esquema (<code>df.columns</code>), y no al definir la transformación
+        (<a href="https://docs.databricks.com/aws/en/spark/connect-vs-classic#schema-analysis"
+        target="_blank" rel="noopener">Spark Connect vs Spark Classic</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/spark/connect-vs-classic#schema-analysis"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
+      <li><b>El compute estándar también usa Spark Connect con notebooks de Python, y sigue
+        teniendo Spark UI.</b> El compute estándar es un compute clásico que varios usuarios
+        comparten. A diferencia de serverless, tiene Spark UI, en la pestaña <i>Spark UI</i> del
+        compute (<a
+        href="https://docs.databricks.com/aws/en/compute/clusters-manage#view-compute-information-in-the-spark-ui"
+        target="_blank" rel="noopener">Manage compute</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/clusters-manage#view-compute-information-in-the-spark-ui"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>).
+        Desde qué versión de Databricks Runtime usa Spark Connect y cuándo Databricks te da un
+        compute estándar: <a href="azure.html#modo-acceso">Azure Databricks ·
+        Modo de acceso</a>.</li>
+      <li id="serverless"><b>En serverless no eliges el compute ni hay Spark UI.</b> Databricks
+        asigna y gestiona el compute por ti, así que no eliges workers ni cores (<a
+        href="https://docs.databricks.com/aws/en/compute/serverless/" target="_blank"
+        rel="noopener">Serverless compute</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/serverless/" target="_blank"
+        rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).
+        Solo hay APIs de Spark Connect: la API de RDD no está disponible. Tampoco hay Spark UI: en su lugar se usa el <a
+        href="query-profile.html">query profile</a> (<a
+        href="https://docs.databricks.com/aws/en/compute/serverless/limitations" target="_blank"
+        rel="noopener">Serverless compute limitations</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/serverless/limitations"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
     </ul>
 
     <h3 class="solo"><span class="k">Con qué se confunde</span></h3>
@@ -193,9 +283,6 @@ extra_css: ["/assets/css/arquitectura.css"]
       <li><b>Worker vs executor.</b> En Spark son cosas distintas: el worker es la máquina y el
         executor es el proceso de tu aplicación en ella. Databricks corre uno por worker, por eso
         su doc los usa como sinónimos.</li>
-      <li><b>Driver vs cluster manager.</b> El cluster manager consigue los recursos del cluster.
-        El driver los usa para su aplicación y reparte las tasks. En Databricks, el nodo driver
-        corre los dos: el driver y el Spark master.</li>
       <li><b>Scheduler de Spark vs programar un job.</b> El scheduler de Spark reparte tasks dentro
         de una aplicación que ya está corriendo. Programar un job es otra cosa: el trigger <a
         href="https://docs.databricks.com/aws/en/jobs/scheduled" target="_blank"
@@ -208,16 +295,71 @@ extra_css: ["/assets/css/arquitectura.css"]
     </ul>
 
     <h3 class="solo"><span class="k">Qué pasaría si</span></h3>
+    <div class="guess q" data-guess data-answer="c">
+      <div class="guess-cover">
+        <p><b>Predice:</b> <code>df.groupBy("pais").count().toPandas()</code> sobre una tabla de
+          1 TB. El resultado tiene 50 filas, una por país. ¿Ayudan más workers?</p>
+        <div class="guess-opts" role="group" aria-label="Opciones">
+          <button type="button" data-opt="a">a) No: es un <code>toPandas()</code>, y ahí más
+            workers no ayudan</button>
+          <button type="button" data-opt="b">b) Solo si además pones un driver más grande</button>
+          <button type="button" data-opt="c">c) Sí, pueden acelerarla</button>
+        </div>
+      </div>
+      <div class="guess-fb" data-for="a"><p><b>No.</b> Suponías que el método decide; falla
+        porque lo que importa es cuánto vuelve al driver, y aquí son 50 filas.</p></div>
+      <div class="guess-fb" data-for="b"><p><b>No.</b> Suponías que <code>toPandas()</code>
+        siempre necesita un driver grande; falla porque al driver solo llegan 50 filas.</p></div>
+      <div class="guess-fb" data-for="c"><p><b>Sí.</b> Leer 1 TB, agrupar y contar corre en los
+        executors, que son los que crecen al añadir workers. Al driver solo llegan 50
+        filas.</p></div>
+      <div class="guess-body">
+        <p><b>Compruébalo:</b> en el simulador, compara <i>count()</i> con <i>toPandas()</i>. Los
+          dos ponen a trabajar a los mismos executors. Lo que cambia es cuánto vuelve al
+          driver.</p>
+        <p>Aquí el trabajo pesado corre en los executors: leer 1 TB, el shuffle del
+          <code>groupBy</code> y los conteos. <code>toPandas()</code> solo trae 50 filas, así que
+          no es el cuello de botella. Lo que importa es cuánto vuelve, no el método. Si el
+          resultado fuera grande, más workers no lo arreglarían: todas sus filas acabarían en la
+          memoria del driver, que es una sola máquina.</p>
+      </div>
+    </div>
     <ul>
-      <li><b>…duplicas los workers para una celda con <code>toPandas()</code>?</b> Los executors
-        terminan antes su parte, pero todas las filas siguen llegando a una sola máquina. Agrega o
-        filtra en Spark antes de traer el resultado, o escríbelo en una tabla.</li>
       <li><b>…haces <code>collect()</code> de una tabla grande con un driver pequeño?</b> Es el
         caso típico de OOM del driver (ver <a href="memoria-oom.html">Memoria y OOM</a>).</li>
       <li><b>…corres un bucle de Python sobre millones de elementos?</b> Es Python normal: corre
         en el driver, y los workers no ayudan. Exprésalo con DataFrames para que lo hagan los
         executors.</li>
     </ul>
+
+    <h3><span class="k">Dónde mirar</span>En tu job</h3>
+    <ul>
+      <li><b>Quieres saber qué jobs lanzó una celda</b> → mira bajo la celda. Si el código usa
+        Spark, ahí aparecen sus jobs, en el desplegable <i>Spark Jobs</i> (<a
+        href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/spark-job-gaps#execution-of-non-spark-code"
+        target="_blank" rel="noopener">Gaps between Spark jobs</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/spark-job-gaps#execution-of-non-spark-code"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
+      <li><b>La celda tarda y no hay ningún job de Spark activo</b> → es código que corre en el
+        driver, como un bucle de Python. Despliega <i>Spark Jobs</i> bajo la celda: si no aparece
+        o ninguno está activo, los workers están parados (<a
+        href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/spark-job-gaps#execution-of-non-spark-code"
+        target="_blank" rel="noopener">Gaps between Spark jobs</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/spark-job-gaps#execution-of-non-spark-code"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
+      <li><b><code>collect()</code> o <code>toPandas()</code> con un resultado grande, y el
+        notebook falla</b> → es un OOM del driver: el fallo llega en la acción que trae los datos
+        (ver <a href="memoria-oom.html">Memoria y OOM</a>). Agrega o filtra en Spark antes de
+        traer el resultado, o escríbelo en una tabla.</li>
+      <li><b>Estás en serverless y buscas el Spark UI</b> → no existe; usa el <a
+        href="query-profile.html">query profile</a> (ver <a href="#serverless">En
+        serverless</a>).</li>
+    </ul>
+    <p class="note">¿Ya tienes un job lento? Empieza por la <a
+      href="spark-ui.html#ruta-diagnostico">ruta de diagnóstico del Spark UI</a> y sigue en <a
+      href="diagnostico.html">Diagnóstico</a>.</p>
 
     <h3><span class="k">De dónde sale</span>Fuentes</h3>
     <p class="src"><a href="https://spark.apache.org/docs/latest/cluster-overview.html"
@@ -231,7 +373,37 @@ extra_css: ["/assets/css/arquitectura.css"]
       href="https://learn.microsoft.com/azure/databricks/compute/configure#worker-node-type"
       target="_blank" rel="noopener"
       title="La misma página en la documentación de Azure Databricks">Azure</a> (driver, workers,
-      single node), <a
+      cero workers, single node, autoscaling), <a
+      href="https://docs.databricks.com/aws/en/compute/clusters-manage#view-compute-information-in-the-spark-ui"
+      target="_blank" rel="noopener">Databricks · Manage compute</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/compute/clusters-manage#view-compute-information-in-the-spark-ui"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> (pestaña
+      <i>Spark UI</i> del compute), <a
+      href="https://spark.apache.org/docs/latest/rdd-programming-guide.html#shuffle-operations"
+      target="_blank" rel="noopener">Apache Spark · Shuffle operations</a> (guía de RDD; el
+      mecanismo es el mismo para DataFrames: el stage que lee un shuffle necesita datos de todas
+      las particiones), <a
+      href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.csv.html"
+      target="_blank" rel="noopener">PySpark · DataFrameReader.csv</a> y <a
+      href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.json.html"
+      target="_blank" rel="noopener">DataFrameReader.json</a> (la inferencia de esquema recorre los
+      datos una vez), <a href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#tuning-partitions"
+      target="_blank" rel="noopener">Apache Spark · Performance tuning</a>
+      (<code>spark.sql.sources.parallelPartitionDiscovery.threshold</code>: con muchas rutas de
+      entrada, Spark lista los archivos con un job distribuido, otra excepción), <a
+      href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/one-spark-task"
+      target="_blank" rel="noopener">Databricks · One Spark task</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/one-spark-task"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> (inferir el
+      esquema de un archivo grande da un stage de una sola task), <a
+      href="https://docs.databricks.com/aws/en/pyspark/#data-processing" target="_blank"
+      rel="noopener">Databricks · PySpark on Databricks</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/pyspark/#data-processing"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>
+      (<code>display</code> y <code>show</code> son acciones), <a
       href="https://docs.databricks.com/aws/en/lakehouse-architecture/cost-optimization/best-practices"
       target="_blank" rel="noopener">Databricks · Best practices for cost optimization</a> <a
       class="az"
@@ -244,7 +416,18 @@ extra_css: ["/assets/css/arquitectura.css"]
       target="_blank" rel="noopener">Databricks · Compare Spark Connect to Spark Classic</a> <a
       class="az" href="https://learn.microsoft.com/azure/databricks/spark/connect-vs-classic"
       target="_blank" rel="noopener"
-      title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      title="La misma página en la documentación de Azure Databricks">Azure</a> (dónde se usa Spark
+      Connect; con él, una columna que no existe falla al pedir <code>df.columns</code> o en la
+      acción), <a
+      href="https://docs.databricks.com/aws/en/compute/photon" target="_blank"
+      rel="noopener">Databricks · What is Photon?</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/compute/photon" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> (dónde está activo, quién planea y cómo verlo en el
+      Spark UI), <a
+      href="https://docs.databricks.com/aws/en/compute/serverless/" target="_blank"
+      rel="noopener">Databricks · Serverless compute</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/compute/serverless/" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> (Databricks asigna y gestiona el compute), <a
       href="https://docs.databricks.com/aws/en/compute/serverless/limitations" target="_blank"
       rel="noopener">Databricks · Serverless compute limitations</a> <a class="az"
       href="https://learn.microsoft.com/azure/databricks/compute/serverless/limitations"
@@ -255,6 +438,27 @@ extra_css: ["/assets/css/arquitectura.css"]
       href="https://learn.microsoft.com/azure/databricks/jobs/scheduled" target="_blank"
       rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
       href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.collect.html"
-      target="_blank" rel="noopener">PySpark · DataFrame.collect</a> y <a
+      target="_blank" rel="noopener">PySpark · DataFrame.collect</a>, <a
       href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.toPandas.html"
-      target="_blank" rel="noopener">PySpark · DataFrame.toPandas</a>.</p>
+      target="_blank" rel="noopener">PySpark · DataFrame.toPandas</a>, <a
+      href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.show.html"
+      target="_blank" rel="noopener">PySpark · DataFrame.show</a> (20 filas por defecto), <a
+      href="https://docs.databricks.com/aws/en/notebooks/notebook-limitations#notebook-cell-outputs"
+      target="_blank" rel="noopener">Databricks · Known limitations of Databricks notebooks</a> <a
+      class="az"
+      href="https://learn.microsoft.com/azure/databricks/notebooks/notebook-limitations#notebook-cell-outputs"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> (10.000 filas o
+      2 MB en una tabla de resultados), <a
+      href="https://docs.databricks.com/aws/en/notebooks/notebook-outputs" target="_blank"
+      rel="noopener">Databricks · Notebook outputs and results</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/notebooks/notebook-outputs"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> (aviso de datos
+      truncados) y <a
+      href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/spark-job-gaps"
+      target="_blank" rel="noopener">Databricks · Gaps between Spark jobs</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/spark-job-gaps"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> (los jobs de una
+      celda salen bajo ella, en el desplegable <i>Spark Jobs</i>).</p>
