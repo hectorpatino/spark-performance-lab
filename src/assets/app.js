@@ -32,9 +32,19 @@
     body.hidden=true; body.inert=true; fbs.forEach(f=>{ f.hidden=true; f.setAttribute('aria-live','polite'); });
     const more=document.createElement('button'); more.type='button'; more.className='guess-more';
     more.textContent='Ver la explicación completa'; more.hidden=true; body.before(more);
+    // «a) texto» pasa a una tecla con la letra y el texto aparte; la letra también se pulsa en el teclado
+    opts.forEach(b=>{ const t=b.firstChild, m=t&&t.nodeType===3&&t.data.match(/^\s*([a-z])\)\s*/);
+      if(!m) return; t.data=t.data.slice(m[0].length);
+      const txt=document.createElement('span'); while(b.firstChild) txt.appendChild(b.firstChild);
+      const key=document.createElement('span'); key.className='guess-key'; key.setAttribute('aria-hidden','true'); key.textContent=m[1];
+      b.append(key,txt); b.setAttribute('aria-label',m[1]+') '+txt.textContent.trim()); b.setAttribute('aria-keyshortcuts',m[1]); });
+    box.addEventListener('keydown',e=>{ if(e.altKey||e.ctrlKey||e.metaKey||!e.target.closest('.guess-opts')) return;
+      const b=opts.find(x=>x.dataset.opt===e.key.toLowerCase()); if(b){ e.preventDefault(); b.focus(); b.click(); } });
     opts.forEach(b=>{ b.setAttribute('aria-pressed','false'); b.addEventListener('click',()=>{
       opts.forEach(x=>{ const me=x===b; x.setAttribute('aria-pressed',me); x.classList.toggle('ok',me&&x.dataset.opt===ans); x.classList.toggle('no',me&&x.dataset.opt!==ans); });
-      fbs.forEach(f=>{ f.hidden=f.dataset.for!==b.dataset.opt; });
+      // el comentario va justo debajo de la opción elegida (contigüidad), y el raíl toma el color del resultado
+      fbs.forEach(f=>{ const me=f.dataset.for===b.dataset.opt; f.hidden=!me; if(me) b.after(f); });
+      box.classList.add('answered'); box.classList.toggle('is-ok',b.dataset.opt===ans); box.classList.toggle('is-no',b.dataset.opt!==ans);
       if(body.hidden) more.hidden=false;
     }); });
     more.addEventListener('click',()=>{ body.hidden=false; body.inert=false; more.hidden=true; });
@@ -301,7 +311,7 @@ AdaptiveSparkPlan isFinalPlan=true
     v.push(partial?`<div><span class="pill ok">PARCIAL</span>Cada map task envía como mucho una fila por clave: ${fmtN(Math.min(ROWS,K))} de 1 M. El shuffle es ${(full/bytes).toFixed(full/bytes<10?1:0)}× más pequeño que sin agregación parcial.</div>`
                    :`<div><span class="pill bad">SIN PARCIAL</span>Las ${fmtN(totalRows)} filas viajan tal cual. Es lo que pasa cuando no hay agregación parcial, por ejemplo en un join.</div>`);
     if(perTask>200*1024*1024) v.push(`<div><span class="pill bad">RIESGO DE SPILL</span>Cada reduce task lee ~${fmtB(perTask)}: más riesgo de spill, según la memoria que tenga cada task (ver <a href="memoria-oom.html">Memoria y OOM</a>). La guía de 2023 sugiere 128–200 MB por task. Sube las particiones o usa <code>auto</code>.</div>`);
-    if(empty>0) v.push(`<div><span class="pill bad">VACÍAS</span>${empty.toLocaleString('es')} reduce tasks no reciben nada (hay menos claves que particiones). Con AQE activo (por defecto, salvo en streaming), AQE puede unirlas tras el shuffle.</div>`);
+    if(empty>0) v.push(`<div><span class="pill bad">VACÍAS</span>${empty.toLocaleString('es')} reduce tasks no reciben nada (hay menos claves que particiones). Con AQE activo (por defecto en queries batch), AQE puede unirlas tras el shuffle.</div>`);
     if(E===1) v.push(`<div><span class="pill ok">LOCAL</span>Con un solo executor no hay lectura remota.</div>`);
     document.getElementById('sw-verdict').innerHTML=v.join('');
     const per=bytes/M, outK=Math.min(K,totalRows);

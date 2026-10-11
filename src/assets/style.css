@@ -422,19 +422,46 @@ pre.has-copy{position:relative;padding-right:4.6rem}
 .guess.is-hidden .guess-body{display:none}
 .guess.is-hidden .guess-cover{display:flex;min-height:14rem;flex-direction:column;align-items:center;justify-content:center;gap:.8rem;padding:1.5rem 1rem;text-align:center;background:var(--code);border:1px solid var(--line);border-radius:8px}
 .guess-cover p{margin:0;font-weight:600;max-width:28rem}
-.guess-cover button{font:600 .88rem var(--f-body);padding:.5rem 1rem;border-radius:999px;border:1px solid var(--ink);background:var(--ink);color:var(--surface);cursor:pointer}
-.guess-cover button:hover{filter:brightness(1.1)}
-.guess.q{margin:1rem 0;border:1px solid var(--line);border-radius:8px;background:var(--code)}
-.guess.q .guess-cover,.guess.q.is-hidden .guess-cover{display:block;min-height:0;padding:.8rem 1rem;text-align:left;background:none;border:0}
-.guess.q .guess-cover p{max-width:none;font-weight:400}
-.guess.q .guess-opts{display:flex;flex-direction:column;gap:.35rem;margin:.55rem 0 .1rem}
-.guess.q .guess-opts button{text-align:left;font:400 .95rem/1.4 var(--f-body);padding:.45rem .75rem;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);cursor:pointer}
-.guess.q .guess-opts button:hover{border-color:var(--muted);filter:none}
-.guess.q .guess-opts button.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 13%,var(--bg))}
-.guess.q .guess-opts button.no{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,var(--bg))}
-.guess.q .guess-fb{padding:0 1rem .2rem}
-.guess.q .guess-fb p{margin:.4rem 0}
-.guess.q .guess-more{margin:.3rem 1rem .9rem;font:600 .85rem var(--f-body);padding:.4rem .9rem;border-radius:999px;border:1px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer}
+.guess:not(.q) .guess-cover>button{font:600 .88rem var(--f-body);padding:.5rem 1rem;border-radius:999px;border:1px solid var(--ink);background:var(--ink);color:var(--surface);cursor:pointer}
+.guess:not(.q) .guess-cover>button:hover{filter:brightness(1.1)}
+/* .guess.q es un punto de control: el raíl izquierdo dice el estado (sin responder, acierto, error)
+   y el comentario sale justo debajo de la opción elegida. La letra de cada opción (.guess-key)
+   la saca app.js del texto «a) …» y también sirve como tecla. */
+.guess.q{--rail:var(--ink);margin:1.6rem 0;padding:1.05rem 1.2rem 1.1rem 1.35rem;border:1px solid var(--line);border-left:5px solid var(--rail);border-radius:4px 10px 10px 4px;background:var(--surface);transition:border-color .2s}
+.guess.q.is-ok{--rail:var(--ok)}
+.guess.q.is-no{--rail:var(--bad)}
+.guess.q .guess-cover,.guess.q.is-hidden .guess-cover{display:block;min-height:0;padding:0;text-align:left;background:none;border:0}
+.guess.q .guess-cover>p{max-width:62ch;font:500 1.12rem/1.5 var(--f-display);color:var(--ink)}
+.guess.q .guess-cover>p:first-child>b:first-child{font:600 .9rem/1 var(--f-body);color:var(--muted);margin-right:.2rem}
+.guess.q .guess-cover>p code{font-size:.82em}
+.guess.q .guess-cover pre{margin:.7rem 0}
+.guess.q .guess-opts{display:flex;flex-direction:column;gap:.45rem;margin:.95rem 0 0}
+.guess.q .guess-opts button{display:block;width:100%;text-align:left;font:400 .97rem/1.45 var(--f-body);padding:.55rem .8rem .55rem .55rem;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);cursor:pointer;transition:opacity .15s,border-color .15s,background-color .15s}
+.guess.q .guess-opts button:has(>.guess-key){display:flex;align-items:flex-start;gap:.75rem}
+.guess.q .guess-opts button:hover{border-color:var(--ink)}
+.guess.q .guess-opts button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.guess-key{flex:none;display:inline-grid;place-items:center;width:1.7rem;height:1.7rem;margin-top:-.08rem;border:1px solid var(--muted);border-bottom-width:2px;border-radius:5px;background:var(--surface);font:600 .85rem/1 var(--f-body);color:var(--ink)}
+.guess.q .guess-opts button>span:last-child{padding-top:.08rem}
+.guess.q.answered .guess-opts button{opacity:.5}
+.guess.q.answered .guess-opts button:hover{opacity:.85}
+.guess.q .guess-opts button.ok,.guess.q .guess-opts button.no{opacity:1}
+.guess.q .guess-opts button.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,var(--surface))}
+.guess.q .guess-opts button.no{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,var(--surface))}
+.guess.q button.ok .guess-key{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.guess.q button.no .guess-key{background:var(--bad);border-color:var(--bad);color:var(--surface)}
+.guess.q .guess-fb{margin:-.1rem 0 .35rem 1.15rem;padding:.15rem 0 .15rem 1.45rem;border-left:2px solid var(--rail);font-size:.96rem}
+.guess.q .guess-fb p{margin:.35rem 0;max-width:62ch;font-weight:400}
+.guess.q .guess-fb p>b:first-child{color:var(--rail)}
+.guess.q .guess-more{margin:.7rem 0 0;font:600 .88rem var(--f-body);padding:.45rem .95rem;border-radius:999px;border:1px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer}
+.guess.q .guess-more:hover{background:var(--ink);color:var(--surface)}
 .guess.q [hidden]{display:none}
-.guess.q .guess-body{padding:.1rem 1rem .8rem;border-top:1px solid var(--line)}
+.guess.q .guess-body{margin-top:.9rem;padding-top:.2rem;border-top:1px solid var(--line)}
 .guess.q .guess-body p{margin:.55rem 0}
+@media (prefers-reduced-motion:no-preference){
+  .guess.q .guess-fb:not([hidden]){animation:guess-in .18s ease-out}
+  @keyframes guess-in{from{opacity:0;transform:translateY(-3px)}}
+}
+@media (max-width:560px){
+  .guess.q{padding:.9rem .85rem .95rem 1rem}
+  .guess.q .guess-fb{margin-left:.6rem;padding-left:1rem}
+}
