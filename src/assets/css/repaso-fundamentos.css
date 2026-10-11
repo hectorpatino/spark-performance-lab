@@ -1,0 +1,31 @@
+/* Repaso de Fundamentos */
+
+/* cabeceras ordenables de la lista de stages recreada */
+.ui-frame .rf-sort{font:inherit;font-weight:700;color:#0088CC;background:none;border:0;padding:0;cursor:pointer}
+.ui-frame .rf-sort:hover{text-decoration:underline}
+.ui-frame .rf-sort:focus-visible{outline:2px solid #0088CC;outline-offset:2px}
+.ui-frame td.rf-desc{color:#0088CC}
+/* texto que en la UI real es un enlace (Associated Job Ids, Associated SQL Query) */
+.ui-frame .rf-a{color:#0088CC;text-decoration:underline}
+
+/* barra de progreso de tasks, como en la UI real */
+.ui-frame .rf-prog{position:relative;display:block;min-width:7.5rem;height:17px;border:1px solid #BBB;border-radius:3px;background:#F5F5F5;overflow:hidden}
+.ui-frame .rf-prog span{position:absolute;inset:0 auto 0 0;background:#C3EBFF}
+.ui-frame .rf-prog em{position:relative;display:block;font-style:normal;font-size:11px;line-height:15px;text-align:center;color:#222;white-space:nowrap}
+
+/* recreación pequeña dentro de una pregunta */
+.guess.q .ui-frame.rf-mini{margin:.5rem 0 .2rem;max-width:34rem}
+.guess.q .ui-frame.rf-mini .ui-kv{margin:0}
+
+/* DAG de la query: ramas que se unen en cada join (usa .sq, .sq-cl y .sq-n de style.css) */
+.ui-frame .rf-dag{min-width:44rem;margin:.6rem 0 .4rem}
+.ui-frame .rf-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;width:100%;align-items:end}
+.ui-frame .rf-dag .sq-cl,.ui-frame .rf-dag .sq-n{min-width:0;max-width:100%}
+.ui-frame .rf-dag>.sq-cl,.ui-frame .rf-dag>.sq-n{min-width:min(17rem,100%)}
+/* el bloque lleva dos líneas de etiqueta: codegen id y duración con su stage */
+.ui-frame .rf-dag .sq-cl{padding-top:.45rem;gap:.6rem}
+.ui-frame .rf-dag .sq-cl>.lbl{position:static;align-self:stretch;text-align:right;line-height:1.3}
+/* unión en forma de U entre los centros de las dos ramas */
+.ui-frame .rf-merge{position:relative;align-self:stretch;height:1.1rem;margin:-1.1rem 25% 0;border:1.5px solid #444;border-top:0}
+.ui-frame .rf-dag .rf-merge::before{content:none}
+.ui-frame .rf-key{font-family:var(--f-mono,monospace);font-size:10.5px;color:#1d3f52}

@@ -20,6 +20,10 @@
   section: "Fundamentos"
   title: "Estrategias de join"
   summary: "Broadcast, shuffle hash, sort-merge y nested loop: qué elige Spark, qué cambia AQE y cómo se ve en el plan."
+- slug: repaso-fundamentos
+  section: "Fundamentos"
+  title: "Repaso de Fundamentos"
+  summary: "Casos nuevos que combinan las cinco páginas, y un ejercicio para ir de la lista de stages a tu código."
 - slug: spark-ui
   section: "Dónde mirar"
   title: "Leer el Spark UI"
