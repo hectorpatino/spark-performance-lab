@@ -110,14 +110,14 @@ df.write.saveAsTable("ventas_clientes")</code></pre>
         acción lo ejecuta entero: el <code>count()</code> lee y une las dos tablas, y el
         <code>write</code> lo vuelve a hacer.</p></div>
       <div class="guess-fb" data-for="d"><p><b>No.</b> Suponías que dos acciones seguidas se
-        juntan en un job. Falla porque cada acción lanza su propio job, con su plan desde la
+        juntan en un job. Falla porque cada acción ejecuta su propio plan, desde la
         lectura.</p></div>
       <div class="guess-body">
         <p><b>Compruébalo:</b> en <a href="plan-ejecucion.html#varios-jobs">Plan de ejecución ·
-          Job vs acción</a> y en el apartado <i>Qué pasaría si</i> de esa página. Qué vuelve al
+          Qué ejecuta cada acción</a> y en el apartado <i>Qué pasaría si</i> de esa página. Qué vuelve al
           driver con un <code>count()</code> está en <a
           href="arquitectura.html#quien-hace-que">Arquitectura</a>.</p>
-        <p>Los 8 min extra son el job del <code>count()</code>, que recorre el join entero. El
+        <p>Los 8 min extra son lo que cuesta ejecutar el <code>count()</code>, que recorre el join entero. El
           <code>print</code> no cuesta nada. La guía
           de PySpark de Databricks lo dice así: "In production data pipelines, writing data is
           typically the only action that should be present. All other actions interrupt query
@@ -228,7 +228,7 @@ df.write.saveAsTable("ventas_clientes")</code></pre>
     </div>
 
     <h3><span class="k">Repaso · 2</span>Interpretar un stage lento, un shuffle y un join</h3>
-    <p>Otros cuatro casos, ahora con métricas del Spark UI y con el plan.</p>
+    <p>Otros cinco casos, ahora con métricas del Spark UI y con el plan.</p>
 
     <div class="guess q" data-guess data-answer="b">
       <div class="guess-cover">
@@ -378,49 +378,93 @@ w = Window.partitionBy("cliente_id").orderBy("fecha")
       </div>
     </div>
 
-    <div class="guess q" data-guess data-answer="a">
+    <div class="guess q" data-guess data-answer="b">
       <div class="guess-cover">
-        <p><b>Predice (8 · Estrategias de join):</b> <code>ventas_hoy LEFT JOIN clientes</code>
+        <p><b>Predice (8 · Estrategias de join):</b> <code>ventas_hoy INNER JOIN clientes</code>
           por <code>cliente_id</code>. Las estadísticas estiman 5 MiB para
           <code>ventas_hoy</code>, que es la izquierda, y 2 GiB para <code>clientes</code>. No hay
           hints, AQE está activado y el motor es el de Spark, sin Photon. ¿Qué join sale en el plan
           inicial y cuál en el final?</p>
         <div class="guess-opts" role="group" aria-label="Opciones">
-          <button type="button" data-opt="a">a) <code>SortMergeJoin</code> en los dos.</button>
+          <button type="button" data-opt="a">a) <code>SortMergeJoin</code> en los dos: la tabla de
+            la izquierda de un join no se copia.</button>
           <button type="button" data-opt="b">b) <code>BroadcastHashJoin</code> de
-            <code>ventas_hoy</code> desde el plan inicial: es la tabla pequeña.</button>
+            <code>ventas_hoy</code> desde el plan inicial.</button>
           <button type="button" data-opt="c">c) <code>SortMergeJoin</code> en el inicial; AQE lo
             cambia a broadcast de <code>ventas_hoy</code>.</button>
           <button type="button" data-opt="d">d) <code>BroadcastHashJoin</code> de
-            <code>clientes</code>: en un <code>LEFT</code> se copia el lado derecho.</button>
+            <code>clientes</code>: se copia el lado derecho.</button>
         </div>
       </div>
-      <div class="guess-fb" data-for="a"><p><b>Sí.</b> Un <code>LEFT</code> solo deja copiar
-        <code>clientes</code>, y 2 GiB no cabe ni en los 10 MiB del umbral estático ni en los
-        30 MiB de AQE. <code>ventas_hoy</code> sí cabe, pero un <code>LEFT</code> conserva todas
-        sus filas y Spark no la copia.</p></div>
-      <div class="guess-fb" data-for="b"><p><b>No.</b> Suponías que siempre se copia la tabla
-        pequeña. Falla porque primero manda el tipo de join: en un <code>LEFT</code>, la izquierda
-        conserva todas sus filas y no se copia.</p></div>
-      <div class="guess-fb" data-for="c"><p><b>No.</b> Suponías que AQE se salta la regla del tipo
-        de join. Falla porque AQE solo puede copiar el lado que el tipo de join deja copiar, y aquí
-        es <code>clientes</code>.</p></div>
-      <div class="guess-fb" data-for="d"><p><b>No.</b> Acertaste el lado que un
-        <code>LEFT</code> deja copiar. Falla porque <code>clientes</code> estima 2 GiB, muy por
-        encima de los dos umbrales.</p></div>
+      <div class="guess-fb" data-for="a"><p><b>No.</b> Suponías que la regla del <code>LEFT</code>
+        vale para cualquier join. Falla porque en un <code>INNER</code> ningún lado conserva todas
+        sus filas, y Spark puede copiar cualquiera de los dos.</p></div>
+      <div class="guess-fb" data-for="b"><p><b>Sí.</b> En un <code>INNER</code> se puede copiar
+        cualquier lado, y <code>ventas_hoy</code> estima 5 MiB, por debajo del umbral estático de
+        10 MiB. Spark ya la elige al planear la query.</p></div>
+      <div class="guess-fb" data-for="c"><p><b>No.</b> Suponías que el broadcast de una tabla
+        pequeña solo llega en runtime. Falla porque 5 MiB ya cabe en el umbral al planear, y
+        entonces el plan inicial ya es broadcast.</p></div>
+      <div class="guess-fb" data-for="d"><p><b>No.</b> Suponías que se copia siempre el lado
+        derecho. Falla porque el lado que se copia es el que cabe en el umbral, y
+        <code>clientes</code> estima 2 GiB, muy por encima de los dos.</p></div>
       <div class="guess-body">
         <p><b>Compruébalo:</b> en <a href="joins.html#como-decide">Cómo decide Spark</a>, mira la
-          tabla de qué lado se puede copiar en cada tipo de join. Qué cambia AQE al ejecutar: <a
-          href="joins.html#en-runtime">En runtime</a>.</p>
-        <p>La FAQ de AQE lo dice para este caso: "the left relation of a LEFT OUTER JOIN cannot be
-          broadcast" (<a
-          href="https://docs.databricks.com/aws/en/optimizations/aqe#why-didnt-aqe-broadcast-a-small-join-table"
-          target="_blank" rel="noopener">Adaptive query execution · FAQ</a> <a class="az"
-          href="https://learn.microsoft.com/azure/databricks/optimizations/aqe#why-didnt-aqe-broadcast-a-small-join-table"
+          tabla de qué lado se puede copiar en cada tipo de join y compara el tamaño estimado con
+          el umbral. Qué cambia AQE al ejecutar: <a href="joins.html#en-runtime">En runtime</a>.</p>
+        <p>Es el mismo caso que el de <code>LEFT</code> de la página de joins, con otro tipo de
+          join: cambia qué lado se puede copiar. Con Photon, el nodo de join del plan puede ser otro
+          (ver <a href="joins.html#photon">Con Photon</a>).</p>
+      </div>
+    </div>
+
+    <div class="guess q" data-guess data-answer="c">
+      <div class="guess-cover">
+        <p><b>Predice (9 · Arquitectura y Plan de ejecución):</b> programas un job de Lakeflow
+          (Lakeflow Jobs, el servicio que programa y orquesta tareas) que corre un notebook durante
+          40 min. En el Spark UI de su compute ves <i>Job 0</i> … <i>Job 57</i>. ¿Qué es cada
+          <i>Job N</i>?</p>
+        <div class="guess-opts" role="group" aria-label="Opciones">
+          <button type="button" data-opt="a">a) Una ejecución programada del job de Lakeflow.</button>
+          <button type="button" data-opt="b">b) Una tarea del job de Lakeflow, como un
+            notebook.</button>
+          <button type="button" data-opt="c">c) Lo que lanzó una acción del notebook (a veces, un
+            tramo de ella).</button>
+          <button type="button" data-opt="d">d) Un stage del notebook: el tramo entre dos
+            shuffles.</button>
+        </div>
+      </div>
+      <div class="guess-fb" data-for="a"><p><b>No.</b> Suponías que cada <i>Job N</i> es una
+        ejecución del job que programaste. Falla porque una sola ejecución corre tu notebook
+        entero, y el Spark UI numera lo que Spark lanza durante ella.</p></div>
+      <div class="guess-fb" data-for="b"><p><b>No.</b> Suponías que las tareas del job de Lakeflow
+        son los <i>Job N</i>. Falla porque una tarea de Lakeflow es una unidad de trabajo del
+        workflow, como un notebook, y no una task de Spark. Un job de Lakeflow con una sola tarea
+        ya muestra muchos <i>Job N</i>.</p></div>
+      <div class="guess-fb" data-for="c"><p><b>Sí.</b> Cada <i>Job N</i> es un job de Spark: lo
+        que Spark lanza cuando una acción del notebook pide un resultado. A veces una acción se
+        reparte en varios jobs.</p></div>
+      <div class="guess-fb" data-for="d"><p><b>No.</b> Suponías que job y stage son lo mismo.
+        Falla porque un job agrupa los stages de lo que lanzó una acción, y cada stage lleva su
+        propio ID, aparte del de su job.</p></div>
+      <div class="guess-body">
+        <p><b>Compruébalo:</b> en <a href="arquitectura.html#job-lakeflow">Arquitectura · Job de
+          Lakeflow vs job de Spark</a>. Qué lanza cada acción: <a
+          href="plan-ejecucion.html#varios-jobs">Plan de ejecución</a>.</p>
+        <p>Cada término tiene su definición oficial. En Lakeflow Jobs, "A job is the primary
+          resource for coordinating, scheduling, and running your operations" y "A task is a
+          specific unit of work within a job" (<a
+          href="https://docs.databricks.com/aws/en/jobs/#orchestration-concepts" target="_blank"
+          rel="noopener">Lakeflow Jobs</a> <a class="az"
+          href="https://learn.microsoft.com/azure/databricks/jobs/#orchestration-concepts"
           target="_blank" rel="noopener"
-          title="La misma página en la documentación de Azure Databricks">Azure</a>). Con Photon,
-          el nodo de join del plan puede ser otro (ver <a href="joins.html#photon">Con
-          Photon</a>).</p>
+          title="La misma página en la documentación de Azure Databricks">Azure</a>). En Spark, un
+          job es "a parallel computation consisting of multiple tasks that gets spawned in response
+          to a Spark action (e.g. save, collect)" (<a
+          href="https://spark.apache.org/docs/latest/cluster-overview.html#glossary"
+          target="_blank" rel="noopener">Apache Spark · Cluster mode overview, glosario</a>).
+          Que una ejecución lance muchos jobs de Spark es consecuencia de estas dos
+          definiciones: cada acción del notebook lanza uno o más.</p>
       </div>
     </div>
 
@@ -429,10 +473,12 @@ w = Window.partitionBy("cliente_id").orderBy("fecha")
     <p>Ahora lo juntas todo sobre un notebook. Corre en un compute clásico de 4 workers de 8
       cores: 32 cores para tasks. AQE está activado, como en Databricks por defecto.
       <code>spark.sql.shuffle.partitions</code> vale 200 y el motor es el de Spark, sin <a
-      href="arquitectura.html#photon">Photon</a>.</p>
+      href="arquitectura.html#photon">Photon</a>. El compute ya había corrido otras celdas, así que
+      los IDs de stages y jobs no empiezan en 0.</p>
     <p>Las tres tablas solo tienen las columnas que usa el ejercicio, así que cada lectura lee la
       tabla entera. <code>ventas</code> pesa 120 GiB; <code>clientes</code>, 6 GiB; y
-      <code>productos</code>, 8 MiB.</p>
+      <code>productos</code>, 8 MiB (su lectura sale en 2 tasks; cuántas salen de una tabla pequeña
+      no lo fija la doc).</p>
 <pre><code># Celda 1
 from pyspark.sql import functions as F
 ventas    = spark.read.table("ventas")      # cliente_id, producto_id, importe
@@ -466,22 +512,22 @@ con_cliente = ventas.join(clientes, "cliente_id")
         <div class="guess-opts" role="group" aria-label="Opciones">
           <button type="button" data-opt="a">a) Uno de los que leen <code>ventas</code>: 120 GiB
             en 960 tasks.</button>
-          <button type="button" data-opt="b">b) El Stage 9: una sola task para 32 cores.</button>
-          <button type="button" data-opt="c">c) El Stage 8: lee 43,1 GiB de shuffle en 200
+          <button type="button" data-opt="b">b) El Stage 21: una sola task para 32 cores.</button>
+          <button type="button" data-opt="c">c) El Stage 20: lee 43,1 GiB de shuffle en 200
             tasks.</button>
-          <button type="button" data-opt="d">d) El Stage 4: con 48 tasks, la segunda wave va a
+          <button type="button" data-opt="d">d) El Stage 16: con 48 tasks, la segunda wave va a
             medias.</button>
         </div>
       </div>
       <div class="guess-fb" data-for="a"><p><b>No.</b> Suponías que el stage con más datos o más
         tasks es el más lento. Falla porque lo que cuenta es la columna <i>Duration</i>: los que
-        leen <code>ventas</code> duran entre 2,3 y 2,9 min, y el Stage 8, 9,6 min.</p></div>
+        leen <code>ventas</code> duran entre 2,3 y 2,9 min, y el Stage 20, 9,6 min.</p></div>
       <div class="guess-fb" data-for="b"><p><b>No.</b> Suponías que un stage de 1 task siempre es
         un problema. Falla porque este dura 1 s. Por qué tiene una sola task lo ves en E3.</p></div>
-      <div class="guess-fb" data-for="c"><p><b>Sí.</b> El Stage 8 dura 9,6 min, casi el triple que
-        el siguiente (el Stage 3, con 3,4 min). Ordena por <i>Duration</i> y sale arriba.</p></div>
+      <div class="guess-fb" data-for="c"><p><b>Sí.</b> El Stage 20 dura 9,6 min, casi el triple que
+        el siguiente (el Stage 15, con 3,4 min). Ordena por <i>Duration</i> y sale arriba.</p></div>
       <div class="guess-fb" data-for="d"><p><b>No.</b> Suponías que una wave a medias pesa mucho.
-        Falla porque el Stage 4 entero dura 18 s.</p></div>
+        Falla porque el Stage 16 entero dura 18 s.</p></div>
       <div class="guess-body">
         <p><b>Compruébalo:</b> pulsa <i>Duration</i> en la tabla. Por qué la duración de un stage
           no sale de sus tasks ni de su Input: <a href="stages.html#waves">Cuánto dura un stage
@@ -512,19 +558,19 @@ con_cliente = ventas.join(clientes, "cliente_id")
       UI enlaza cada paso con el siguiente: stage → job → query → bloque del DAG →
       <code>Exchange</code> → línea.</p>
 
-    <p><b>Paso 1 · La página del stage.</b> Pulsas la Description del Stage 8 y se abre su
+    <p><b>Paso 1 · La página del stage.</b> Pulsas la Description del Stage 20 y se abre su
       página. Arriba, <i>Associated Job Ids</i> da los jobs a los que está asociado el stage (<a
       href="https://spark.apache.org/docs/latest/web-ui.html#stage-detail" target="_blank"
       rel="noopener">Apache Spark · Web UI, Stage detail</a>). Debajo, <i>Summary Metrics</i> da
       el mínimo, los percentiles 25, 50 y 75 y el máximo de cada métrica entre las 200 tasks. La
       usarás en E4.</p>
     <div class="console">
-      <div class="ttl">Página del Stage 8 · recreada</div>
+      <div class="ttl">Página del Stage 20 · recreada</div>
       <div id="rf-stage"></div>
     </div>
 
-    <p><b>Paso 2 · La página del job.</b> Pulsas el 8 de <i>Associated Job Ids</i>. La página del
-      Job 8 tiene <i>Associated SQL Query</i>: un "Link to the SQL tab for this job" (<a
+    <p><b>Paso 2 · La página del job.</b> Pulsas el 13 de <i>Associated Job Ids</i>. La página del
+      Job 13 tiene <i>Associated SQL Query</i>: un "Link to the SQL tab for this job" (<a
       href="https://spark.apache.org/docs/latest/web-ui.html#jobs-detail" target="_blank"
       rel="noopener">Apache Spark · Web UI, Jobs detail</a>). La guía de Databricks usa ese mismo
       enlace para abrir el DAG de la query: "scroll up to the top of the job's page and click on
@@ -535,7 +581,7 @@ con_cliente = ventas.join(clientes, "cliente_id")
       target="_blank" rel="noopener"
       title="La misma página en la documentación de Azure Databricks">Azure</a>).</p>
     <div class="console">
-      <div class="ttl">Página del Job 8 · recreada</div>
+      <div class="ttl">Página del Job 13 · recreada</div>
       <div id="rf-job"></div>
     </div>
 
@@ -556,7 +602,7 @@ con_cliente = ventas.join(clientes, "cliente_id")
         target="_blank" rel="noopener"
         title="La misma página en la documentación de Azure Databricks">Azure</a>). Ese tiempo es
         la suma de todas sus tasks, no el reloj: "These times are cumulative" (misma página). Por
-        eso el bloque del Stage 8 marca 1.6 h, como <i>Total Time Across All Tasks</i>.</li>
+        eso el bloque del Stage 20 marca 1.6 h, como <i>Total Time Across All Tasks</i>.</li>
       <li><b>Por el codegen id.</b> Cada WholeStageCodegen lleva un número, el <i>codegen id</i>.
         El DAG de la página del stage muestra el mismo número, WholeStageCodegen (5), y la doc de
         Spark dice que sirve para esto: "this allows you to cross-reference stage execution
@@ -580,7 +626,7 @@ con_cliente = ventas.join(clientes, "cliente_id")
 
     <div class="guess q" data-guess data-answer="b">
       <div class="guess-cover">
-        <p><b>Predice (E2):</b> en el DAG, el bloque del Stage 8 recibe dos
+        <p><b>Predice (E2):</b> en el DAG, el bloque del Stage 20 recibe dos
           <code>Exchange hashpartitioning(producto_id, 200)</code>. ¿Qué línea del notebook lanzó
           ese stage?</p>
         <div class="guess-opts" role="group" aria-label="Opciones">
@@ -599,15 +645,15 @@ con_cliente = ventas.join(clientes, "cliente_id")
         <code>cliente_id</code>: sus <code>Exchange</code> entran en otro bloque, el del Stage
         7.</p></div>
       <div class="guess-fb" data-for="b"><p><b>Sí.</b> Los <code>Exchange</code> que entran en el
-        bloque del Stage 8 reparten por <code>producto_id</code>. En la celda 4, lo único que
+        bloque del Stage 20 reparten por <code>producto_id</code>. En la celda 4, lo único que
         junta filas por <code>producto_id</code> es el join con <code>productos</code>.</p></div>
       <div class="guess-fb" data-for="c"><p><b>No.</b> Suponías que el último shuffle es el lento.
         Falla porque el <code>groupBy</code> reparte por <code>categoria</code> y
-        <code>segmento</code>: su <code>Exchange</code> sale del bloque del Stage 8, no entra en
+        <code>segmento</code>: su <code>Exchange</code> sale del bloque del Stage 20, no entra en
         él.</p></div>
       <div class="guess-fb" data-for="d"><p><b>No.</b> Suponías que el stage que tarda es el que
-        lee la tabla. Falla porque el Stage 8 no lee del almacenamiento: lee dos shuffles. La
-        lectura de <code>ventas</code> de esta query está en el Stage 5.</p></div>
+        lee la tabla. Falla porque el Stage 20 no lee del almacenamiento: lee dos shuffles. La
+        lectura de <code>ventas</code> de esta query está en el Stage 17.</p></div>
       <div class="guess-body">
         <p><b>Compruébalo:</b> en <a href="plan-ejecucion.html#explain">Leer el plan con
           explain()</a>, mira cómo cada <code>Exchange</code> corta un stage. Por qué un shuffle
@@ -622,20 +668,21 @@ con_cliente = ventas.join(clientes, "cliente_id")
       </div>
     </div>
 
-    <p><b>Paso 4 · La celda.</b> La línea está en la celda 4. En un notebook largo, el desplegable
-      <b>Spark Jobs</b> bajo cada celda te dice qué celdas lanzaron jobs: "If the code is using
-      Spark, you will see Spark jobs under the cell" (<a
+    <p><b>Paso 4 · La celda.</b> La línea está en la celda 4. Si corres el notebook de forma
+      interactiva, el desplegable <b>Spark Jobs</b> bajo cada celda te dice qué celdas lanzaron
+      jobs: "If the code is using Spark, you will see Spark jobs under the cell" (<a
       href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/spark-job-gaps#execution-of-non-spark-code"
       target="_blank" rel="noopener">Gaps between Spark jobs</a> <a class="az"
       href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/spark-job-gaps#execution-of-non-spark-code"
       target="_blank" rel="noopener"
-      title="La misma página en la documentación de Azure Databricks">Azure</a>). Con un job
-      programado que ya terminó, el recorrido es el mismo; antes tienes que <a
-      href="spark-ui.html#ejecucion-terminada">abrir el Spark UI de esa ejecución</a>.</p>
+      title="La misma página en la documentación de Azure Databricks">Azure</a>). Si no lo ves,
+      abre la pestaña <b>Jobs</b> del Spark UI y compara la hora de cada job con la de las
+      celdas. Cómo funciona el desplegable: <a
+      href="arquitectura.html#spark-jobs-celda">Arquitectura</a>.</p>
 
     <h3><span class="k">Ejercicio · 3</span>Por qué tarda el stage y qué join salió</h3>
     <p>Ya sabes qué stage tarda y qué línea lo lanzó. Ahora buscas la causa con lo que tienes
-      delante: la lista de stages, la página del Stage 8 y el DAG de la query.</p>
+      delante: la lista de stages, la página del Stage 20 y el DAG de la query.</p>
 
     <div class="guess q" data-guess data-answer="d">
       <div class="guess-cover">
@@ -643,10 +690,10 @@ con_cliente = ventas.join(clientes, "cliente_id")
           cores. ¿Qué stage deja cores sin trabajo de forma que pese en el tiempo del
           notebook?</p>
         <div class="guess-opts" role="group" aria-label="Opciones">
-          <button type="button" data-opt="a">a) El Stage 9: 1 task para 32 cores.</button>
-          <button type="button" data-opt="b">b) El Stage 8: 200 tasks no caben en 32
+          <button type="button" data-opt="a">a) El Stage 21: 1 task para 32 cores.</button>
+          <button type="button" data-opt="b">b) El Stage 20: 200 tasks no caben en 32
             cores.</button>
-          <button type="button" data-opt="c">c) El Stage 4: su segunda wave lleva 16 tasks y deja
+          <button type="button" data-opt="c">c) El Stage 16: su segunda wave lleva 16 tasks y deja
             16 cores parados.</button>
           <button type="button" data-opt="d">d) Ninguno de forma que pese en el tiempo.</button>
         </div>
@@ -658,20 +705,20 @@ con_cliente = ventas.join(clientes, "cliente_id")
         los cores libres reciben trabajo enseguida (puede haber esperas cortas por localidad de
         datos).</p></div>
       <div class="guess-fb" data-for="c"><p><b>No.</b> La cuenta es buena: ⌈48 ÷ 32⌉ = 2 waves,
-        la segunda con 16 tasks. Falla porque el Stage 4 entero dura 18 s.</p></div>
-      <div class="guess-fb" data-for="d"><p><b>Sí.</b> El Stage 8 tiene 200 tasks para 32 cores:
+        la segunda con 16 tasks. Falla porque el Stage 16 entero dura 18 s.</p></div>
+      <div class="guess-fb" data-for="d"><p><b>Sí.</b> El Stage 20 tiene 200 tasks para 32 cores:
         trabajo de sobra para todos al empezar. Los stages con pocas tasks duran segundos. Si el
-        Stage 8 tarda, no es por falta de tasks.</p></div>
+        Stage 20 tarda, no es por falta de tasks.</p></div>
       <div class="guess-body">
         <p><b>Compruébalo:</b> en <a href="stages.html#cuantas-tasks">Cuántas tasks pedir según
           los cores</a> y en <a href="stages.html#anadir-workers">¿Vale la pena añadir
           workers?</a>.</p>
         <p>Primero compara tasks con cores. Menos tasks que cores en un stage largo significa que
           faltan particiones. Aquí no pasa: el stage largo tiene 200 tasks para 32 cores.</p>
-        <p>El Stage 9 tiene 1 task porque AQE unió las 200 particiones del shuffle del
-          <code>groupBy</code>, que entre todas suman 210 KiB. Las particiones unidas no bajan de
-          1 MB (<code>minPartitionSize</code>), así que sale una. Dura 1 s: no es el stage largo
-          de una task del que avisa la guía (ver <a href="aqe.html#otras-funciones">AQE</a>). La
+        <p>El Stage 21 tiene 1 task porque AQE unió las 200 particiones del shuffle del
+          <code>groupBy</code>, que entre todas suman 210 KiB (cómo las une: <a
+          href="aqe.html#otras-funciones">AQE</a>). Dura 1 s: no es el stage largo de una task del
+          que avisa la guía. La
           guía dice: "If you see a long-running stage with just one task, that's likely a sign of
           a problem" (<a
           href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/one-spark-task"
@@ -684,12 +731,12 @@ con_cliente = ventas.join(clientes, "cliente_id")
 
     <div class="guess q" data-guess data-answer="a">
       <div class="guess-cover">
-        <p><b>Predice (E4):</b> con la lista de stages y la página del Stage 8, ¿qué frena el
-          Stage 8?</p>
+        <p><b>Predice (E4):</b> con la lista de stages y la página del Stage 20, ¿qué frena el
+          Stage 20?</p>
         <div class="guess-opts" role="group" aria-label="Opciones">
           <button type="button" data-opt="a">a) Una task: tarda 9,4 min y lee 9,1 GiB, cuando el
             percentil 75 tarda 28 s.</button>
-          <button type="button" data-opt="b">b) Una explosión de filas: el Stage 7 escribe
+          <button type="button" data-opt="b">b) Una explosión de filas: el Stage 19 escribe
             43,1 GiB de shuffle.</button>
           <button type="button" data-opt="c">c) Spill en todas las tasks: faltan
             particiones.</button>
@@ -702,7 +749,7 @@ con_cliente = ventas.join(clientes, "cliente_id")
         dura lo que esa task.</p></div>
       <div class="guess-fb" data-for="b"><p><b>No.</b> Suponías que mucho <i>Shuffle Write</i> ya
         es una explosión. Falla porque una explosión se ve en las filas: un nodo da muchas más de
-        las que recibe. Lo que muestra la página del Stage 8 es otra cosa: una sola task con unas
+        las que recibe. Lo que muestra la página del Stage 20 es otra cosa: una sola task con unas
         50 veces más filas que el percentil 75.</p></div>
       <div class="guess-fb" data-for="c"><p><b>No.</b> Suponías que el spill viene de tener pocas
         particiones. Falla porque solo la task Max tiene spill: el percentil 75 marca 0 B. Spill
@@ -727,7 +774,7 @@ con_cliente = ventas.join(clientes, "cliente_id")
 
     <div class="guess q" data-guess data-answer="c">
       <div class="guess-cover">
-        <p><b>Predice (E5):</b> en el DAG, el join del bloque del Stage 8 es un
+        <p><b>Predice (E5):</b> en el DAG, el join del bloque del Stage 20 es un
           <code>SortMergeJoin</code>, y es el plan final. <code>productos</code> estima 8 MiB.
           ¿Por qué no salió un broadcast?</p>
         <div class="guess-opts" role="group" aria-label="Opciones">
@@ -750,7 +797,7 @@ con_cliente = ventas.join(clientes, "cliente_id")
       <div class="guess-fb" data-for="c"><p><b>Sí.</b> En <code>productos LEFT JOIN
         con_cliente</code>, todo producto sale aunque no tenga ventas, así que
         <code>productos</code> no se puede copiar. El único lado que se puede copiar es el derecho,
-        y el Stage 7 escribe 43,1 GiB de shuffle para él: muy por encima de los umbrales.</p></div>
+        y el Stage 19 escribe 43,1 GiB de shuffle para él: muy por encima de los umbrales.</p></div>
       <div class="guess-fb" data-for="d"><p><b>No.</b> Suponías que AQE elige sort-merge cuando ve
         skew. Falla porque aquí decide el tipo de join. Y AQE ni siquiera partió este skew: la
         explicación completa dice por qué.</p></div>
@@ -766,27 +813,22 @@ con_cliente = ventas.join(clientes, "cliente_id")
           target="_blank" rel="noopener"
           title="La misma página en la documentación de Azure Databricks">Azure</a>). Con Photon,
           el nodo de join puede ser otro (ver <a href="joins.html#photon">Con Photon</a>).</p>
-        <p>Esto también explica que AQE no partiera el skew de E4. El skew está en
-          <code>con_cliente</code>, que es el lado derecho, y la doc de AQE dice: "in a LEFT OUTER
-          JOIN, only skew on the left side can be optimized" (<a
-          href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank"
-          rel="noopener">Adaptive query execution</a> <a class="az"
-          href="https://learn.microsoft.com/azure/databricks/optimizations/aqe" target="_blank"
-          rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).
-          Qué hacer entonces: <a href="remedios.html">Remedios</a>.</p>
+        <p>Esto también explica que AQE no partiera el skew de E4: está en
+          <code>con_cliente</code>, el lado derecho de un <code>LEFT OUTER</code>, y AQE solo parte
+          el izquierdo (<a
+          href="https://docs.databricks.com/aws/en/optimizations/aqe#why-didnt-aqe-detect-my-data-skew"
+          target="_blank" rel="noopener">Adaptive query execution · FAQ</a> <a class="az"
+          href="https://learn.microsoft.com/azure/databricks/optimizations/aqe#why-didnt-aqe-detect-my-data-skew"
+          target="_blank" rel="noopener"
+          title="La misma página en la documentación de Azure Databricks">Azure</a>; resumen en <a
+          href="aqe.html">AQE</a>). Qué hacer entonces: <a href="remedios.html">Remedios</a>.</p>
       </div>
     </div>
 
     <p class="note">Los números del ejercicio son ilustrativos: no salen de un job real. El
-      recorrido sí es el de un job real. La escritura también puede sumar stages que la lista no
-      tiene. Con <i>optimized writes</i>, "data is shuffled before being written", y ese shuffle
-      puede añadir un stage. En Databricks Runtime 13.3 LTS y superior está activado, entre otros
-      casos, al crear o insertar en tablas particionadas de Unity Catalog (<a
-      href="https://docs.databricks.com/aws/en/delta/tune-file-size#optimized-writes"
-      target="_blank" rel="noopener">Optimized writes</a> <a class="az"
-      href="https://learn.microsoft.com/azure/databricks/delta/tune-file-size#optimized-writes"
-      target="_blank" rel="noopener"
-      title="La misma página en la documentación de Azure Databricks">Azure</a>).</p>
+      recorrido sí es el de un job real. Si la escritura usa <i>optimized writes</i>, hay un
+      shuffle antes de escribir: está explicado en <a
+      href="mantenimiento-delta.html">Mantenimiento de Delta</a>.</p>
 
     <h3><span class="k">Para tu job</span>Dónde ves en el Spark UI cada idea de Fundamentos</h3>
     <p>Con tu job, sigue la <a href="spark-ui.html#ruta-diagnostico">ruta de diagnóstico del Spark
@@ -822,9 +864,8 @@ con_cliente = ventas.join(clientes, "cliente_id")
         <tr><td>Qué join salió</td><td>Nodo de join del plan final:
           <code>isFinalPlan=true</code> en <code>AdaptiveSparkPlan</code></td><td><a
           href="joins.html#en-runtime">Estrategias de join · En runtime</a></td></tr>
-        <tr><td>Particiones unidas por AQE</td><td>Nodo de lectura del shuffle con
-          <i>Coalesced</i>; la doc de AQE lo llama <code>CustomShuffleReader</code>, y en planes
-          recientes sale como <code>AQEShuffleRead</code></td><td><a href="aqe.html">AQE · Señales
+        <tr><td>Particiones unidas por AQE</td><td>Nodo de lectura con
+          <i>Coalesced</i></td><td><a href="aqe.html">AQE · Señales
           en el plan</a></td></tr>
       </tbody>
     </table></div>
@@ -859,7 +900,7 @@ con_cliente = ventas.join(clientes, "cliente_id")
       (umbral de 30 MB en runtime, unión de particiones tras el shuffle y su mínimo de 1 MB, skew
       solo en joins sort-merge y shuffle hash, qué lado se parte en cada tipo de join, el lado
       izquierdo de un <code>LEFT OUTER</code> no se copia, <code>isFinalPlan</code> y
-      <code>CustomShuffleReader</code> en el plan), <a
+      el nodo de lectura con <code>Coalesced</code> en el plan), <a
       href="https://spark.apache.org/docs/latest/rdd-programming-guide.html#shuffle-operations"
       target="_blank" rel="noopener">Apache Spark · Shuffle operations</a> (guía de RDD; el
       mecanismo es el mismo para DataFrames: un archivo por map task y todos los valores de una
@@ -896,12 +937,13 @@ con_cliente = ventas.join(clientes, "cliente_id")
       target="_blank" rel="noopener"
       title="La misma página en la documentación de Azure Databricks">Azure</a> (ordenar los
       stages por duración; qué miden Input, Shuffle Read y Shuffle Write), <a
-      href="https://docs.databricks.com/aws/en/delta/tune-file-size#optimized-writes"
-      target="_blank" rel="noopener">Databricks · Optimized writes</a> <a class="az"
-      href="https://learn.microsoft.com/azure/databricks/delta/tune-file-size#optimized-writes"
+      href="https://docs.databricks.com/aws/en/jobs/#orchestration-concepts" target="_blank"
+      rel="noopener">Databricks · Lakeflow Jobs</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/jobs/#orchestration-concepts"
       target="_blank" rel="noopener"
-      title="La misma página en la documentación de Azure Databricks">Azure</a> (shuffle antes de
-      escribir y cuándo viene activado), <a
+      title="La misma página en la documentación de Azure Databricks">Azure</a> (job y tarea de
+      Lakeflow), <a href="https://spark.apache.org/docs/latest/cluster-overview.html#glossary"
+      target="_blank" rel="noopener">Apache Spark · Cluster mode overview</a> (job de Spark), <a
       href="https://spark.apache.org/docs/latest/sql-ref-syntax-qry-explain.html"
       target="_blank" rel="noopener">Apache Spark · EXPLAIN</a> (<code>Exchange
       hashpartitioning</code> y su clave) y <a

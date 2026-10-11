@@ -15,8 +15,8 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
           bloque por partición destino. Shuffle read: cada reduce task lee su bloque de todos esos
           archivos.</li>
         <li>Cada shuffle es un <code>Exchange</code> en el plan y una frontera de stage. Ahí AQE
-          conoce los tamaños reales y puede re-planificar lo que falta, en queries que no son
-          streaming. No siempre cambia el plan.</li>
+          conoce los tamaños reales y puede re-planificar lo que falta, en queries batch.
+          No siempre cambia el plan.</li>
         <li><code>groupBy</code>, <code>distinct</code>, joins sort-merge, ventanas con
           <code>partitionBy</code>, <code>orderBy</code> y <code>repartition</code> hacen shuffle.
           Un broadcast join evita mover la tabla grande.</li>
@@ -102,9 +102,10 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
           (<code>spark.sql.files.maxPartitionBytes</code>); si lee otro shuffle, una por partición
           de ese shuffle (ver <a href="plan-ejecucion.html#particiones">de dónde sale cada
           partición</a>)</td><td>Una por
-          partición del shuffle: tantas como <code>spark.sql.shuffle.partitions</code>, o las que
-          elija Databricks si no fijas un número (ver <a
-          href="plan-ejecucion.html#particiones">Plan de ejecución</a>). AQE puede unirlas después
+          partición del shuffle: tantas como <code>spark.sql.shuffle.partitions</code> (200 si no
+          lo cambias). En serverless, y en DBR 19 si no fijas un número, las elige
+          <i>auto-optimized shuffle</i> (ver <a
+          href="plan-ejecucion.html#particiones">de dónde sale cada partición</a>). AQE puede unirlas después
           (<a href="aqe.html#otras-funciones">AQE</a>)</td></tr>
         <tr><td>En el Spark UI</td><td>Las tasks del stage N, las que tienen <i>Shuffle
           Write</i></td><td>Las tasks del stage N+1, las que tienen <i>Shuffle Read</i></td></tr>
@@ -181,20 +182,26 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
 
     <h3><span class="k">Cómo funciona por dentro</span>Qué escribe el lado map y qué lee el lado
       reduce</h3>
-    <p><b>Shuffle write (lado map).</b> Con un join o un <code>groupBy</code>, Spark calcula con un
-      hash de la clave a qué partición destino va cada fila. Los resultados se guardan en memoria
-      hasta que se llena, se ordenan por partición destino y se escriben en <b>un único archivo</b>
-      por map task, en el disco local del executor. Ese archivo queda dividido en bloques, uno por
-      partición destino. Así lo describe la doc de Spark.</p>
+    <p><b>Shuffle write (lado map).</b> El plan muestra el reparto por clave como <code>Exchange
+      hashpartitioning(clave, n)</code>: un hash de la clave decide la partición destino de cada
+      fila (<a href="https://spark.apache.org/docs/latest/sql-ref-syntax-qry-explain.html"
+      target="_blank" rel="noopener">Apache Spark · EXPLAIN</a>). Lo demás lo describe la doc de
+      Spark (<a
+      href="https://spark.apache.org/docs/latest/rdd-programming-guide.html#performance-impact"
+      target="_blank" rel="noopener">guía de RDD</a>; el mecanismo es el mismo para DataFrames):
+      los resultados se guardan en memoria hasta que se llena, se ordenan por partición destino y
+      se escriben en <b>un único archivo</b> por map task, en el disco local del executor. Ese
+      archivo queda dividido en bloques, uno por partición destino.</p>
     <p class="note"><b>Con Photon.</b> Esta página y sus simuladores describen el shuffle de Spark sin
       Photon. Photon es el motor de ejecución de Databricks (qué es y si tu compute lo usa: <a
-      href="arquitectura.html#photon">Arquitectura</a>). Usa su propio shuffle columnar (<a
+      href="arquitectura.html#photon">Arquitectura</a>). Según su documentación, usa un shuffle columnar
+      rediseñado para aumentar el rendimiento en joins grandes (<a
       href="https://docs.databricks.com/aws/en/compute/photon" target="_blank"
       rel="noopener">What is Photon?</a> <a class="az"
       href="https://learn.microsoft.com/azure/databricks/compute/photon" target="_blank"
       rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).
-      El reparto en stages y el reparto all-to-all no cambian; el formato de los archivos sí
-      puede. La doc no detalla cómo son esos archivos.</p>
+      La doc no detalla cómo se parten en stages esas queries ni cómo son los archivos de shuffle
+      de Photon, así que no asumas que son iguales a los de aquí.</p>
     <p><b>Shuffle read (lado reduce).</b> Cada reduce task lee <b>su</b> bloque de <b>cada</b>
       archivo de shuffle. Si el archivo está en su mismo executor, la lectura es local. Si no, la
       pide por red al otro executor, y mientras llega la task queda bloqueada (eso es el <i>fetch
@@ -202,11 +209,8 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
     <p><b>Dónde se rompe el stage.</b> Cada shuffle es un nodo <code>Exchange</code> en el plan
       (cómo encontrarlo: <a href="plan-ejecucion.html#explain">Leer el plan</a>) y separa dos
       stages: el stage N termina escribiendo el shuffle y el stage N+1 empieza leyéndolo. En esa
-      frontera AQE conoce los tamaños reales y puede re-planificar lo que falta, en queries que no
-      son streaming; no siempre cambia el plan (ver <a href="aqe.html">AQE</a>).</p>
-    <p><b>Memoria y spill.</b> Las operaciones de shuffle organizan las filas en memoria antes de
-      enviarlas y después de recibirlas. Si no caben, Spark las vuelca a disco (spill); el mecanismo
-      está en <a href="memoria-oom.html">Memoria y OOM</a>.</p>
+      frontera AQE conoce los tamaños reales y puede re-planificar lo que falta, en queries batch;
+      no siempre cambia el plan (ver <a href="aqe.html">AQE</a>).</p>
     <p id="archivos-intermedios"><b>Archivos intermedios.</b> Los archivos de shuffle se quedan en
       disco mientras se puedan necesitar, para no rehacer el write si hay que recomputar (<a
       href="https://spark.apache.org/docs/latest/rdd-programming-guide.html#performance-impact"
@@ -277,7 +281,11 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
       <div class="guess-body">
         <p><b>Compruébalo:</b> apaga la agregación parcial, baja <i>shuffle.partitions</i> a 10 y
           lee el veredicto. Después vuelve a encender la agregación parcial.</p>
-        <p>Cada reduce task lee unos 305 MiB. Por encima de 200 MiB por task, el simulador marca
+        <p>Las operaciones de shuffle organizan las filas en memoria antes de enviarlas y después
+          de recibirlas. Si no caben, Spark las vuelca a disco (spill); el mecanismo está en <a
+          href="memoria-oom.html">Memoria y OOM</a>.</p>
+        <p>Cada reduce task lee unos 305 MiB. Por encima de 200 MiB por task (el simulador usa
+          MiB; ver <a href="plan-ejecucion.html#unidades">unidades</a>), marca
           <b>RIESGO DE SPILL</b>. Ese límite sale de los 128–200 MB por task que propone la guía de
           optimización de Databricks de 2023 (un eBook, no documentación oficial). Con la
           agregación parcial encendida, las mismas 10 particiones ya no dan aviso: el shuffle pesa
@@ -410,8 +418,8 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
     <h3 class="solo"><span class="k">Qué pasaría si</span></h3>
     <ul>
       <li><b>Muchísimas particiones para poco shuffle:</b> el número de bloques es map tasks ×
-        particiones, y cada reduce task hace muchas lecturas diminutas. Esto es razonamiento mío, no
-        de la doc; AQE lo mitiga uniendo particiones pequeñas (ver <a
+        particiones, y cada reduce task hace muchas lecturas diminutas. Esto es razonamiento de este
+        manual, no de la doc; AQE lo mitiga uniendo particiones pequeñas (ver <a
         href="aqe.html#otras-funciones">AQE</a>).</li>
     </ul>
 
@@ -429,7 +437,8 @@ description: "Shuffle write y shuffle read: cómo se mueven las filas entre stag
     </ul>
     <p class="note">¿Ya tienes un job lento? Empieza por la <a
       href="spark-ui.html#ruta-diagnostico">ruta de diagnóstico del Spark UI</a> y sigue en <a
-      href="diagnostico.html">Diagnóstico</a>.</p>
+      href="diagnostico.html">Diagnóstico</a>. Si es un job programado que ya terminó, antes <a
+      href="spark-ui.html#ejecucion-terminada">abre el Spark UI de esa ejecución</a>.</p>
 
     <h3><span class="k">De dónde sale</span>Fuentes</h3>
     <p class="src"><a

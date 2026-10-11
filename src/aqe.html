@@ -96,8 +96,14 @@ tamaño &gt; skewedPartitionThresholdInBytes   <span class="c">-- default 256MB<
 
     <h3><span class="k">Límite 2</span>Dónde AQE no actúa</h3>
     <ul>
-      <li>Solo aplica a queries <b>no streaming</b> que tienen al menos un exchange (join,
-        agregación o ventana) o una subquery.</li>
+      <li>Aplica a queries <b>batch</b> que tienen al menos un exchange (join, agregación o
+        ventana) o una subquery. Desde Databricks Runtime 18.0 también actúa, activado por
+        defecto, en queries de <b>streaming sin estado</b>: <q>Databricks supports Adaptive Query
+        Execution (AQE) and Auto Optimized Shuffle (AOS) for stateless streaming queries</q> (<a
+        href="https://docs.databricks.com/aws/en/structured-streaming/stateless-streaming#adaptive-query-execution-and-auto-optimized-shuffle"
+        target="_blank" rel="noopener">Stateless streaming</a> · <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/structured-streaming/stateless-streaming"
+        target="_blank" rel="noopener">Azure</a>). En streaming con estado no actúa.</li>
       <li>El manejo de skew es para <b>joins</b>. Una ventana <code>PARTITION BY
         clave_caliente</code> o una agregación sin agregación parcial no se parten. Lo verás en el
         <a href="lab.html">lab</a>.</li>
@@ -142,6 +148,21 @@ tamaño &gt; skewedPartitionThresholdInBytes   <span class="c">-- default 256MB<
       jobs</h3>
     <p>Como AQE ejecuta la query por query stages, una sola acción puede salir en el Spark UI
       como varios jobs, y el stage que ya corrió sale <i>skipped</i> en el siguiente.</p>
+    <p id="query-stages">AQE vuelve a optimizar la query al final de cada shuffle, cuando ya tiene
+      sus estadísticas reales. La doc lo dice así: <q>the most up-to-date accurate statistics at
+      the end of a shuffle and broadcast exchange (referred to as a query stage in AQE)</q> (<a
+      href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank"
+      rel="noopener">Databricks · AQE</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/optimizations/aqe" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).
+      Por eso la ejecución se parte en tramos, uno por query stage.</p>
+    <p class="c">Es lo que se observa en el Spark UI; la doc no lo detalla. No describe el stage
+      final de 1 task (de un <code>count()</code> o de una agregación sin <code>groupBy</code>), ni
+      el stage que lee la tabla copiada en un broadcast, ni cómo reparte AQE los query stages en
+      jobs. Para comprobarlo en un cluster clásico, pon
+      <code>spark.databricks.optimizer.adaptive.enabled</code> en false y repite el
+      <code>count()</code> de <a href="plan-ejecucion.html#count-dos-jobs">Plan de ejecución</a>:
+      deberías ver un solo job con dos stages.</p>
     <p>Cómo contar el trabajo real, con un ejemplo de <code>count()</code>: <a
       href="plan-ejecucion.html#varios-jobs">Plan de ejecución · Job vs acción</a>.</p>
 
@@ -237,6 +258,10 @@ SELECT /*+ SKEW('orders', ('o_custId', 'o_storeRegionId'), ((0, 1001), (1, 1002)
       href="https://learn.microsoft.com/azure/databricks/archive/legacy/skew-join" target="_blank"
       rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>
       (página archivada) · <a
+      href="https://docs.databricks.com/aws/en/structured-streaming/stateless-streaming"
+      target="_blank" rel="noopener">Stateless streaming</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/structured-streaming/stateless-streaming"
+      target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a
       href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#adaptive-query-execution"
       target="_blank" rel="noopener">Apache Spark · Adaptive Query Execution</a> · <a
       href="https://spark.apache.org/docs/latest/web-ui.html#jobs-tab"

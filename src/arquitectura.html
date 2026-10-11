@@ -22,6 +22,9 @@ extra_css: ["/assets/css/arquitectura.css"]
           esquema, que recorre los datos una vez.</li>
         <li><code>collect()</code> y <code>toPandas()</code> traen todas las filas del resultado a
           la memoria del driver.</li>
+        <li>Este manual describe Spark sin Photon, el motor de ejecución de Databricks. Con Photon
+          cambian los operadores del plan; qué ves y cómo saber si tu compute lo usa: <a
+          href="#photon">Photon</a>.</li>
         <li>En serverless no hay Spark UI ni eliges los cores (ver <a href="#serverless">En
           serverless</a>).</li>
       </ul>
@@ -77,9 +80,6 @@ extra_css: ["/assets/css/arquitectura.css"]
       <li><b>Como hay 14 tasks y 12 cores, 2 esperan a que se libere un core</b> (cómo se
         reparten: <a href="stages.html#waves">Tasks, cores y waves</a>). Y el stage siguiente no
         empieza hasta que este termina sus 14 tasks.</li>
-      <li><b>El simulador cuenta stages y tasks, no jobs.</b> En el Spark UI una acción puede
-        verse como varios jobs (por qué: <a href="plan-ejecucion.html#varios-jobs">Plan de
-        ejecución · Job vs acción</a>).</li>
     </ul>
     <div class="guess q" data-guess data-answer="b">
       <div class="guess-cover">
@@ -223,24 +223,72 @@ extra_css: ["/assets/css/arquitectura.css"]
         el driver hace de master y de worker, y Spark corre en local con un hilo executor por core,
         menos uno para el driver. Aquí sí corren tasks en el nodo driver. Está pensado para pocos
         datos o cargas que no se distribuyen.</li>
-      <li id="photon"><b>Photon está activo en casi todo compute de Databricks.</b> Photon es el
-        motor de ejecución vectorizado de Databricks: procesa los datos por lotes de columnas, no
-        fila a fila, y está escrito en C++. Está activo en serverless y en los SQL warehouses (el
-        compute para queries SQL), y por defecto en el compute clásico. Si creas el compute con la
-        Clusters API o la Jobs API, tienes que activarlo tú (<code>runtime_engine</code> =
-        <code>PHOTON</code>). Catalyst (el optimizador de Spark) sigue planeando la query; Photon
-        cambia quién la ejecuta, así que en el plan ves operadores de Photon en lugar de algunos de
-        Spark. Este manual describe el motor de Spark sin Photon. Para saber si tu query corrió en
-        Photon, en compute clásico mira el DAG de la pestaña SQL / DataFrame del Spark UI: sus
-        operadores salen en naranja. En serverless, míralo en el <a
-        href="query-profile.html">query profile</a> (<a
-        href="https://docs.databricks.com/aws/en/compute/photon" target="_blank"
-        rel="noopener">What is Photon?</a> <a class="az"
-        href="https://learn.microsoft.com/azure/databricks/compute/photon" target="_blank"
-        rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).
-        Qué cambia en los joins: <a href="joins.html#photon">Joins · Con Photon</a>.</li>
+      <li id="photon"><b>Photon es el motor de ejecución vectorizado de Databricks.</b> Procesa los
+        datos por lotes de columnas, no fila a fila, y está escrito en C++. Está activo en serverless
+        y en los SQL warehouses (el compute para queries SQL). En el compute clásico (all-purpose y
+        job compute) lo activa Databricks por defecto si creas el compute desde la UI, con la casilla
+        <i>Use Photon Acceleration</i> en <i>Performance</i>. Si defines el compute con la Clusters
+        API o la Jobs API, tienes que activarlo tú con <code>runtime_engine</code> =
+        <code>PHOTON</code>. Catalyst (el optimizador de Spark) sigue planeando la query; Photon
+        cambia quién la ejecuta (<a href="https://docs.databricks.com/aws/en/compute/photon"
+        target="_blank" rel="noopener">What is Photon?</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/photon" target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>).
+        Este manual describe el motor de Spark sin Photon.
+        <p><b>Qué cambia en lo que ves.</b> Solo lo que la doc de Photon describe:</p>
+        <div class="tblwrap"><table>
+          <thead><tr><th>Qué miras</th><th>Con Photon</th></tr></thead>
+          <tbody>
+            <tr><td>Joins</td><td>Photon "replaces sort-merge joins with high-performance hash
+              joins" (detalle en <a href="joins.html#photon">Joins · Con Photon</a>)</td></tr>
+            <tr><td>Shuffle</td><td>Photon "uses a redesigned columnar shuffle"</td></tr>
+            <tr><td>Spark UI (compute clásico)</td><td>En el DAG de la pestaña SQL / DataFrame, los
+              operadores de Photon salen en naranja y los de Spark en azul</td></tr>
+            <tr><td>Query profile (SQL warehouses y serverless)</td><td>El plan distingue los
+              operadores de Photon (morado) de los estándar (gris); más en <a
+              href="query-profile.html">query profile</a></td></tr>
+            <tr><td>Nombres de los nodos en el plan</td><td>La doc no los da. Ábrelo y míralo en tu
+              plan</td></tr>
+            <tr><td>Summary Metrics de un stage</td><td>La doc de Photon no las describe.
+              Compruébalas en un stage de tu job</td></tr>
+          </tbody>
+        </table></div>
+        <p><b>Cómo saber si tu ejecución usó Photon.</b></p>
+        <ol>
+          <li>Abre la ejecución en <i>Runs</i>, haz clic en la tarea y mira el cluster que la
+            ejecutó. Cada tarea puede tener un compute distinto (<a
+            href="https://docs.databricks.com/aws/en/jobs/monitor" target="_blank"
+            rel="noopener">Monitor and observe Lakeflow Jobs</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/jobs/monitor" target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
+          <li>En un compute clásico, abre su pestaña <i>Configuration</i>, pulsa <i>JSON</i> y mira
+            <code>runtime_engine</code>: <code>PHOTON</code> o <code>STANDARD</code> (<a
+            href="https://docs.databricks.com/aws/en/compute/clusters-manage" target="_blank"
+            rel="noopener">Manage compute</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/clusters-manage" target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
+          <li>En el Spark UI, los operadores de Photon salen en naranja. En serverless no hay Spark
+            UI: usa el <a href="query-profile.html">query profile</a>, que muestra qué parte del
+            tiempo corrió en Photon.</li>
+        </ol>
+        <div class="verify"><b>Verifícalo</b> en tu workspace: la doc no dice si el JSON de un job
+          cluster que ya terminó sigue visible desde la ejecución.</div>
+      </li>
       <li><b>El driver guarda el estado de todos los notebooks conectados.</b> Por eso Databricks
         recomienda desconectar los que no uses.</li>
+      <li id="serverless"><b>En serverless no eliges el compute ni hay Spark UI.</b> Databricks
+        asigna y gestiona el compute por ti, así que no eliges workers ni cores (<a
+        href="https://docs.databricks.com/aws/en/compute/serverless/" target="_blank"
+        rel="noopener">Serverless compute</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/serverless/" target="_blank"
+        rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).
+        Solo hay APIs de Spark Connect: la API de RDD no está disponible. Tampoco hay Spark UI: en su lugar se usa el <a
+        href="query-profile.html">query profile</a> (<a
+        href="https://docs.databricks.com/aws/en/compute/serverless/limitations" target="_blank"
+        rel="noopener">Serverless compute limitations</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/serverless/limitations"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
       <li id="spark-connect"><b>Serverless siempre usa Spark Connect.</b> Spark Connect es un
         protocolo cliente-servidor. El cliente construye las transformaciones y las manda a un
         servidor Spark remoto como planes sin analizar (Spark aún no ha comprobado que existan las
@@ -263,19 +311,6 @@ extra_css: ["/assets/css/arquitectura.css"]
         Desde qué versión de Databricks Runtime usa Spark Connect y cuándo Databricks te da un
         compute estándar: <a href="azure.html#modo-acceso">Azure Databricks ·
         Modo de acceso</a>.</li>
-      <li id="serverless"><b>En serverless no eliges el compute ni hay Spark UI.</b> Databricks
-        asigna y gestiona el compute por ti, así que no eliges workers ni cores (<a
-        href="https://docs.databricks.com/aws/en/compute/serverless/" target="_blank"
-        rel="noopener">Serverless compute</a> <a class="az"
-        href="https://learn.microsoft.com/azure/databricks/compute/serverless/" target="_blank"
-        rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).
-        Solo hay APIs de Spark Connect: la API de RDD no está disponible. Tampoco hay Spark UI: en su lugar se usa el <a
-        href="query-profile.html">query profile</a> (<a
-        href="https://docs.databricks.com/aws/en/compute/serverless/limitations" target="_blank"
-        rel="noopener">Serverless compute limitations</a> <a class="az"
-        href="https://learn.microsoft.com/azure/databricks/compute/serverless/limitations"
-        target="_blank" rel="noopener"
-        title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
     </ul>
 
     <h3 class="solo"><span class="k">Con qué se confunde</span></h3>
@@ -283,13 +318,24 @@ extra_css: ["/assets/css/arquitectura.css"]
       <li><b>Worker vs executor.</b> En Spark son cosas distintas: el worker es la máquina y el
         executor es el proceso de tu aplicación en ella. Databricks corre uno por worker, por eso
         su doc los usa como sinónimos.</li>
-      <li><b>Scheduler de Spark vs programar un job.</b> El scheduler de Spark reparte tasks dentro
-        de una aplicación que ya está corriendo. Programar un job es otra cosa: el trigger <a
+      <li id="job-lakeflow"><b>Job de Lakeflow vs job de Spark.</b> Un job de Lakeflow Jobs es "the
+        primary resource for coordinating, scheduling, and running your operations", y su task es
+        "a specific unit of work within a job" (<a
+        href="https://docs.databricks.com/aws/en/jobs/#orchestration-concepts" target="_blank"
+        rel="noopener">Lakeflow Jobs</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/jobs/#orchestration-concepts" target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>). Cada ejecución corre tu
+        código. Un job de Spark es otra cosa: "a parallel computation consisting of multiple tasks
+        that gets spawned in response to a Spark action", y su task es "a unit of work that will be
+        sent to one executor" (<a href="https://spark.apache.org/docs/latest/cluster-overview.html#glossary"
+        target="_blank" rel="noopener">Apache Spark · Glossary</a>). Así, tu job de 40 minutos no
+        es un "Job 0" del Spark UI, y una task de Lakeflow no es una task de Spark. Cada acción
+        lanza uno o más jobs de Spark. Programar el job a una hora fija es del trigger <a
         href="https://docs.databricks.com/aws/en/jobs/scheduled" target="_blank"
-        rel="noopener"><i>Scheduled</i> de Lakeflow Jobs</a> <a class="az"
-        href="https://learn.microsoft.com/azure/databricks/jobs/scheduled" target="_blank"
-        rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>
-        lanza el job a una hora fija.</li>
+        rel="noopener"><i>Scheduled</i></a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/jobs/scheduled" target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>; el scheduler de Spark solo reparte
+        tasks dentro de una aplicación que ya corre.</li>
       <li><b>Cliente de Spark Connect vs driver.</b> En serverless, tu notebook es el cliente:
         construye el plan y lo envía. El servidor remoto es quien lo analiza y lo ejecuta.</li>
     </ul>
@@ -334,16 +380,19 @@ extra_css: ["/assets/css/arquitectura.css"]
 
     <h3><span class="k">Dónde mirar</span>En tu job</h3>
     <ul>
-      <li><b>Quieres saber qué jobs lanzó una celda</b> → mira bajo la celda. Si el código usa
-        Spark, ahí aparecen sus jobs, en el desplegable <i>Spark Jobs</i> (<a
+      <li id="spark-jobs-celda"><b>Quieres saber qué jobs lanzó una celda</b> → al correr la celda
+        de forma interactiva, mira bajo ella. Si el código usa Spark, ahí aparecen sus jobs, en el
+        desplegable <i>Spark Jobs</i>. La doc no dice si la salida de una ejecución de job ya
+        terminada conserva ese desplegable; si no está, usa la pestaña Jobs del Spark UI y compara
+        las horas de cada job con las de tus celdas (<a
         href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/spark-job-gaps#execution-of-non-spark-code"
         target="_blank" rel="noopener">Gaps between Spark jobs</a> <a class="az"
         href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/spark-job-gaps#execution-of-non-spark-code"
         target="_blank" rel="noopener"
         title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
       <li><b>La celda tarda y no hay ningún job de Spark activo</b> → es código que corre en el
-        driver, como un bucle de Python. Despliega <i>Spark Jobs</i> bajo la celda: si no aparece
-        o ninguno está activo, los workers están parados (<a
+        driver, como un bucle de Python. Al correrla de forma interactiva, despliega <i>Spark
+        Jobs</i> bajo la celda: si no aparece o ninguno está activo, los workers están parados (<a
         href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/spark-job-gaps#execution-of-non-spark-code"
         target="_blank" rel="noopener">Gaps between Spark jobs</a> <a class="az"
         href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/spark-job-gaps#execution-of-non-spark-code"
@@ -359,7 +408,8 @@ extra_css: ["/assets/css/arquitectura.css"]
     </ul>
     <p class="note">¿Ya tienes un job lento? Empieza por la <a
       href="spark-ui.html#ruta-diagnostico">ruta de diagnóstico del Spark UI</a> y sigue en <a
-      href="diagnostico.html">Diagnóstico</a>.</p>
+      href="diagnostico.html">Diagnóstico</a>. Si es un job programado que ya terminó, antes <a
+      href="spark-ui.html#ejecucion-terminada">abre el Spark UI de esa ejecución</a>.</p>
 
     <h3><span class="k">De dónde sale</span>Fuentes</h3>
     <p class="src"><a href="https://spark.apache.org/docs/latest/cluster-overview.html"
@@ -433,6 +483,18 @@ extra_css: ["/assets/css/arquitectura.css"]
       href="https://learn.microsoft.com/azure/databricks/compute/serverless/limitations"
       target="_blank" rel="noopener"
       title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://docs.databricks.com/aws/en/jobs/#orchestration-concepts" target="_blank"
+      rel="noopener">Databricks · Lakeflow Jobs</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/jobs/#orchestration-concepts"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> (job y task de
+      Lakeflow), <a href="https://spark.apache.org/docs/latest/cluster-overview.html#glossary"
+      target="_blank" rel="noopener">Apache Spark · Glossary</a> (job y task de Spark), <a
+      href="https://docs.databricks.com/aws/en/jobs/monitor" target="_blank"
+      rel="noopener">Databricks · Monitor and observe Lakeflow Jobs</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/jobs/monitor" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>
+      (cluster de cada tarea), <a
       href="https://docs.databricks.com/aws/en/jobs/scheduled" target="_blank"
       rel="noopener">Databricks · Run jobs on a schedule</a> <a class="az"
       href="https://learn.microsoft.com/azure/databricks/jobs/scheduled" target="_blank"

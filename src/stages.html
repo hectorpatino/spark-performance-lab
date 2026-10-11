@@ -14,8 +14,7 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
           driver que asigna el trabajo) las reparte entre los cores.</li>
         <li><code>waves = ⌈tasks ÷ cores⌉</code>. Si las tasks duran parecido, el stage tarda más o
           menos waves × duración de una task.</li>
-        <li>Para las shuffle partitions, prueba primero <code>auto</code> (Databricks elige el
-          número). Si las fijas a mano, usa un múltiplo de los cores totales (<a
+        <li>Si fijas las shuffle partitions a mano, usa un múltiplo de los cores totales (<a
           href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide#cluster-usage"
           target="_blank" rel="noopener">guía de optimización de Databricks de 2023</a>, un eBook,
           no documentación oficial). Ver <a href="#cuantas-tasks">Cuántas tasks pedir según los
@@ -44,10 +43,7 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
         <tr><td><b>Core</b></td><td>Un hueco donde corre una task a la vez (por defecto, 1
           task = 1 core)</td><td>Los cores de los workers</td></tr>
         <tr><td><b>Wave</b></td><td>Cada tanda en que las tasks de un stage pasan por los cores; la
-          última puede ir a medias. <b>Término no oficial y sin config</b>. Se llama
-          <i>iterations</i> en la <a
-          href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide#cluster-usage"
-          target="_blank" rel="noopener">guía de 2023</a></td><td>⌈tasks ÷ cores⌉</td></tr>
+          última puede ir a medias. <b>Término no oficial y sin config</b>.</td><td>⌈tasks ÷ cores⌉</td></tr>
       </tbody>
     </table></div>
     <p>Task, executor y worker están en <a href="arquitectura.html#quien-hace-que">Quién hace
@@ -57,35 +53,35 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
     <p>Un stage tiene una pila de tasks y un número fijo de cores. Cada core corre una task a la
       vez. Las tasks que aún no tienen core esperan en la <b>cola</b>. Primero responde la
       predicción. Después dale a reproducir o arrastra el tiempo a mano con la barra de abajo.</p>
-    <div class="guess q" data-guess data-answer="b">
+    <div class="guess q" data-guess data-answer="c">
       <div class="guess-cover">
-        <p><b>Predice:</b> un stage de 40 tasks en 16 cores. Cada task tarda entre 2 y 8 s. En el
-          último segundo del stage, ¿cuántos cores siguen trabajando?</p>
+        <p><b>Predice:</b> un stage de 40 tasks en 16 cores. Cada task tarda entre 2 y 8 s. ¿Cuándo
+          empieza la task 17?</p>
         <div class="guess-opts" role="group" aria-label="Opciones">
-          <button type="button" data-opt="a">a) 8: los de la última wave.</button>
-          <button type="button" data-opt="b">b) Solo unos pocos.</button>
-          <button type="button" data-opt="c">c) Los 16.</button>
+          <button type="button" data-opt="a">a) Cuando terminan las 16 primeras tasks.</button>
+          <button type="button" data-opt="b">b) Cuando termina la task 1, que tiene su cola.</button>
+          <button type="button" data-opt="c">c) Cuando termina la primera de las 16.</button>
         </div>
       </div>
       <div class="guess-fb" data-for="a"><p><b>No.</b> Suponías que las waves son tandas fijas
         (16, 16 y 8) y que cada una espera a la anterior; falla porque cada core toma la siguiente
-        task en cuanto acaba la suya. Las tasks de la «última wave» no arrancan juntas ni acaban
+        task en cuanto acaba la suya. Las tasks de la «segunda wave» no arrancan juntas ni acaban
         juntas.</p></div>
-      <div class="guess-fb" data-for="b"><p><b>Sí.</b> Cuando la cola se vacía, cada core que
-        acaba se queda sin trabajo. Al final solo siguen las tasks que empezaron más tarde o que
-        duran más.</p></div>
-      <div class="guess-fb" data-for="c"><p><b>No.</b> Suponías que los cores libres ayudan con
-        las tasks que quedan; falla porque una task corre entera en el core que la tomó. Los cores
-        que acaban pronto no pueden partirla.</p></div>
+      <div class="guess-fb" data-for="b"><p><b>No.</b> Suponías que cada core tiene sus tasks
+        asignadas de antemano; falla porque hay una sola cola y la task 17 la toma el primer core
+        que quede libre, sea cual sea. Si la task 1 dura 8 s, otro core la toma antes.</p></div>
+      <div class="guess-fb" data-for="c"><p><b>Sí.</b> Hay una sola cola y el primer core que
+        acaba toma la siguiente task, sin esperar a los otros 15.</p></div>
       <div class="guess-body">
         <p><b>Compruébalo:</b> deja 40 tasks y 16 cores y marca «Duraciones variables». Arrastra
-          «Tiempo» hasta un segundo antes del final y mira la cifra «corriendo».</p>
+          «Tiempo» hasta que «en cola» baje de 24 a 23 y mira cuántas tasks han
+          terminado: solo una.</p>
         <p>Sin duraciones variables verías 3 waves limpias (16, 16 y 8), y en la última solo
           trabajan 8 cores. Con duraciones variables las waves se desdibujan: un core que acaba
           pronto toma otra task sin esperar a los otros 15. Las waves son una forma de razonar;
-          Spark no las impone. La cola del final, con cores parados mientras acaban las últimas
-          tasks, es la misma que produce el skew cuando una task dura mucho más que las demás (ver
-          <a href="diagnostico.html">Diagnóstico</a>).</p>
+          Spark no las impone. Puede haber esperas cortas por localidad de datos (ver «Cómo funciona
+          por dentro»). La cola del final, con cores parados mientras acaban las últimas tasks, es la misma que produce el skew cuando
+          una task dura mucho más que las demás (ver <a href="diagnostico.html">Diagnóstico</a>).</p>
       </div>
     </div>
     <div class="console">
@@ -140,8 +136,10 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
         ejecución</a>). Si <a href="aqe.html#otras-funciones">AQE une particiones</a>, el stage
         tiene menos tasks.</li>
       <li><b>El scheduler reparte tasks en cores libres.</b> Cuando un core queda libre, recibe la
-        siguiente task de la cola, sin esperar a los demás cores. Es lo que viste en el
-        Simulador 1. Con 64 cores corren 64 tasks a la vez como máximo.</li>
+        siguiente task de la cola, sin esperar a los demás cores. Puede esperar unos segundos para
+        lanzar una task cerca de sus datos (<code>spark.locality.wait</code>, 3 s por defecto; <a
+        href="https://spark.apache.org/docs/latest/configuration.html#scheduling" target="_blank"
+        rel="noopener">Apache Spark · Configuration</a>). Es lo que viste en el Simulador 1. Con 64 cores corren 64 tasks a la vez como máximo.</li>
       <li><b>Las waves salen solas de la cuenta.</b> <code>waves = ⌈tasks ÷ cores⌉</code>. Si las
         tasks duran parecido, el stage tarda más o menos <code>waves × duración de una
         task</code>.</li>
@@ -285,20 +283,20 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
     <p>Un stage de tasks iguales de 10 s en workers de 8 cores. El coste es workers × tiempo, es
       decir, lo que pagas mientras el stage corre. Los números son ilustrativos y no usan precios
       reales. Mueve el deslizador o pasa el dedo o el ratón por las gráficas.</p>
-    <div class="guess q" data-guess data-answer="b">
+    <div class="guess q" data-guess data-answer="a">
       <div class="guess-cover">
         <p><b>Predice:</b> un stage de 48 tasks de 10 s corre en 4 workers de 8 cores. Puedes pasar
           a 5 workers o a 6. ¿Qué cambio acorta el stage?</p>
         <div class="guess-opts" role="group" aria-label="Opciones">
-          <button type="button" data-opt="a">a) Cualquiera de los dos lo acorta.</button>
-          <button type="button" data-opt="b">b) Solo pasar a 6 workers lo acorta.</button>
+          <button type="button" data-opt="a">a) Solo pasar a 6 workers lo acorta.</button>
+          <button type="button" data-opt="b">b) Cualquiera de los dos lo acorta.</button>
           <button type="button" data-opt="c">c) Ninguno de los dos lo acorta.</button>
         </div>
       </div>
-      <div class="guess-fb" data-for="a"><p><b>No.</b> Suponías que cada worker nuevo quita algo
+      <div class="guess-fb" data-for="b"><p><b>No.</b> Suponías que cada worker nuevo quita algo
         de tiempo; falla porque una task no se parte entre cores. Con 5 workers hay 40 cores: 40
         tasks en la primera wave y 8 en la segunda. Siguen siendo 2 waves de 10 s.</p></div>
-      <div class="guess-fb" data-for="b"><p><b>Sí.</b> Con 4 workers hay 32 cores: ⌈48 ÷ 32⌉ = 2
+      <div class="guess-fb" data-for="a"><p><b>Sí.</b> Con 4 workers hay 32 cores: ⌈48 ÷ 32⌉ = 2
         waves, 20 s. Con 5 workers, 40 cores: ⌈48 ÷ 40⌉ = 2 waves, 20 s. Con 6 workers, 48 cores:
         1 wave, 10 s.</p></div>
       <div class="guess-fb" data-for="c"><p><b>No.</b> Suponías que añadir workers no acelera un
@@ -346,9 +344,8 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
       elegirlo, sigue este orden:</p>
     <ol>
       <li><b>Empieza por <code>auto</code>.</b> Con <code>auto</code>, Databricks elige el número.
-        Es el valor por defecto en serverless y, desde Databricks Runtime 19, si no fijas uno (ver
-        <a href="plan-ejecucion.html#particiones">De dónde sale cada partición</a>). La guía del
-        Spark UI lo recomienda para stages con shuffle alto (<a
+        Qué valor tiene tu compute: <a href="plan-ejecucion.html#particiones">De dónde sale cada
+        partición</a>. La guía del Spark UI lo recomienda para stages con shuffle alto (<a
         href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io#high-shuffle"
         target="_blank" rel="noopener">Databricks · Long Spark stage with high I/O</a> <a
         class="az"
@@ -371,16 +368,8 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
     </ol>
     <p>Dos casos más en los que faltan tasks:</p>
     <ul>
-      <li><b>Un stage largo con una sola task</b> puede ser señal de problema: "If you see a
-        long-running stage with just one task, that's likely a sign of a problem" (<a
-        href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/one-spark-task"
-        target="_blank" rel="noopener">Databricks · One Spark task</a> <a class="az"
-        href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/one-spark-task"
-        target="_blank" rel="noopener"
-        title="La misma página en la documentación de Azure Databricks">Azure</a>). Un stage de 1
-        task que dura segundos es normal. Por ejemplo, el final de un <code>count()</code> (ver <a
-        href="plan-ejecucion.html#explain">Leer el plan con explain()</a>) o una agregación pequeña
-        que <a href="aqe.html#otras-funciones">AQE unió</a> en una partición.</li>
+      <li><b>Un stage largo con una sola task</b> es el extremo: causas y cuándo es normal, en <a
+        href="plan-ejecucion.html#una-task">Plan de ejecución</a>.</li>
       <li><b>Una UDF lenta</b> (una función tuya, por ejemplo en Python, que Spark llama para
         calcular una columna): primero intenta reescribirla con funciones nativas. Si no puedes y
         el stage tiene menos tasks que cores, haz <code>repartition()</code> antes de la UDF para
@@ -439,12 +428,11 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
       <li><b>Añadiste workers y el stage tarda lo mismo</b> → calcula las waves antes y después,
         ⌈tasks ÷ cores⌉. Si no cambian, los workers nuevos no ayudan (ver <a
         href="#waves">Cuánto dura un stage según tasks y cores</a>).</li>
-      <li><b>Un stage largo con una sola task</b> → es una de las señales de la ruta de
-        diagnóstico de Databricks (ver <a href="spark-ui.html#ruta-diagnostico">Spark UI</a>).</li>
     </ul>
     <p class="note">¿Ya tienes un job lento? Empieza por la <a
       href="spark-ui.html#ruta-diagnostico">ruta de diagnóstico del Spark UI</a> y sigue en <a
-      href="diagnostico.html">Diagnóstico</a>.</p>
+      href="diagnostico.html">Diagnóstico</a>. Si es un job programado que ya terminó, antes <a
+      href="spark-ui.html#ejecucion-terminada">abre el Spark UI de esa ejecución</a>.</p>
 
     <h3><span class="k">De dónde sale</span>Fuentes</h3>
     <p class="src"><a href="https://spark.apache.org/docs/latest/cluster-overview.html#glossary"
@@ -457,11 +445,6 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
       href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage"
       target="_blank" rel="noopener">Databricks · Look at longest stage</a> <a class="az"
       href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage"
-      target="_blank" rel="noopener"
-      title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
-      href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/one-spark-task"
-      target="_blank" rel="noopener">Databricks · One Spark task</a> <a class="az"
-      href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/one-spark-task"
       target="_blank" rel="noopener"
       title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
       href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-page#skew"
@@ -489,7 +472,6 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
       rel="noopener">Databricks · Compute configuration</a> <a class="az"
       href="https://learn.microsoft.com/azure/databricks/compute/configure" target="_blank"
       rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>.
-      Fuera de la documentación oficial, la regla del múltiplo de cores y el término
-      <i>iterations</i> vienen de la <a
+      Fuera de la documentación oficial, la regla del múltiplo de cores viene de la <a
       href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide#cluster-usage"
       target="_blank" rel="noopener">guía de 2023 (Cluster usage)</a>.</p>

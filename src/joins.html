@@ -2,7 +2,7 @@
 layout: default
 slug: joins
 title: "Estrategias de join"
-description: "Broadcast, shuffle hash, sort-merge y nested loop: cómo elige Spark la estrategia de un join, qué cambia AQE en runtime y cómo se ve en el plan."
+description: "Broadcast (hash y nested loop), shuffle hash, sort-merge y producto cartesiano: qué elige Spark, qué cambia AQE y cómo se ve en el plan."
 extra_js: ["/assets/js/joins.js"]
 extra_css: ["/assets/css/joins.css"]
 ---
@@ -15,7 +15,7 @@ extra_css: ["/assets/css/joins.css"]
           cabe en el umbral) y el otro no se mueve. Sort-merge hace shuffle de los dos lados y los
           ordena.</li>
         <li>Umbral estático <code>spark.sql.autoBroadcastJoinThreshold</code>: 10 MB en Apache
-          Spark (Databricks no documenta otro valor), con estadísticas (el tamaño estimado de cada
+          Spark, con estadísticas (el tamaño estimado de cada
           tabla antes de ejecutar). Umbral de AQE en runtime: 30 MB, con tamaños reales y después
           de los shuffles.</li>
         <li>En un join con igualdad, el tipo de join decide qué lado se puede copiar: Spark no copia
@@ -26,8 +26,9 @@ extra_css: ["/assets/css/joins.css"]
         <li>Un <b>hint</b> es una indicación que escribes en la query para pedir una estrategia de
           join, como <code>/*+ BROADCAST(c) */</code> en SQL o <code>broadcast()</code> en un
           DataFrame. Si el tipo de join lo permite, el hint <code>BROADCAST</code> se aplica aunque
-          la tabla supere el umbral. En serverless el umbral no se puede cambiar; la doc de
-          serverless no prohíbe los hints.</li>
+          la tabla supere el umbral. En serverless no puedes cambiar los umbrales, pero sí
+          pedir broadcast con un hint: <code>broadcast()</code> y <code>.hint()</code> son APIs de
+          Spark Connect, las que admite serverless.</li>
         <li>Un exploding join (muchas más filas de salida que de entrada) no se arregla cambiando la
           estrategia; hay que corregir la condición o reducir la entrada.</li>
       </ul>
@@ -138,58 +139,36 @@ extra_css: ["/assets/css/joins.css"]
       devolver cada fila de la izquierda aunque no tenga pareja. Eso no se puede decidir si la
       izquierda está copiada en todos los executors. Los joins sin igualdad siguen otras reglas
       (paso 3 de la lista de abajo).</p>
-    <div class="verify"><b>Verifícalo.</b> La doc no publica esta tabla. Lo más cercano está en la
-      doc de hints, y es para el caso en que los dos lados llevan hint: Spark elige el lado
-      "based on the join type and the sizes of the relations", y una estrategia "might not support
-      all join types" (<a
-      href="https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-hints"
-      target="_blank" rel="noopener">Hints</a> <a class="az"
-      href="https://learn.microsoft.com/azure/databricks/sql/language-manual/sql-ref-syntax-qry-select-hints"
-      target="_blank" rel="noopener"
-      title="La misma página en la documentación de Azure Databricks">Azure</a>). El caso del
-      <code>LEFT OUTER</code> está en la FAQ de AQE: "the left relation of a LEFT OUTER JOIN cannot
-      be broadcast" (<a
-      href="https://docs.databricks.com/aws/en/optimizations/aqe#why-didnt-aqe-broadcast-a-small-join-table"
-      target="_blank" rel="noopener">AQE</a> <a class="az"
-      href="https://learn.microsoft.com/azure/databricks/optimizations/aqe#why-didnt-aqe-broadcast-a-small-join-table"
-      target="_blank" rel="noopener"
-      title="La misma página en la documentación de Azure Databricks">Azure</a>). La tabla completa
-      por tipo de join sale del código de Spark; compruébala con <code>df.explain()</code>.</div>
-
     <p>El plan se decide antes de ejecutar, con estadísticas (tamaño estimado de cada lado). Sin
       hints, para un join con igualdad (equi-join), el orden es este:</p>
     <ol class="steps">
       <li><b>¿Algún lado cabe en <code>spark.sql.autoBroadcastJoinThreshold</code>?</b> El default
-        de Spark es 10 MB. Spark escribe "10 MB", pero cuenta en potencias de 1024: son
-        10.485.760 bytes, es decir 10 MiB (unidad binaria). Lo mismo vale para los 30 MB de
-        AQE. Si un lado cabe y el tipo de join permite construir ese lado, sale
+        de Spark es 10 MB (10 MiB; ver <a href="plan-ejecucion.html#unidades">unidades</a>). Si un
+        lado cabe y el tipo de join permite construir ese lado, sale
         <code>BroadcastHashJoin</code>. Si caben los dos, gana el más pequeño.</li>
       <li><b>Si no, <code>SortMergeJoin</code> en el plan de Spark.</b> Spark prefiere sort-merge
-        sobre shuffle hash por defecto (<code>spark.sql.join.preferSortMergeJoin</code>). Shuffle
-        hash queda, sobre todo, para cuando lo pides con un hint. En Databricks, Photon (activo por
-        defecto) cambia el sort-merge por hash joins propios al ejecutar (ver <a
-        href="#photon">Con Photon</a>, más abajo).</li>
+        sobre shuffle hash por defecto. Shuffle hash queda, sobre todo, para cuando lo pides con un
+        hint. Con Photon puede salir otro nodo (ver <a href="#photon">Con Photon</a>).</li>
       <li><b>Sin igualdad</b> (solo <code>&lt;</code>, <code>BETWEEN</code>, <code>OR</code>…):
         <code>BroadcastNestedLoopJoin</code> si un lado cabe en el umbral. Si no cabe ninguno,
         <code>CartesianProduct</code> para INNER y, para los demás tipos,
         <code>BroadcastNestedLoopJoin</code> de todas formas, con un lado grande en broadcast.</li>
     </ol>
-    <div class="verify"><b>Verifícalo.</b> Varias reglas de esta sección vienen del código de Spark
-      (<code>JoinSelection</code> en <code>SparkStrategies.scala</code>), no de la doc. Son estas:
-      el orden de los pasos 2 y 3; que gane el lado más pequeño si caben los dos; el "broadcast
-      forzado" de un lado grande sin igualdad; que <code>CartesianProduct</code> solo salga en
-      joins <code>INNER</code> y <code>CROSS</code>; y que el hint
-      <code>SHUFFLE_REPLICATE_NL</code> acabe en <code>CartesianProduct</code>, sin broadcast. El
-      simulador de abajo las sigue. La doc de Spark solo menciona <code>preferSortMergeJoin</code>
-      de pasada. Hay una excepción al paso 2 que el simulador no recoge: en Apache Spark, AQE
-      también puede elegir shuffle hash si subes
-      <code>spark.sql.adaptive.maxShuffledHashJoinLocalMapThreshold</code> (0 por defecto).
-      Databricks no documenta otro valor del umbral estático; este simulador asume los 10 MB de
-      Spark (<a
-      href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#automatically-broadcasting-joins"
-      target="_blank" rel="noopener">Apache Spark · Automatically broadcasting joins</a>, <a
-      href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#converting-sort-merge-join-to-shuffled-hash-join"
-      target="_blank" rel="noopener">Converting sort-merge join to shuffled hash join</a>).</div>
+    <p class="c" style="font-size:.88rem">La doc no publica la tabla de lados ni el orden de los
+      pasos. Lo que sí dice: que una estrategia "might not support all join types" (<a
+      href="https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-syntax-qry-select-hints"
+      target="_blank" rel="noopener">Hints</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/sql/language-manual/sql-ref-syntax-qry-select-hints"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>) y que "the left
+      relation of a LEFT OUTER JOIN cannot be broadcast" (<a
+      href="https://docs.databricks.com/aws/en/optimizations/aqe#why-didnt-aqe-broadcast-a-small-join-table"
+      target="_blank" rel="noopener">FAQ de AQE</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/optimizations/aqe#why-didnt-aqe-broadcast-a-small-join-table"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>). El resto sale del
+      código de Spark, y el simulador lo sigue. Compruébalo en tu plan con
+      <code>explain()</code>.</p>
 
     <p><b>Con hints.</b> <code>BROADCAST</code>, <code>MERGE</code>, <code>SHUFFLE_HASH</code> y
       <code>SHUFFLE_REPLICATE_NL</code> piden una estrategia. Si los dos lados tienen hints
@@ -221,7 +200,7 @@ extra_css: ["/assets/css/joins.css"]
       si la mayoría de las particiones de ese lado llegan vacías. Entonces casi todas las tasks del
       sort-merge acaban enseguida, y AQE no lo considera rentable. La doc dice que AQE evita el
       cambio "if the percentage of non-empty partitions is lower than" un umbral. Además,
-      AQE solo actúa en queries que no son streaming (<a
+      AQE actúa por defecto en queries batch (<a
       href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank"
       rel="noopener">AQE, secciones Application y FAQ</a> <a class="az"
       href="https://learn.microsoft.com/azure/databricks/optimizations/aqe" target="_blank"
@@ -232,34 +211,15 @@ extra_css: ["/assets/css/joins.css"]
       <code>spark.sql.adaptive.autoBroadcastJoinThreshold</code>, que por defecto vale lo mismo que
       el umbral estático.</p>
 
-    <div class="note" id="photon"><b>Con Photon.</b> Qué es Photon y si tu compute lo usa: <a
-      href="arquitectura.html#photon">Arquitectura</a>. Para los joins importa esto. Photon no
-      cambia quién planea la query, sino quién la ejecuta: la doc dice que "replaces sort-merge
-      joins with high-performance hash joins". Por eso puedes no ver <code>SortMergeJoin</code>
-      donde esta página lo predice. Si una operación no la soporta (por ejemplo, una UDF), esa
-      parte vuelve al motor de Spark. Para saber qué corrió en Photon en serverless y SQL
-      warehouses:
-      <ul>
-        <li>En el query profile, la vista <b>Execution Details</b> da el porcentaje del tiempo de
-          las tasks que corrió en Photon. El plan pinta los operadores de Photon en morado y los
-          estándar en gris: "The query plan distinguishes Photon operators (purple) from standard
-          operators (grey)".</li>
-        <li>El insight <code>COVERAGE_PHOTON</code> del query profile avisa cuando Photon no puede
-          acelerar una operación y la query usa el motor de Spark.</li>
-      </ul>
-      En compute clásico, los colores del Spark UI están en <a
-      href="arquitectura.html#photon">Arquitectura</a>.
-      La doc no lista los nombres de los nodos de join de Photon en el plan (<a
-      href="https://docs.databricks.com/aws/en/compute/photon#monitor-photon-usage" target="_blank"
+    <div class="note" id="photon"><b>Con Photon.</b> Qué es Photon, si tu compute lo usa y cómo ver
+      qué operadores corrieron en él: <a href="arquitectura.html#photon">Arquitectura · Photon</a>.
+      En los joins, la doc de Photon dice que "replaces sort-merge joins with high-performance
+      hash joins". Por eso, donde esta página predice <code>SortMergeJoin</code>, tu plan puede
+      mostrar otro nodo de join; en el Spark UI de compute clásico, los operadores de Photon salen
+      en naranja (<a href="https://docs.databricks.com/aws/en/compute/photon" target="_blank"
       rel="noopener">What is Photon?</a> <a class="az"
-      href="https://learn.microsoft.com/azure/databricks/compute/photon#monitor-photon-usage"
-      target="_blank" rel="noopener"
-      title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
-      href="https://docs.databricks.com/aws/en/sql/user/queries/performance-insights"
-      target="_blank" rel="noopener">Query performance insights</a> <a class="az"
-      href="https://learn.microsoft.com/azure/databricks/sql/user/queries/performance-insights"
-      target="_blank" rel="noopener"
-      title="La misma página en la documentación de Azure Databricks">Azure</a>).</div>
+      href="https://learn.microsoft.com/azure/databricks/compute/photon" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).</div>
 
     <h3><span class="k">Simulador</span>Qué estrategia sale según tamaños, tipo de join y
       hints</h3>
@@ -409,8 +369,7 @@ extra_css: ["/assets/css/joins.css"]
       <div id="js-ui"></div>
     </div>
     <p class="c" style="font-size:.88rem">Los tamaños, el número de executors y los bytes son
-      ilustrativos. Los tamaños salen en MiB, como en el Spark UI. Los umbrales de 10 MB y 30 MB
-      de Spark también son MiB. La caja <i>pasa por el driver</i> y el driver del diagrama siguen
+      ilustrativos. Los tamaños salen en MiB, como en el Spark UI. La caja <i>pasa por el driver</i> y el driver del diagrama siguen
       la regla de la tabla de <a href="#estrategias">estrategias</a> (guía de 2023). Para seguir
       explorando:</p>
     <ul>
@@ -489,8 +448,10 @@ SET spark.sql.autoBroadcastJoinThreshold = -1;</code></pre>
         ver cuánto produce y cuánto ocupa.</li>
     </ul>
     <p class="note"><b>En serverless</b> los dos <a href="#umbrales">umbrales</a> no se pueden
-      cambiar. La doc de serverless no prohíbe los hints, ni en SQL ni con
-      <code>broadcast()</code>. El <code>sc.broadcast()</code> de RDD no funciona, porque
+      cambiar. Los hints sí: <code>broadcast()</code> y <code>.hint()</code>
+      son APIs de Spark Connect, las que admite serverless (<a
+      href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.broadcast.html"
+      target="_blank" rel="noopener">PySpark · broadcast</a>: "Supports Spark Connect"). El <code>sc.broadcast()</code> de RDD no funciona, porque
       serverless solo soporta las APIs de Spark Connect: "Spark RDD APIs are not supported" (<a
       href="https://docs.databricks.com/aws/en/compute/serverless/limitations" target="_blank"
       rel="noopener">limitaciones</a> <a class="az"
@@ -597,7 +558,8 @@ SET spark.sql.autoBroadcastJoinThreshold = -1;</code></pre>
           (AQE lo maneja en SMJ y shuffle hash) y el número de particiones</td></tr>
         <tr><td>No sabes cuánto quedará tras los filtros</td><td>Deja que AQE decida en runtime;
           mantén las estadísticas al día
-          (<code>ANALYZE TABLE</code> o predictive optimization)</td></tr>
+          (<a href="mantenimiento-delta.html#estadisticas"><code>ANALYZE TABLE</code> o predictive
+          optimization</a>)</td></tr>
         <tr><td>Condición por rango de fechas o de valores</td><td>Range join optimization
           (automática en Databricks SQL, hint en el resto)</td></tr>
         <tr><td><code>FULL OUTER JOIN</code> con una tabla pequeña</td><td>Ningún broadcast aplica.
@@ -613,9 +575,8 @@ SET spark.sql.autoBroadcastJoinThreshold = -1;</code></pre>
       rel="noopener">Optimize join performance</a> <a class="az"
       href="https://learn.microsoft.com/azure/databricks/transform/optimize-joins" target="_blank"
       rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>, que
-      además dice que el compute con Photon "always selects the best join type". Photon no cambia
-      quién planea la query: qué cambia y qué no está en <a href="#photon">Con Photon</a>. La idea
-      del <code>FULL</code> partido en dos es mía, no de la doc.</p>
+      además dice que el compute con Photon "always selects the best join type"; ver <a href="#photon">Con Photon</a>. La idea del
+      <code>FULL</code> partido en dos es una deducción de este manual, no de la doc.</p>
 
     <h3 class="solo"><span class="k">Con qué se confunde</span></h3>
     <ul>
@@ -632,8 +593,7 @@ SET spark.sql.autoBroadcastJoinThreshold = -1;</code></pre>
         target="_blank" rel="noopener">guía de 2023</a>). Lo ves en el caso <a
         href="casos.html#broadcast-2g">El driver se cae en un broadcast</a>.</li>
       <li><b>Skew vs exploding join.</b> El skew es una partición mucho más grande que las demás.
-        AQE puede partirla en joins con shuffle (sort-merge o shuffle hash) si supera 5 veces la
-        mediana y 256 MB, y solo en el lado que el tipo de join permite (ver <a
+        AQE puede partirla en joins con shuffle, con condiciones (ver <a
         href="aqe.html">AQE</a>). El exploding join produce demasiadas filas en todas las
         particiones; ningún reparto lo arregla.</li>
       <li><b>Skew join hint.</b> Para skew, la doc de Databricks recomienda AQE sobre el hint
@@ -674,22 +634,16 @@ SET spark.sql.autoBroadcastJoinThreshold = -1;</code></pre>
         rows</code> del join con las filas de entrada. En el <a href="query-profile.html">query
         profile</a>, métrica <b>Rows</b> e insight <code>EXPLODING_JOIN</code>.</li>
       <li><b>Sale un broadcast que el umbral no explica</b> → el insight
-        <code>HISTORY_BASED_JOIN_STRATEGY</code>, en el historial de queries o en el query profile.
-        Databricks eligió el broadcast midiendo ejecuciones anteriores de queries parecidas: "It
-        chose a broadcast join instead of shuffling data across the cluster, based on your
-        workload history" (<a
-        href="https://docs.databricks.com/aws/en/sql/user/queries/performance-insights"
-        target="_blank" rel="noopener">Query performance insights</a> <a class="az"
-        href="https://learn.microsoft.com/azure/databricks/sql/user/queries/performance-insights"
-        target="_blank" rel="noopener"
-        title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
+        <code>HISTORY_BASED_JOIN_STRATEGY</code>: qué significa en el <a
+        href="query-profile.html">query profile</a>.</li>
       <li><b>Quieres comprobar si te queda claro Fundamentos</b> → <a
         href="repaso-fundamentos.html">Repaso de Fundamentos</a>: casos nuevos que mezclan las
         páginas de esta sección.</li>
     </ul>
     <p class="note">¿Ya tienes un job lento? Empieza por la <a
       href="spark-ui.html#ruta-diagnostico">ruta de diagnóstico del Spark UI</a> y sigue en <a
-      href="diagnostico.html">Diagnóstico</a>.</p>
+      href="diagnostico.html">Diagnóstico</a>. Si es un job programado que ya terminó, antes <a
+      href="spark-ui.html#ejecucion-terminada">abre el Spark UI de esa ejecución</a>.</p>
 
     <h3><span class="k">De dónde sale</span>Fuentes</h3>
     <p class="src"><a
@@ -724,7 +678,7 @@ SET spark.sql.autoBroadcastJoinThreshold = -1;</code></pre>
       href="https://learn.microsoft.com/azure/databricks/compute/photon"
       target="_blank" rel="noopener"
       title="La misma página en la documentación de Azure Databricks">Azure</a> (colores en el
-      Spark UI y en el query profile), <a
+      Spark UI), <a
       href="https://docs.databricks.com/aws/en/transform/optimize-joins"
       target="_blank" rel="noopener">Databricks · Optimize join performance</a> <a class="az"
       href="https://learn.microsoft.com/azure/databricks/transform/optimize-joins"
@@ -765,12 +719,16 @@ SET spark.sql.autoBroadcastJoinThreshold = -1;</code></pre>
       href="https://learn.microsoft.com/azure/databricks/compute/serverless/limitations"
       target="_blank" rel="noopener"
       title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
+      href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.broadcast.html"
+      target="_blank" rel="noopener">PySpark · functions.broadcast</a>, <a
       href="https://docs.databricks.com/aws/en/notebooks/notebook-export-import"
       target="_blank" rel="noopener">Databricks · Export and import notebooks</a> <a class="az"
       href="https://learn.microsoft.com/azure/databricks/notebooks/notebook-export-import"
       target="_blank" rel="noopener"
-      title="La misma página en la documentación de Azure Databricks">Azure</a>. Fuera de la
-      documentación oficial: <a
+      title="La misma página en la documentación de Azure Databricks">Azure</a>. Salen del código de
+      Spark (<code>JoinSelection</code>), no de la documentación: la tabla de lados por tipo de
+      join, el orden de los pasos 2 y 3, que gane el lado más pequeño y el broadcast forzado sin
+      igualdad. Fuera de la documentación oficial: <a
       href="https://www.databricks.com/discover/pages/optimize-data-workloads-guide"
       target="_blank" rel="noopener">Comprehensive Guide to Optimize Databricks, Spark and Delta
       Lake Workloads</a> (guía de 2023, un eBook), para el broadcast que pasa por el driver sin

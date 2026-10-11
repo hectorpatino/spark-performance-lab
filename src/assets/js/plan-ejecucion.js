@@ -258,51 +258,60 @@
   const box = document.getElementById('dag-guess');
   if (!box) return;
   try {
-    const ask = document.getElementById('dag-ask'), optsEl = document.getElementById('dag-opts');
+    const lab = document.getElementById('dag-lab'), ask = document.getElementById('dag-ask'), optsEl = document.getElementById('dag-opts');
     const fb = document.getElementById('dag-fb'), more = document.getElementById('dag-show');
     const body = box.querySelector('.guess-body');
-    // por query: pregunta, letra correcta y [letra, opción, comentario]; cada error es un modelo roto
+    // por query: las tres primeras son ejemplos resueltos (sin `ans`: muestran el resultado y `look`);
+    // bhj y aggsort son preguntas con la letra correcta y [letra, opción, comentario]; cada error es un modelo roto
     const Q = {
-      narrow: { q: '<code>filter</code> + <code>select</code> y <code>write</code> sobre <code>ventas</code>: ¿cuántos stages y cuántas tasks?', ans: 'a', o: [
-        ['a', '1 stage de 80 tasks.', '<code>filter</code> y <code>select</code> son narrow: cada task trabaja su partición sin pedir filas a otras. Sin <code>Exchange</code> no hay frontera de stage, y las tasks salen de las 80 particiones de lectura.'],
-        ['b', '2 stages: uno por transformación.', 'Suponías que cada transformación abre un stage; falla porque un stage solo se corta en un <code>Exchange</code>, y <code>filter</code> y <code>select</code> no mueven datos.'],
-        ['c', '1 stage de 200 tasks.', 'Suponías que <code>shuffle.partitions</code> fija las tasks de todos los stages; falla porque aquí no hay shuffle: las tasks salen de las 80 particiones de lectura.']] },
-      agg: { q: '<code>groupBy("cliente_id").count()</code> y <code>write</code>: ¿cuántas tasks tiene el último stage?', ans: 'c', o: [
-        ['a', '1 task: <code>count</code> lo junta en una partición.', 'Confundías <code>groupBy().count()</code> con <code>df.count()</code>; falla porque <code>groupBy().count()</code> cuenta por cliente y reparte el resultado por <code>cliente_id</code> en las particiones del shuffle.'],
-        ['b', '80 tasks, las mismas de la lectura.', 'Suponías que las tasks de lectura siguen después del shuffle; falla porque el shuffle reparte los datos en <code>shuffle.partitions</code> particiones, y el stage que lo lee tiene una task por partición.'],
-        ['c', '200 tasks, las de <code>shuffle.partitions</code>.', 'El <code>groupBy</code> obliga a un shuffle, y el stage que lo lee tiene una task por partición del shuffle: 200 aquí. AQE puede unir las pequeñas, y entonces el Spark UI muestra menos.']] },
-      smj: { q: 'Join sort-merge de <code>ventas</code> y <code>clientes</code>, y <code>write</code>: ¿cuántos stages?', ans: 'b', o: [
-        ['a', '2 stages: el join es un solo shuffle.', 'Suponías que el join es un solo shuffle; falla porque cada lado se reparte por <code>cliente_id</code> en su propio stage. Normalmente hay un <code>Exchange</code> en cada lado, y el join va en un stage más.'],
-        ['b', '3 stages: uno por lado y el del join.', 'Un stage lee <code>ventas</code> y la reparte por <code>cliente_id</code>, otro hace lo mismo con <code>clientes</code>, y un tercero lee los dos shuffles y hace el join. Los dos primeros no dependen entre sí.'],
-        ['c', '1 stage: el join no mueve datos.', 'Suponías que el join junta las filas donde están; falla porque las filas de un mismo <code>cliente_id</code> están en particiones distintas de cada tabla. Para juntarlas, Spark reparte las dos tablas por la clave con un shuffle.']] },
+      narrow: { q: '<code>filter</code> + <code>select</code> y <code>write</code> sobre <code>ventas</code>.', look: 'No hay ningún <code>Exchange</code>: un stage de 80 tasks.' },
+      agg: { q: '<code>groupBy("cliente_id").count()</code> y <code>write</code> sobre <code>ventas</code>.', look: 'El stage que lee el shuffle tiene 200 tasks, no 80.' },
+      smj: { q: 'Join sort-merge de <code>ventas</code> y <code>clientes</code>, y <code>write</code>.', look: 'Dos stages que leen tablas y uno que lee los dos shuffles.' },
       bhj: { q: 'Join broadcast con <code>clientes_vip</code> (una tabla pequeña) y <code>write</code>: ¿cuántos stages ejecuta la query, sumando sus jobs?', ans: 'b', o: [
         ['a', '1 stage: sin shuffle, todo va junto.', 'Suponías que sin <code>Exchange</code> de shuffle todo cabe en un stage; falla porque <code>clientes_vip</code> también hay que leerla. Se lee en su propio stage, que termina en el <code>BroadcastExchange</code>. Ese stage cuenta aunque salga en otro job.'],
         ['b', '2 stages: uno por cada tabla.', 'Un stage lee <code>clientes_vip</code> y la copia entera a cada executor (<code>BroadcastExchange</code>). Otro lee <code>ventas</code> y hace el join con su copia, sin shuffle. El de <code>ventas</code> espera a que la copia esté lista. El stage del broadcast puede salir en otro job: por eso la pregunta suma los jobs de la query.'],
         ['c', '3 stages, como en el sort-merge.', 'Suponías que todo join reparte las dos tablas por la clave; falla porque con broadcast <code>ventas</code> no se mueve. No hay <code>Exchange</code> de shuffle ni un stage aparte para el join: cada task de <code>ventas</code> hace el join con su copia de <code>clientes_vip</code>.']] },
-      aggsort: { q: '<code>groupBy</code> + <code>orderBy</code> y <code>write</code>: ¿cuántos stages?', ans: 'a', o: [
-        ['a', '3: el <code>orderBy</code> añade otro shuffle, por rangos.', 'El <code>groupBy</code> reparte por <code>cliente_id</code>, y el <code>orderBy</code> vuelve a repartir, esta vez por rangos de <code>count</code>, para que cada task ordene su tramo. Dos <code>Exchange</code>, tres stages.'],
-        ['b', '2: el <code>orderBy</code> ordena dentro del stage del <code>groupBy</code>.', 'Suponías que ordenar es narrow; falla porque un orden global necesita filas de todas las particiones: Spark las reparte por rangos de <code>count</code> con otro <code>Exchange</code>.'],
-        ['c', '2: el <code>orderBy</code> lo hace el driver al final.', 'Suponías que el driver ordena el resultado; falla porque el <code>write</code> lo hacen las tasks en los executors. Para ordenar en paralelo, Spark reparte las filas por rangos con otro shuffle.']] }
+      aggsort: { q: '<code>groupBy</code> + <code>orderBy</code> y <code>write</code>. Sin contar lo que pueda unir AQE, ¿cuántas tasks tiene el stage que ordena, y cómo queda ordenada la tabla entera?', ans: 'c', o: [
+        ['a', '1 task: un orden global necesita juntar todas las filas en ella.', 'Suponías que ordenar todo exige un único sitio; falla porque Spark reparte las filas por rangos de <code>count</code> con otro shuffle, y cada task ordena su rango. Los rangos ya van en orden entre sí.'],
+        ['b', '200 tasks ordenan su parte y el driver junta los trozos al final.', 'Suponías que el driver remata el orden; falla porque el <code>write</code> lo hacen las tasks en los executors. No hace falta un paso final en el driver.'],
+        ['c', '200 tasks: cada una ordena un rango de <code>count</code>, y los rangos van en orden.', 'El <code>orderBy</code> global vuelve a repartir las filas, esta vez por rangos de <code>count</code>, en <code>shuffle.partitions</code> particiones (200 aquí). Cada task ordena su rango, y como los rangos van en orden, la tabla queda ordenada entera.'],
+        ['d', '80 tasks, las mismas que leyeron <code>ventas</code>.', 'Suponías que las tasks de lectura siguen después del shuffle; falla porque tras el <code>groupBy</code> y el <code>orderBy</code> cada stage lee un shuffle, y tiene una task por partición de ese shuffle.']] }
     };
     function load(k) {
       const q = Q[k]; if (!q) return;
+      const solved = !q.ans;
+      lab.textContent = solved ? 'Ejemplo resuelto:' : 'Predice:';
       ask.innerHTML = q.q;
       optsEl.textContent = '';
+      optsEl.hidden = solved;
+      more.hidden = true;
+      // mismo aspecto que .guess.q de app.js: el comentario vuelve a su sitio y el raíl a neutro
+      optsEl.after(fb); box.classList.remove('answered', 'is-ok', 'is-no');
+      if (solved) {
+        // sin pregunta: el resultado se ve directamente, con una línea sobre qué mirar
+        fb.innerHTML = `<p><b>Qué mirar:</b> ${q.look}</p>`; fb.hidden = false;
+        body.hidden = false; body.inert = false;
+        return;
+      }
       fb.hidden = true; fb.innerHTML = '';
-      more.hidden = true; body.hidden = true; body.inert = true;
+      body.hidden = true; body.inert = true;
       const btns = q.o.map(([l, txt, why]) => {
         const b = document.createElement('button');
         b.type = 'button'; b.dataset.opt = l; b.setAttribute('aria-pressed', 'false');
-        b.innerHTML = `${l}) ${txt}`;
+        b.innerHTML = `<span class="guess-key" aria-hidden="true">${l}</span><span>${txt}</span>`;
+        b.setAttribute('aria-label', `${l}) ${b.textContent.slice(1).trim()}`);
         b.addEventListener('click', () => {
           btns.forEach(x => { const me = x === b; x.setAttribute('aria-pressed', me); x.classList.toggle('ok', me && l === q.ans); x.classList.toggle('no', me && l !== q.ans); });
-          fb.innerHTML = `<p><b>${l}) ${l === q.ans ? 'Sí' : 'No'}.</b> ${why}</p>`; fb.hidden = false;
+          fb.innerHTML = `<p><b>${l === q.ans ? 'Sí' : 'No'}.</b> ${why}</p>`; fb.hidden = false; b.after(fb);
+          box.classList.add('answered'); box.classList.toggle('is-ok', l === q.ans); box.classList.toggle('is-no', l !== q.ans);
           if (body.hidden) more.hidden = false;
         });
         optsEl.appendChild(b); return b;
       });
     }
     more.addEventListener('click', () => { body.hidden = false; body.inert = false; more.hidden = true; });
+    box.addEventListener('keydown', e => { if (e.altKey || e.ctrlKey || e.metaKey || !e.target.closest('#dag-opts')) return;
+      const b = optsEl.querySelector(`[data-opt="${e.key.toLowerCase()}"]`); if (b) { e.preventDefault(); b.focus(); b.click(); } });
     // cada query nueva vuelve a taparse, para pensarla antes de verla
     document.querySelectorAll('#dag-q [data-q]').forEach(b => b.addEventListener('click', () => load(b.dataset.q)));
     const on = document.querySelector('#dag-q [aria-pressed="true"]');

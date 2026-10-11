@@ -17,7 +17,7 @@
     "t": [
       "job"
     ],
-    "d": "Cálculo paralelo que Spark lanza cuando llamas a una acción como write, count, collect o display. En el Spark UI una sola acción puede verse como varios jobs (es lo que se observa; la doc no lo detalla); la pestaña SQL / DataFrame lista los jobs de cada query."
+    "d": "Cálculo paralelo que Spark lanza cuando llamas a una acción como write, count, collect o display. En el Spark UI una sola acción puede verse como varios jobs; la pestaña SQL / DataFrame lista los jobs de cada query. No confundir con un job de Lakeflow Jobs: cada ejecución corre tu código, y cada acción lanza uno o más jobs de Spark."
   },
   {
     "t": [
@@ -87,7 +87,7 @@
     "t": [
       "AQE"
     ],
-    "d": "Adaptive Query Execution: re-optimiza la query mientras se ejecuta, con los tamaños reales al terminar cada shuffle o broadcast. Activado por defecto. Actúa en queries que no son streaming y tienen al menos un exchange (normalmente un join, una agregación o una ventana) o una subquery. No siempre cambia el plan."
+    "d": "Adaptive Query Execution: re-optimiza la query mientras se ejecuta, con los tamaños reales al terminar cada shuffle o broadcast. Activado por defecto. Actúa en queries batch con al menos un exchange (normalmente un join, una agregación o una ventana) o una subquery. No siempre cambia el plan."
   },
   {
     "t": [
@@ -138,7 +138,7 @@
     "t": [
       "Photon"
     ],
-    "d": "Motor de ejecución vectorizado de Databricks, compatible con las APIs de Spark. Activo por defecto en el compute clásico y siempre en serverless; Catalyst sigue planeando la query."
+    "d": "Motor de ejecución vectorizado de Databricks, compatible con las APIs de Spark. Activo en serverless y en los SQL warehouses. En el compute clásico (all-purpose y job compute) viene activo por defecto si lo creas desde la UI; con la Clusters API o la Jobs API (también desde bundles) hay que fijar runtime_engine: PHOTON. Catalyst sigue planeando la query; Photon la ejecuta."
   },
   {
     "t": [
@@ -333,6 +333,6 @@
       "SQL warehouse",
       "SQL warehouses"
     ],
-    "d": "Compute de Databricks para ejecutar queries SQL (por ejemplo, desde el editor SQL o un dashboard). Usa Photon siempre."
+    "d": "Compute de Databricks para ejecutar queries SQL (por ejemplo, desde el editor SQL o un dashboard). Photon es su motor por defecto."
   }
 ]

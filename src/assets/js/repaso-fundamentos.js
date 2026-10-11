@@ -1,6 +1,7 @@
 /* Repaso de Fundamentos: recreaciones del Spark UI del ejercicio "De Fundamentos a tu job".
-   Siguen la cadena del stage lento a la línea: lista de stages, página del Stage 8, página del
-   Job 8 y DAG de la Query 2. Los números son ilustrativos. */
+   Siguen la cadena del stage lento a la línea: lista de stages, página del Stage 20, página del
+   Job 13 y DAG de la Query 2. El compute ya había corrido otras celdas, así que los stages
+   empiezan en 12 y los jobs en 5. Los números son ilustrativos. */
 (function () {
   if (!window.SPL) return;
   const { UI } = window.SPL;
@@ -15,19 +16,19 @@
   /* ---------- lista de stages (pestaña Stages) ---------- */
   if (document.getElementById('rf-stages')) { try {
     const box = document.getElementById('rf-stages');
-    // Celda 2: Stage 0 · celda 3: Stages 1-3 · celda 4: Stages 4-9 (el lector no lo sabe)
+    // Celda 2: Stage 12 · celda 3: Stages 13-15 · celda 4: Stages 16-21 (el lector no lo sabe)
     // d: duración (s) · n: tasks · inB: Input · srB: Shuffle Read · swB: Shuffle Write
     const STAGES = [
-      { id: 0, d: 138, n: 960, inB: 120 * GiB },
-      { id: 1, d: 18, n: 48, inB: 6 * GiB, swB: 2.1 * GiB },
-      { id: 2, d: 174, n: 960, inB: 120 * GiB, swB: 41.3 * GiB },
-      { id: 3, d: 205, n: 200, srB: 43.4 * GiB },
-      { id: 4, d: 18, n: 48, inB: 6 * GiB, swB: 2.1 * GiB },
-      { id: 5, d: 174, n: 960, inB: 120 * GiB, swB: 41.3 * GiB },
-      { id: 6, d: 1, n: 2, inB: 8 * MiB, swB: 6.2 * MiB },
-      { id: 7, d: 190, n: 200, srB: 43.4 * GiB, swB: 43.1 * GiB },
-      { id: 8, d: 576, n: 200, srB: 43.1 * GiB + 6.2 * MiB, swB: 210 * KiB },
-      { id: 9, d: 1, n: 1, srB: 210 * KiB }
+      { id: 12, d: 138, n: 960, inB: 120 * GiB },
+      { id: 13, d: 18, n: 48, inB: 6 * GiB, swB: 2.1 * GiB },
+      { id: 14, d: 174, n: 960, inB: 120 * GiB, swB: 41.3 * GiB },
+      { id: 15, d: 205, n: 200, srB: 43.4 * GiB },
+      { id: 16, d: 18, n: 48, inB: 6 * GiB, swB: 2.1 * GiB },
+      { id: 17, d: 174, n: 960, inB: 120 * GiB, swB: 41.3 * GiB },
+      { id: 18, d: 1, n: 2, inB: 8 * MiB, swB: 6.2 * MiB },
+      { id: 19, d: 190, n: 200, srB: 43.4 * GiB, swB: 43.1 * GiB },
+      { id: 20, d: 576, n: 200, srB: 43.1 * GiB + 6.2 * MiB, swB: 210 * KiB },
+      { id: 21, d: 1, n: 1, srB: 210 * KiB }
     ];
     let byDur = false;
     const cell = b => b ? UI.bytes(b) : '';
@@ -52,7 +53,7 @@
     draw();
   } catch (e) { console.error('repaso: lista de stages', e); } }
 
-  /* ---------- página del Stage 8 ---------- */
+  /* ---------- página del Stage 20 ---------- */
   if (document.getElementById('rf-stage')) { try {
     // Cuantiles ya calculados: Min, 25th percentile, Median, 75th percentile, Max
     const dur = [19, 24, 26, 28, 564];
@@ -63,12 +64,12 @@
     // Sin resaltar el Max: la pregunta E4 pide encontrarlo
     const row = (name, vals) => `<tr><td>${name}</td>${vals.map(v => `<td>${v}</td>`).join('')}</tr>`;
     const body =
-      `<h5>Details for Stage 8 (Attempt 0)</h5><ul class="ui-kv">` +
+      `<h5>Details for Stage 20 (Attempt 0)</h5><ul class="ui-kv">` +
       `<li><b>Total Time Across All Tasks:</b> 1.6 h</li>` +
       `<li><b>Shuffle Read Size / Records:</b> ${UI.bytes(43.1 * GiB + 6.2 * MiB)} / ${UI.rec(4310000000)}</li>` +
       `<li><b>Spill (Memory):</b> ${UI.bytes(21.6 * GiB)}</li><li><b>Spill (Disk):</b> ${UI.bytes(6.8 * GiB)}</li>` +
-      `<li><b>Associated Job Ids:</b> ${link('8')}</li></ul>` +
-      `<div class="ui-link">DAG Visualization</div><div class="dv"><div class="dv-stage"><div class="lbl">Stage 8</div>` +
+      `<li><b>Associated Job Ids:</b> ${link('13')}</li></ul>` +
+      `<div class="ui-link">DAG Visualization</div><div class="dv"><div class="dv-stage"><div class="lbl">Stage 20</div>` +
       `<div class="dv-scope">Exchange</div><div class="dv-scope">WholeStageCodegen (5)</div><div class="dv-scope">Exchange</div></div></div>` +
       `<div class="ui-link">Event Timeline</div>` +
       `<h6>Summary Metrics for 200 Completed Tasks</h6><table class="ui-tbl"><thead><tr><th>Metric</th><th>Min</th><th>25th percentile</th><th>Median</th><th>75th percentile</th><th>Max</th></tr></thead><tbody>` +
@@ -78,22 +79,22 @@
       row('Spill (disk)', spD.map(UI.bytes)) +
       '</tbody></table>';
     document.getElementById('rf-stage').innerHTML = UI.frame('Stages', body,
-      'Recreación ilustrativa de la página del Stage 8. El DAG del stage está simplificado. Las filas de spill solo salen cuando el stage tiene spill. Los números son inventados.');
-  } catch (e) { console.error('repaso: página del Stage 8', e); } }
+      'Recreación ilustrativa de la página del Stage 20. El DAG del stage está simplificado. Las filas de spill solo salen cuando el stage tiene spill. Los números son inventados.');
+  } catch (e) { console.error('repaso: página del Stage 20', e); } }
 
-  /* ---------- página del Job 8 ---------- */
+  /* ---------- página del Job 13 ---------- */
   if (document.getElementById('rf-job')) { try {
     const body =
-      `<h5>Details for Job 8</h5><ul class="ui-kv">` +
+      `<h5>Details for Job 13</h5><ul class="ui-kv">` +
       `<li><b>Status:</b> SUCCEEDED</li>` +
       `<li><b>Associated SQL Query:</b> ${link('2')}</li>` +
       `<li><b>Completed Stages:</b> 1</li></ul>` +
       `<div class="ui-link">Event Timeline</div><div class="ui-link">DAG Visualization</div>` +
       `<h6>Completed Stages (1)</h6><table class="ui-tbl"><thead><tr><th>Stage Id</th><th>Description</th><th>Duration</th><th>Tasks: Succeeded/Total</th></tr></thead><tbody>` +
-      `<tr><td>8</td><td class="rf-desc">${DESC}</td><td>${sdur(576)}</td><td>${prog(200)}</td></tr></tbody></table>`;
+      `<tr><td>20</td><td class="rf-desc">${DESC}</td><td>${sdur(576)}</td><td>${prog(200)}</td></tr></tbody></table>`;
     document.getElementById('rf-job').innerHTML = UI.frame('Jobs', body,
-      'Recreación ilustrativa de la página del Job 8, con solo lo que usa el ejercicio. Cómo reparte Spark los stages de una query entre jobs no lo detalla la doc: aquí el Job 8 ejecuta solo el Stage 8.');
-  } catch (e) { console.error('repaso: página del Job 8', e); } }
+      'Recreación ilustrativa de la página del Job 13, con solo lo que usa el ejercicio. Cómo reparte Spark los stages de una query entre jobs no lo detalla la doc: aquí el Job 13 ejecuta solo el Stage 20.');
+  } catch (e) { console.error('repaso: página del Job 13', e); } }
 
   /* ---------- DAG de la Query 2 (pestaña SQL / DataFrame) ---------- */
   if (document.getElementById('rf-query')) { try {
@@ -111,22 +112,22 @@
           `<div class="sq">` +
             `<div class="rf-cols"><div class="sq">${scan('ventas')}${ex('cliente_id')}</div><div class="sq">${scan('clientes')}${ex('cliente_id')}</div></div>` +
             merge +
-            block(4, '1.5 h', 7, node('SortMergeJoin')) +
+            block(4, '1.5 h', 19, node('SortMergeJoin')) +
             ex('producto_id') +
           `</div>` +
         `</div>` +
         merge +
-        block(5, '1.6 h', 8, node('SortMergeJoin') + node('HashAggregate', 'parcial')) +
+        block(5, '1.6 h', 20, node('SortMergeJoin') + node('HashAggregate', 'parcial')) +
         ex('categoria, segmento') +
         node('AQEShuffleRead', 'coalesced') +
-        block(6, '1 s', 9, node('HashAggregate', 'final')) +
+        block(6, '1 s', 21, node('HashAggregate', 'final')) +
         node('WriteFiles') +
       `</div>`;
     const body =
       `<h5>Details for Query 2</h5><ul class="ui-kv">` +
       `<li><b>Description:</b> ${DESC}</li>` +
       `<li><b>Duration:</b> 16 min</li>` +
-      `<li><b>Succeeded Jobs:</b> ${[4, 5, 6, 7, 8, 9].map(link).join(' ')}</li></ul>` +
+      `<li><b>Succeeded Jobs:</b> ${[9, 10, 11, 12, 13, 14].map(link).join(' ')}</li></ul>` +
       dag + `<div class="ui-link">Details</div>`;
     document.getElementById('rf-query').innerHTML = UI.frame('SQL / DataFrame', body,
       'Recreación simplificada del DAG de la query: el real tiene más nodos (por ejemplo, un Sort antes de cada SortMergeJoin) y métricas en cada nodo. La clave de cada Exchange, que aquí ves en el nodo, en la UI real está en el detalle del nodo y en Details. El formato con que un bloque muestra su stage cambia según la versión.');
