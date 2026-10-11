@@ -46,11 +46,13 @@ Subagents live in `.claude/agents/`. The shared verification rules are the `fuen
 - `redactor-manual`: writes and edits pages, following the conventions above and the `technical-writer` criteria.
 - `verificador-fuentes`: applies the `fuentes-oficiales` skill to any single claim, on any topic. It is read-only.
 - `editor-tecnico`: runs the `technical-writer` review and does not edit.
+- `pedagogo`: applies the `pedagogia` skill (Wilson's *Teaching Tech Together*, Mayer's multimedia principles, predict-observe-explain). It designs how a page or simulator teaches: the target mental model, likely misconceptions, misleading example numbers, and questions. It is read-only.
 - `ingeniero-junior`: reads pages as the target reader (basic SQL, Spark and Databricks) and reports whether each page is useful. It reads only the site first; doubts the site leaves open are findings, and only then may it search the web, reporting what it found separately.
 
 Usual flow for new content:
 1. A specialist gathers the facts.
-2. `redactor-manual` writes the page.
-3. `ingeniero-junior` and `editor-tecnico` review it in parallel.
-4. The user approves the changes.
-5. `redactor-manual` applies them.
+2. `pedagogo` sets the target mental model, the likely misconceptions and the simulator's steps and numbers.
+3. `redactor-manual` writes the page.
+4. `ingeniero-junior` and `editor-tecnico` review it in parallel. If the junior's report shows a misconception, `pedagogo` diagnoses it.
+5. The user approves the changes.
+6. `redactor-manual` applies them.
