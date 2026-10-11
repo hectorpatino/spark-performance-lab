@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Spanish-language study manual for diagnosing slow Databricks / Apache Spark jobs (stages, shuffle, joins, Spark UI, query profile, system tables, AQE, memory/OOM, liquid clustering, Delta maintenance, Azure). Static Jekyll site; all site sources live in `src/` (root `_config.yml` sets `source: src`). On push to `main`, `.github/workflows/pages.yml` builds it with the Gemfile and deploys to GitHub Pages (https://hectorpatino.github.io/spark-performance-lab/). Personal study material, not official docs; simulator numbers are illustrative. All content, UI strings, comments and commit messages are in Spanish.
 
+## Technical debt
+
+`revisiones/deuda-tecnica.md` lists what is pending and why. At the start of every session, read it and remind the user of each open item in one line, before anything else. When an item is resolved, remove it from the file in the same commit as the fix.
+
 ## Commands
 
 ```bash
