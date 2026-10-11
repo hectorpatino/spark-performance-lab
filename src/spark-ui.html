@@ -89,7 +89,80 @@ extra_css: ["/assets/css/spark-ui.css"]
     </ol>
     <div class="verify"><b>Verifícalo</b> en tu workspace: la doc de jobs no dice con qué nombre
       aparece el enlace al Spark UI dentro del panel de la task. Lo confirmado es la ruta Compute →
-      tu compute → Spark UI.</div>
+      tu compute → Spark UI. Para una ejecución que ya terminó, sigue la <a
+      href="#ejecucion-terminada">ruta por tramos</a> de la sección siguiente.</div>
+
+    <h3 id="ejecucion-terminada"><span class="k">Cómo se usa</span>Abrir el Spark UI de una
+      ejecución de job ya terminada</h3>
+    <p><b>Vas de la ejecución a la tarea, de la tarea al compute y del compute a su pestaña Spark
+      UI.</b></p>
+    <p>El job programado de anoche tardó el doble y quieres saber por qué. Aquí «job» es un job de
+      <b>Lakeflow Jobs</b>, el orquestador de Databricks, no un job de Spark. Cada vez que se lanza
+      es una <b>ejecución</b> (<i>run</i>). Un job de Lakeflow tiene una o más <b>tareas</b>, y cada
+      tarea es una unidad de trabajo, por ejemplo un notebook (<a
+      href="https://docs.databricks.com/aws/en/jobs/" target="_blank" rel="noopener">Lakeflow
+      Jobs</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/jobs/"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>). Una tarea del job
+      no es una task de Spark: el notebook de una tarea puede lanzar varios jobs de Spark, cada uno
+      con sus stages y tasks.</p>
+    <p>En compute clásico la ruta tiene cuatro tramos (<a
+      href="https://docs.databricks.com/aws/en/jobs/monitor" target="_blank"
+      rel="noopener">Monitor Lakeflow Jobs</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/jobs/monitor" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>):</p>
+    <ol class="steps">
+      <li><b>El job.</b> En la barra lateral, haz clic en <b>Jobs &amp; Pipelines</b> y luego en el
+        nombre de tu job. Se abre la pestaña <b>Runs</b>, con las ejecuciones activas y
+        terminadas.</li>
+      <li><b>La ejecución.</b> En la vista de lista, haz clic en el enlace de la columna <b>Start
+        time</b> de la ejecución que quieres estudiar. Se abre la página de detalles de esa
+        ejecución.</li>
+      <li><b>La tarea.</b> Haz clic en la tarea (en la vista de grafo, en su nodo). Su panel muestra
+        el cluster que la ejecutó, con enlaces a su query history y a sus logs.</li>
+      <li><b>El compute.</b> Abre ese compute. En su página de detalles, haz clic en la pestaña
+        <b>Spark UI</b> (<a
+        href="https://docs.databricks.com/aws/en/compute/clusters-manage#view-compute-information-in-the-spark-ui"
+        target="_blank" rel="noopener">Manage classic compute</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/clusters-manage#view-compute-information-in-the-spark-ui"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>).</li>
+    </ol>
+    <div class="verify"><b>Verifícalo</b> en tu workspace: la doc describe cada tramo en una página
+      distinta y ninguna página los encadena. Tampoco dice qué pulsas en el panel de la tarea para
+      llegar a la página del compute.</div>
+    <p>Mira el Spark UI antes de volver a arrancar ese compute. Si reinicias un compute terminado,
+      el Spark UI muestra el compute reiniciado, no la historia del que terminó (misma página de
+      Manage classic compute).</p>
+    <p>La pestaña Runs guarda la historia de ejecuciones 60 días. Ese plazo es de la lista de
+      ejecuciones, no del Spark UI. La doc no dice cuánto tiempo se conserva el Spark UI de un
+      compute terminado.</p>
+    <p><b>En serverless no hay Spark UI.</b> La guía de rendimiento de jobs reserva el Spark UI para
+      jobs en compute clásico. Para jobs serverless manda a la <b>query history</b> (la lista de
+      queries ejecutadas, con su duración) y al <a href="query-profile.html">query profile</a> de
+      cada query (<a href="https://docs.databricks.com/aws/en/jobs/diagnose-job-performance"
+      target="_blank" rel="noopener">Diagnose Lakeflow Jobs performance</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/jobs/diagnose-job-performance"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>). Los dos primeros
+      tramos son los mismos; luego cambia el final (<a
+      href="https://docs.databricks.com/aws/en/jobs/run-serverless-jobs#view-query-details-for-job-runs"
+      target="_blank" rel="noopener">View query details for job runs</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/jobs/run-serverless-jobs#view-query-details-for-job-runs"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>):</p>
+    <ol class="steps">
+      <li>Abre el job y la ejecución, como en los pasos 1 y 2 de arriba.</li>
+      <li>Haz clic en <b>Timeline</b>. La ejecución se muestra como una línea de tiempo dividida en
+        tareas.</li>
+      <li>Haz clic en la flecha junto al nombre de la tarea. Ves sus sentencias y cuánto tardó
+        cada una.</li>
+      <li>Haz clic en una sentencia. Se abre su query profile.</li>
+    </ol>
+    <p>Otra vía: en la sección <b>Compute</b> del panel de la tarea, haz clic en <b>Query
+      history</b>. Se abre ya filtrada por esa ejecución de la tarea. Úsala si no ves la vista
+      Timeline: en jobs de una sola tarea, esa vista llegó con una beta (Diagnose Lakeflow Jobs
+      performance).</p>
 
     <h3><span class="k">Cómo funciona por dentro</span>Qué hay en cada pestaña</h3>
     <p><b>Cada pestaña responde una pregunta distinta. La tabla dice qué buscar en cada una.</b></p>
@@ -194,7 +267,7 @@ extra_css: ["/assets/css/spark-ui.css"]
         Spark repitió.</li>
     </ul>
 
-    <h3><span class="k">Cómo se usa</span>La ruta de diagnóstico de Databricks</h3>
+    <h3 id="ruta-diagnostico"><span class="k">Cómo se usa</span>La ruta de diagnóstico de Databricks</h3>
     <p><b>La guía oficial dice qué mirar y en qué orden. El paso del stage (spill y skew) está a
       fondo en <a href="diagnostico.html">Diagnóstico</a>.</b> Aquí tienes dónde está cada paso en
       el Spark UI (<a href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/"
@@ -219,7 +292,7 @@ extra_css: ["/assets/css/spark-ui.css"]
         target="_blank" rel="noopener"
         title="La misma página en la documentación de Azure Databricks">Azure</a>).</p></div>
       <div><span>2</span><p><b>El stage más largo.</b> En la página del job, ordena los stages por
-        duración y anota Input, Output, Shuffle Read y Shuffle Write. Un stage con una sola task
+        duración y anota Input, Output, Shuffle Read y Shuffle Write. Un stage largo con una sola task
         puede ser señal de problema (<a
         href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage"
         target="_blank" rel="noopener">Look at longest stage</a> <a class="az"
@@ -252,7 +325,7 @@ extra_css: ["/assets/css/spark-ui.css"]
         title="La misma página en la documentación de Azure Databricks">Azure</a>).</p></div>
     </div>
 
-    <h3><span class="k">Cómo se usa</span>Logs y métricas fuera del Spark UI</h3>
+    <h3 id="logs"><span class="k">Cómo se usa</span>Logs y métricas fuera del Spark UI</h3>
     <p><b>Para saber por qué se perdió una máquina, o para ver la historia de un compute reiniciado,
       sal del Spark UI.</b> El Spark UI no dice por qué desapareció una máquina ni guarda la
       historia de un compute reiniciado. Para eso Databricks tiene otras fuentes (<a
@@ -543,6 +616,23 @@ SPARK_WORKER_OPTS="-Dspark.decommission.enabled=true"</code></pre>
       href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/failing-spark-jobs"
       target="_blank" rel="noopener"
       title="La misma página en la documentación de Azure Databricks">Azure</a> · <a
+      href="https://docs.databricks.com/aws/en/jobs/" target="_blank" rel="noopener">Lakeflow
+      Jobs</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/jobs/"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> · <a
+      href="https://docs.databricks.com/aws/en/jobs/monitor" target="_blank" rel="noopener">Monitor
+      Lakeflow Jobs</a> <a class="az" href="https://learn.microsoft.com/azure/databricks/jobs/monitor"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> · <a
+      href="https://docs.databricks.com/aws/en/jobs/diagnose-job-performance" target="_blank"
+      rel="noopener">Diagnose Lakeflow Jobs performance</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/jobs/diagnose-job-performance"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a> · <a
+      href="https://docs.databricks.com/aws/en/jobs/run-serverless-jobs" target="_blank"
+      rel="noopener">Run your Lakeflow Jobs with serverless compute for workflows</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/jobs/run-serverless-jobs" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a
       href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/spark-memory-issues"
       target="_blank" rel="noopener">Spark memory issues</a> <a class="az"
       href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/spark-memory-issues"
