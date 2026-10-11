@@ -17,21 +17,21 @@
     "t": [
       "job"
     ],
-    "d": "Cálculo paralelo que Spark lanza cuando llamas a una acción como write, count o collect. Con AQE, una sola acción puede dar varios jobs."
+    "d": "Cálculo paralelo que Spark lanza cuando llamas a una acción como write, count o collect. Con AQE, una sola acción suele dar varios jobs."
   },
   {
     "t": [
       "acción",
       "acciones"
     ],
-    "d": "Operación que devuelve un resultado al driver (count, collect, show) o escribe datos (write). Es lo único que lanza jobs: en principio uno por acción, pero con AQE suele dar varios, uno por query stage."
+    "d": "Operación que devuelve un resultado al driver (count, collect, show) o escribe datos (write). Es lo único que lanza jobs: en principio uno por acción, pero con AQE suele dar varios (ver Plan de ejecución)."
   },
   {
     "t": [
       "wave",
       "waves"
     ],
-    "d": "Ronda de tasks que corren a la vez: tasks ÷ cores. No es un término oficial de Spark ni una configuración."
+    "d": "Cada tanda en que las tasks de un stage pasan por los cores: ⌈tasks ÷ cores⌉, redondeado hacia arriba. Con 16 tasks y 12 cores salen 2 waves: la primera con 12 tasks y la segunda con solo 4. No es una barrera: cada core toma la siguiente task en cuanto acaba la suya. No es un término oficial de Spark ni una configuración."
   },
   {
     "t": [

@@ -241,10 +241,13 @@ extra_css: ["/assets/css/plan-ejecucion.css"]
       </tbody>
     </table></div>
     <p><b>Al leer, Spark no hace una partición por archivo.</b> Varios archivos pequeños pueden ir
-      en una partición, y uno grande se parte en varias. Además, Spark intenta tener al menos tantas
+      en una partición, y uno grande se parte en varias. Además, Spark intenta, sin garantizarlo, tener al menos tantas
       particiones como el paralelismo del compute (<a
       href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#tuning-partitions"
-      target="_blank" rel="noopener"><code>spark.sql.files.minPartitionNum</code></a>). Por eso
+      target="_blank" rel="noopener"><code>spark.sql.files.minPartitionNum</code></a>). Por
+      defecto, ese paralelismo es el total de cores de los executors, sin contar el driver (<a
+      href="https://spark.apache.org/docs/latest/configuration.html" target="_blank"
+      rel="noopener"><code>spark.default.parallelism</code></a>). Por eso
       una tabla pequeña puede leerse en trozos de menos de 128 MB, y la misma tabla puede dar otro
       número de tasks en otro compute.</p>
     <p>Los 128 MB son bytes del archivo en disco, ya comprimidos: en memoria ese trozo suele ocupar
@@ -373,6 +376,9 @@ AdaptiveSparkPlan isFinalPlan=false
       title="La misma página en la documentación de Azure Databricks">Azure</a>, <a
       href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#tuning-partitions"
       target="_blank" rel="noopener">Apache Spark · Tuning partitions</a>, <a
+      href="https://spark.apache.org/docs/latest/configuration.html" target="_blank"
+      rel="noopener">Apache Spark · Configuration</a> (<code>spark.sql.leafNodeDefaultParallelism</code>
+      y <code>spark.default.parallelism</code>), <a
       href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#coalescing-post-shuffle-partitions"
       target="_blank" rel="noopener">Apache Spark · Coalescing post shuffle partitions</a>, <a
       href="https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.coalesce.html"

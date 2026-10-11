@@ -42,9 +42,9 @@ description: "Cómo reparte el scheduler las tasks entre los cores, qué son las
           Spark</a>)</td><td>El cluster</td></tr>
         <tr><td><b>Core / slot</b></td><td>Un hueco donde corre una task a la vez (por defecto, 1
           task = 1 core)</td><td>Los cores de los workers</td></tr>
-        <tr><td><b>Wave</b></td><td>Una ronda de tasks que corren a la vez. <b>Término no oficial y
-          sin config</b>. Sale de dividir tasks entre cores. La guía de Databricks lo llama
-          <i>iterations</i></td><td>tasks ÷ cores</td></tr>
+        <tr><td><b>Wave</b></td><td>Cada tanda en que las tasks de un stage pasan por los cores; la
+          última puede ir a medias. <b>Término no oficial y sin config</b>. La guía de Databricks
+          lo llama <i>iterations</i></td><td>⌈tasks ÷ cores⌉</td></tr>
       </tbody>
     </table></div>
     <p>Qué son la application, los jobs y los stages, y qué los crea, está en <a
