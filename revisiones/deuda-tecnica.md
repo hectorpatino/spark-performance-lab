@@ -21,7 +21,7 @@ Sin lanzar. Propuesta: revisar solo lo que cambió, sin preguntas ni secciones n
 
 ## 3. Rama sin mezclar a `main`
 
-`arquitectura-paralelismo-y-agentes` está subida a `origin` desde el 2026-10-11, pero lleva 17 commits sobre `main` sin PR. El sitio publicado no cambia hasta mezclarla.
+`arquitectura-paralelismo-y-agentes` está subida a `origin` desde el 2026-10-11, pero no tiene PR a `main` (`git log main..HEAD` dice cuántos commits van). El sitio publicado no cambia hasta mezclarla.
 
 ## 4. Huecos de la doc marcados en el sitio
 
