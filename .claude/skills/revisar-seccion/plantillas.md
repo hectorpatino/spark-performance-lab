@@ -1,6 +1,6 @@
 # Plantillas de encargo
 
-Sustituye `{…}`. `{HUB}` es la ruta absoluta de `hub/` en el scratchpad de la sesión.
+Sustituye `{…}`. `{HUB}` es la ruta absoluta de `revisiones/<sección>/` en el repo.
 
 ## Junior
 

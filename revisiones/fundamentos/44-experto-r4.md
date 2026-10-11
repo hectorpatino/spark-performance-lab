@@ -1,0 +1,33 @@
+# Experto motor r4 (resumen fiel; pares Azure idénticos)
+
+ALTA
+- shuffle:332-334, :394-395 FALSO ("falta agregación parcial") y sin fuente (bytes). Corr :332-334: "Compara filas, no bytes. Si Shuffle Write Records es mucho mayor que las filas que entran al stage (Input Records, o Shuffle Read Records si el stage lee otro shuffle), algo multiplica filas antes del Exchange: un join dentro del stage o un explode(). Confírmalo en la pestaña SQL / DataFrame con number of output rows. Si falta agregación parcial, las filas escritas se acercan a las de entrada, pero no las superan." Corr :394-395: "Shuffle Write Records mucho mayor que las filas que entran al stage → algo multiplica filas antes del shuffle (join o explode(); ver las métricas del shuffle)." Fuentes: long-spark-stage ("Input: How much data this stage read from storage… Shuffle Write: How much shuffle data this stage wrote"); slow-spark-stage-low-io ("If you see a few rows going into a node and magnitudes more coming out, you may be suffering from an exploding join or explode()"); web-ui#jobs-detail.
+- stages:24-25, :376-381 "1 task señal de problema" impreciso → "Un stage largo con una sola task puede ser señal de problema. Un stage de 1 task que dura segundos (por ejemplo, el final de un count() o una agregación pequeña que AQE unió en una partición) es normal." Fuente one-spark-task "If you see a long-running stage with just one task, that's likely a sign of a problem." (+Azure).
+- Stage 4 repaso CORRECTO, falta explicar. Texto: "El Stage 4 tiene 1 task porque AQE unió las 200 particiones del shuffle del groupBy, que entre todas suman 210 KiB. Las particiones unidas no bajan de 1 MB (minPartitionSize), así que sale una. Dura 1 s: no es el stage largo de una task del que avisa la guía (ver AQE#otras-funciones)." Fuentes aqe ("Dynamically coalesces partitions…"; minPartitionSize "Default value: 1MB"), tuning#coalescing-post-shuffle-partitions (parallelismFirst). NO mencionar minPartitionNum. Plan: CustomShuffleReader Coalesced (nombre cambia según versión).
+
+MEDIA
+- repaso:301-304 "suelen ocupar más" sin fuente → "Compara filas, no bytes. Input mide bytes de los archivos de la tabla y Shuffle Write, bytes de los archivos de shuffle, en otro formato. Sus bytes no se comparan directamente; las filas sí."
+- shuffle:27, :376-378 "mucho write con spill 0 es sano" → "Mucho shuffle write sin spill no es un error, pero puede hacer el stage lento por I/O (ver Spark stage high I/O)" (long-spark-stage-io "High shuffle…", "about 3 MBs per second").
+- shuffle:100-102 map tasks → "Una por partición del stage que escribe el shuffle: si lee una tabla, una por trozo de hasta 128 MB; si lee otro shuffle, una por partición de ese shuffle."
+- repaso:526-528 Associated Job IDs plural → "los jobs a los que está asociado" (web-ui#stage-detail).
+- arquitectura:215-218 cero workers → "Para correr Spark hace falta al menos un worker: con cero, los comandos de Spark fallan. Un compute multinodo no se puede dejar en 0 workers; para eso está Single node." (compute/configure "A multi-node compute resource can't be scaled to 0 workers").
+- joins:14 + glosario broadcast → "Broadcast copia un lado entero a cada executor (el que el tipo de join deja copiar, si cabe en el umbral) y el otro no se mueve." (aqe FAQ LEFT OUTER).
+- broadcastTimeout correcto (Apache Spark, 300 s, tuning#automatically-broadcasting-joins y configuration); no fijable en serverless (spark/conf serverless). Dueña joins "Hints, umbrales y cómo comprobarlo" junto a autoBroadcastJoinThreshold: "default de Apache Spark; Databricks no documenta otro valor; no se puede fijar en serverless". stages y app.js enlazan; ancla #automatically-broadcasting-joins.
+- glosario AQE → "…y tienen al menos un exchange (normalmente un join, una agregación o una ventana) o una subquery."
+
+BAJA
+- glosario job: añadir "(lo que se observa en el Spark UI; la doc no lo detalla)".
+- repaso:560-561 → "Mientras haya tasks en cola, los cores libres reciben trabajo enseguida (puede haber esperas cortas por localidad de datos)."
+- arquitectura:21, :176 "la más común" → "por ejemplo".
+- arquitectura:107-110 y js:19 count() → "(es lo que se ve en el Spark UI; la doc no detalla ese stage)" [ojo: dueña plan#explain; usar enlace].
+- app.js:343, :359, :361 "200 tasks (o menos con AQE)".
+- repaso Stage 2 Input 120 GiB: decir en el enunciado que ventas tiene solo las columnas que usa el ejercicio.
+- joins:23-24 hint en serverless → "La doc de serverless no prohíbe los hints".
+
+Dudas
+- Spark UI de ejecución terminada: por tramos. jobs/monitor ("click the link for the run in the Start time column"; detalles de task "The cluster that ran the task and links to its query history and logs"); clusters-manage#view-compute-information-in-the-spark-ui ("selecting the Spark UI tab on the compute details page"; "If you restart a terminated compute…not the historical"); jobs/diagnose-job-performance ("For jobs running on classic compute, use the Spark UI to diagnose slow stages and tasks"; serverless: query history/profile desde Timeline). KB (no docs): "Spark SQL queries remain visible in the SQL/DataFrame tab in the cluster's Spark UI, even after the compute is terminated". Ruta propuesta: Jobs & Pipelines → job → Runs → Start time → tarea → compute → pestaña Spark UI (cada paso documentado por separado). Va en spark-ui.html.
+- Stage → línea: slow-spark-stage-low-io ("Some nodes in the DAG have helpful time information and others don't. For example, this block took 2.1 minutes and even provides the stage ID"); web-ui#stage-detail ("whole-stage code generation operations are also annotated with the code generation id… cross-reference stage execution details to the relevant query in the SQL Tab"); explain(mode="formatted") [codegen id : N]; Exchange hashpartitioning(k#33, 200) (EXPLAIN; que la clave identifique el groupBy/join es razonamiento); cadena Associated Job IDs → Associated SQL Query ("Link to the SQL tab for this job") → query "the jobs and stages associated with it" (web-ui#execution-detail-page); celda: Gaps (no afirmar que muestra IDs de job).
+- plan:342-347: maxPartitionBytes es máximo, minPartitionNum mínimo sugerido; con pocos datos particiones < 128 MB.
+- plan:459: "no deduzcas los stages de una acción contando jobs".
+- Regla unificada broadcast: no confirmada por doc (no la menciona).
+Fuera de tema: saveAsTable puede añadir stages (optimized writes, delta/tune-file-size) → aviso en nota repaso:683; system.query.history (observabilidad); nombres Spill (memory) vs Shuffle spill (memory); glosario Event Timeline "fases" sin fuente ("Summary metrics for all tasks are represented in a table and in a timeline").

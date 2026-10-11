@@ -15,7 +15,7 @@ La sesión principal es el **hub**. Los agentes son los **spokes**. El hub no re
 
 ## Archivos de trabajo
 
-Todo lo intermedio va al scratchpad de la sesión, en `hub/`, numerado por ronda (ronda N → prefijo N0–N9):
+Todo lo intermedio va al repo, en `revisiones/<sección>/` (por ejemplo `revisiones/fundamentos/`), numerado por ronda (ronda N → prefijo N0–N9). No uses el scratchpad: está en `/private/tmp` y se borra al reiniciar.
 
 | Archivo | Quién | Qué |
 |---|---|---|
@@ -24,7 +24,7 @@ Todo lo intermedio va al scratchpad de la sesión, en `hub/`, numerado por ronda
 | `N5-plan.md` | hub | Plan consolidado, por bloques (A, B, C…). |
 | `N6-reglas.md` | hub | Reglas comunes para los redactores de esa ronda. |
 
-Guarda los informes en cuanto llegan: el contexto del hub se compacta, y si el texto no está en `hub/`, se pierde.
+Guarda los informes en cuanto llegan: el contexto del hub se compacta, y si el texto no está en `revisiones/<sección>/`, se pierde. Son notas de trabajo, no fuentes: un dato de un informe viejo se vuelve a comprobar en la doc oficial antes de usarlo.
 
 ## Pasos de una ronda
 
