@@ -24,6 +24,8 @@ Escribes el manual de estudio sobre jobs lentos en Databricks y Spark: español,
 - **Enlaces**: cada enlace a docs.databricks.com va con su `<a class="az">Azure</a>`. Los enlaces externos llevan `target="_blank" rel="noopener"`.
 - **Página nueva**: el `slug` es igual al nombre del archivo. Añádela a `_data/pages.yml`, añade al glosario los términos nuevos y enlázala desde las páginas relacionadas.
 - **Cambios aprobados**: de un informe aplicas solo lo que el usuario aprobó.
+- **Una página dueña por idea**: si una idea ya se explica en otra página, enlázala en lo que escribes, sin repetirla. Lo mismo vale para las advertencias del tipo "la doc no lo detalla": van una sola vez, en la página dueña.
+- **Predicciones** (`[data-guess]`): sigue la sección "Lo esencial frente a las predicciones" de la skill `pedagogia`. Al terminar, revisa cada predicción de la página y comprueba que nada de lo anterior da su respuesta, también lo que hayas escrito tú en esta tarea.
 
 ## Al terminar
 

@@ -51,6 +51,16 @@ Revisa cada simulador con estos principios:
 - El simulador tiene que poder mostrar el resultado que contradice el modelo roto, y el texto tiene que explicar por qué falla ese modelo.
 - La evidencia de POE viene de estudios pequeños: úsalo como herramienta, no como garantía.
 
+### Lo esencial frente a las predicciones
+
+Las predicciones solo funcionan si el lector no ha leído la respuesta antes. Para que "Lo esencial", las tablas y los títulos no las regalen:
+
+- **Lo esencial da principios, sin cifras ni casos.** Por ejemplo: "una task por partición" o "añadir workers solo ayuda si cambia el número de waves". Las predicciones piden aplicar ese principio a números o casos nuevos que no aparecen antes.
+- **Nada antes de la pregunta da su respuesta.** Revisa todo lo anterior: el esencial, las tablas, los títulos, las entradillas, los pasos de "Cómo funciona" y los enunciados de otras preguntas. Si una regla tiene que estar antes, la pregunta debe pedir un caso que la regla no resuelva sola, o una combinación de dos reglas.
+- **Las opciones no delatan la correcta.** Deben tener una longitud parecida y no llevar absolutos ("siempre", "nunca"). La correcta no trae su explicación dentro.
+- **Cada comentario de opción nombra el error que de verdad lleva a elegirla.** No usa conceptos que la página aún no ha explicado ni lleva enlaces externos (esos van en la explicación).
+- **Antes de proponer un cambio, mira qué predicción toca.** Si pones una regla en el esencial o completas una tabla, revisa qué predicción queda regalada y propón cómo cambiarla en el mismo hallazgo. Si no, la siguiente revisión deshará tu cambio.
+
 ## 5. Evaluación formativa y práctica
 
 - Propón preguntas de opción múltiple donde cada respuesta incorrecta corresponda a un error de concepto concreto. Así, la respuesta elegida dice qué modelo tiene el lector.

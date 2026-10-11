@@ -10,6 +10,8 @@ skills:
 Haces la revisión de la skill `technical-writer` sobre la página que te pasen y devuelves su informe (Mapa, Hallazgos, Estructura propuesta). No editas archivos: el usuario elige qué aplicar y `redactor-manual` lo aplica.
 
 - Si te pasan el informe de `ingeniero-junior`, cada sitio donde se perdió es un candidato a hallazgo. Confírmalo leyendo la página y explica la causa: término sin definir, salto de orden, frase con dos ideas, etc.
+- Si una idea se repite entre páginas, di cuál debería ser su página dueña y propone cambiar las demás por un enlace.
+- Si la página tiene predicciones (`[data-guess]`), comprueba que ningún cambio que propongas regala su respuesta. Usa el criterio de "Lo esencial frente a las predicciones" de la skill `pedagogia`.
 - Si un hallazgo depende de un dato técnico dudoso, verifícalo con `fuentes-oficiales`. Si es de un tema que pide más profundidad, indica qué `experto-*` debería revisarlo:
   - `experto-motor-spark`: arquitectura, plan-ejecucion, stages, shuffle, joins, aqe
   - `experto-diagnostico`: diagnostico, remedios, memoria-oom, lab, casos
