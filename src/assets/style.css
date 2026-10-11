@@ -413,3 +413,28 @@ pre.has-copy{position:relative;padding-right:4.6rem}
 .essentials li{margin:.28rem 0;font-size:.95rem}
 .essentials-one{margin:.7rem 0 0;padding-top:.7rem;border-top:1px solid color-mix(in srgb,var(--accent) 25%,var(--line));font:500 1.125rem/1.45 var(--f-display);max-width:none}
 .essentials-one b{font:600 .88rem/1.3 var(--f-body);display:block;margin-bottom:.15rem;color:var(--accent)}
+
+/* Predice y comprueba: la respuesta queda tapada hasta que el lector la pide.
+   .guess sola (DAG de plan-ejecucion): panel opaco de alto fijo que tapa el resultado.
+   .guess.q: pregunta con opciones pulsables; al elegir sale solo el comentario de esa opción
+   (.guess-fb) y un botón para ver la explicación completa (.guess-body) */
+.guess-cover{display:none}
+.guess.is-hidden .guess-body{display:none}
+.guess.is-hidden .guess-cover{display:flex;min-height:14rem;flex-direction:column;align-items:center;justify-content:center;gap:.8rem;padding:1.5rem 1rem;text-align:center;background:var(--code);border:1px solid var(--line);border-radius:8px}
+.guess-cover p{margin:0;font-weight:600;max-width:28rem}
+.guess-cover button{font:600 .88rem var(--f-body);padding:.5rem 1rem;border-radius:999px;border:1px solid var(--ink);background:var(--ink);color:var(--surface);cursor:pointer}
+.guess-cover button:hover{filter:brightness(1.1)}
+.guess.q{margin:1rem 0;border:1px solid var(--line);border-radius:8px;background:var(--code)}
+.guess.q .guess-cover,.guess.q.is-hidden .guess-cover{display:block;min-height:0;padding:.8rem 1rem;text-align:left;background:none;border:0}
+.guess.q .guess-cover p{max-width:none;font-weight:400}
+.guess.q .guess-opts{display:flex;flex-direction:column;gap:.35rem;margin:.55rem 0 .1rem}
+.guess.q .guess-opts button{text-align:left;font:400 .95rem/1.4 var(--f-body);padding:.45rem .75rem;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);cursor:pointer}
+.guess.q .guess-opts button:hover{border-color:var(--muted);filter:none}
+.guess.q .guess-opts button.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 13%,var(--bg))}
+.guess.q .guess-opts button.no{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,var(--bg))}
+.guess.q .guess-fb{padding:0 1rem .2rem}
+.guess.q .guess-fb p{margin:.4rem 0}
+.guess.q .guess-more{margin:.3rem 1rem .9rem;font:600 .85rem var(--f-body);padding:.4rem .9rem;border-radius:999px;border:1px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer}
+.guess.q [hidden]{display:none}
+.guess.q .guess-body{padding:.1rem 1rem .8rem;border-top:1px solid var(--line)}
+.guess.q .guess-body p{margin:.55rem 0}

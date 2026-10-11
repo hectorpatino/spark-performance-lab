@@ -17,21 +17,21 @@
     "t": [
       "job"
     ],
-    "d": "Cálculo paralelo que Spark lanza cuando llamas a una acción como write, count o collect. Con AQE, una sola acción suele dar varios jobs."
+    "d": "Cálculo paralelo que Spark lanza cuando llamas a una acción como write, count, collect o display. En el Spark UI una sola acción puede verse como varios jobs (es lo que se observa; la doc no lo detalla); la pestaña SQL / DataFrame lista los jobs de cada query."
   },
   {
     "t": [
       "acción",
       "acciones"
     ],
-    "d": "Operación que devuelve un resultado al driver (count, collect, show) o escribe datos (write). Es lo único que lanza jobs: en principio uno por acción, pero con AQE suele dar varios (ver Plan de ejecución)."
+    "d": "Operación que devuelve un resultado al driver (count, collect, show, display) o escribe datos (write). Es lo que lanza jobs: en principio uno por acción, aunque puede verse como varios (ver Plan de ejecución)."
   },
   {
     "t": [
       "wave",
       "waves"
     ],
-    "d": "Cada tanda en que las tasks de un stage pasan por los cores: ⌈tasks ÷ cores⌉, redondeado hacia arriba. Con 16 tasks y 12 cores salen 2 waves: la primera con 12 tasks y la segunda con solo 4. No es una barrera: cada core toma la siguiente task en cuanto acaba la suya. No es un término oficial de Spark ni una configuración."
+    "d": "Cada tanda en que las tasks de un stage pasan por los cores: ⌈tasks ÷ cores⌉, redondeado hacia arriba. Con 14 tasks y 12 cores salen 2 waves: la primera con 12 tasks y la segunda con solo 2. No es una barrera: cada core toma la siguiente task en cuanto acaba la suya. No es un término oficial de Spark ni una configuración."
   },
   {
     "t": [
@@ -81,20 +81,20 @@
     "t": [
       "Exchange"
     ],
-    "d": "Nodo del plan donde ocurre un shuffle. Es la frontera entre dos stages."
+    "d": "Nodo del plan donde los datos cambian de partición. Exchange (shuffle) es una frontera de stage; BroadcastExchange copia una tabla y no es un shuffle."
   },
   {
     "t": [
       "AQE"
     ],
-    "d": "Adaptive Query Execution: re-optimiza la query mientras se ejecuta, con los tamaños reales de cada shuffle. Activado por defecto."
+    "d": "Adaptive Query Execution: re-optimiza la query mientras se ejecuta, con los tamaños reales al terminar cada shuffle o broadcast. Activado por defecto. Actúa en queries que no son streaming y tienen al menos un exchange (normalmente un join, una agregación o una ventana) o una subquery. No siempre cambia el plan."
   },
   {
     "t": [
       "broadcast join",
       "broadcast"
     ],
-    "d": "Join que copia la tabla pequeña entera a cada executor, así la tabla grande no hace shuffle."
+    "d": "Join que copia un lado entero a cada executor (el que el tipo de join deja copiar, si cabe en el umbral); el otro lado no hace shuffle."
   },
   {
     "t": [
@@ -138,13 +138,13 @@
     "t": [
       "Photon"
     ],
-    "d": "Motor de ejecución vectorizado de Databricks, compatible con las APIs de Spark."
+    "d": "Motor de ejecución vectorizado de Databricks, compatible con las APIs de Spark. Activo por defecto en el compute clásico y siempre en serverless; Catalyst sigue planeando la query."
   },
   {
     "t": [
       "WholeStageCodegen"
     ],
-    "d": "Bloque del plan donde Spark fusiona varios operadores en un único código generado."
+    "d": "Bloque del plan donde Spark (sin Photon) fusiona varios operadores en un único código generado. Con Photon, los operadores que Photon soporta los ejecuta Photon; el resto sigue en Spark."
   },
   {
     "t": [
@@ -162,13 +162,13 @@
     "t": [
       "Event Timeline"
     ],
-    "d": "Vista del Spark UI con los executors añadidos o retirados y los jobs o stages en el tiempo. En la página del stage parte cada task en 7 fases."
+    "d": "Vista del Spark UI con los executors añadidos o retirados y los jobs o stages en el tiempo. En la página del stage, muestra en una línea de tiempo las métricas de cada task."
   },
   {
     "t": [
       "shuffle hash join"
     ],
-    "d": "Join que hace shuffle de los dos lados y construye en cada task una tabla hash en memoria con el lado más pequeño."
+    "d": "Join que hace shuffle de los dos lados y construye en cada task una tabla hash en memoria con el lado build: el que permite el tipo de join (si los dos pueden, el más pequeño)."
   },
   {
     "t": [
@@ -230,5 +230,109 @@
       "VACUUM"
     ],
     "d": "Borra los archivos que la tabla ya no referencia y que superan la retención (7 días por defecto). También limita el time travel."
+  },
+  {
+    "t": [
+      "narrow",
+      "transformación narrow",
+      "transformaciones narrow"
+    ],
+    "d": "Transformación en la que cada partición se calcula solo con sus propias filas (filter, select, withColumn). No necesita shuffle y va en el mismo stage."
+  },
+  {
+    "t": [
+      "wide",
+      "transformación wide",
+      "transformaciones wide"
+    ],
+    "d": "Transformación que necesita filas de otras particiones (groupBy, orderBy, un join sin broadcast). Obliga a un shuffle, y ahí empieza otro stage."
+  },
+  {
+    "t": [
+      "query stage",
+      "query stages"
+    ],
+    "d": "En AQE, un tramo del plan que termina en un shuffle o un broadcast. Al acabar, AQE tiene estadísticas reales y puede reoptimizar el resto de la query."
+  },
+  {
+    "t": [
+      "UDF",
+      "UDFs"
+    ],
+    "d": "Función definida por el usuario (user-defined function): código tuyo, por ejemplo en Python, que Spark llama para calcular una columna. Databricks recomienda reescribirla con funciones nativas si es lenta."
+  },
+  {
+    "t": [
+      "map task",
+      "map tasks"
+    ],
+    "d": "Task del stage que escribe un shuffle: reparte sus filas por partición destino y las deja en un archivo en el disco local de su executor."
+  },
+  {
+    "t": [
+      "reduce task",
+      "reduce tasks"
+    ],
+    "d": "Task del stage que lee un shuffle: recoge su bloque de los archivos que escribieron todas las map tasks, en local o por red."
+  },
+  {
+    "t": [
+      "RDD",
+      "RDDs"
+    ],
+    "d": "API original y de bajo nivel de Spark, anterior a DataFrame. Este manual no la usa; serverless y el compute estándar no la admiten."
+  },
+  {
+    "t": [
+      "serialización",
+      "serializa",
+      "serializar",
+      "serializados",
+      "serializada",
+      "deserializada",
+      "deserializar",
+      "deserializados"
+    ],
+    "d": "Convertir las filas en bytes para mandarlas por red o escribirlas en disco. Deserializar es lo contrario. Un shuffle y un spill serializan."
+  },
+  {
+    "t": [
+      "Catalyst"
+    ],
+    "d": "Optimizador de Spark SQL: convierte tu código DataFrame o SQL en el plan físico que ves con explain(). Con Photon, Catalyst sigue planificando la query."
+  },
+  {
+    "t": [
+      "DAG",
+      "DAG Visualization"
+    ],
+    "d": "Grafo dirigido acíclico: el dibujo del Spark UI (o del query profile) con las operaciones de un job, un stage o una query y cómo se encadenan."
+  },
+  {
+    "t": [
+      "estadísticas"
+    ],
+    "d": "Tamaño y número de filas de una tabla que el optimizador usa para estimar antes de ejecutar, por ejemplo para decidir si un lado de un join cabe en el umbral de broadcast (ver Mantenimiento Delta)."
+  },
+  {
+    "t": [
+      "hint",
+      "hints"
+    ],
+    "d": "Indicación en la query (/*+ BROADCAST(t) */ en SQL, broadcast() o .hint() en un DataFrame) que sugiere una estrategia de join. Spark no garantiza usarla, por ejemplo si el tipo de join no la admite."
+  },
+  {
+    "t": [
+      "cache",
+      "caché"
+    ],
+    "d": "Guarda un DataFrame ya calculado para reutilizarlo en las acciones siguientes; sin él, cada acción vuelve a ejecutar su plan. No está soportado en serverless."
+  },
+  {
+    "t": [
+      "SQL warehouse",
+      "SQL warehouses"
+    ],
+    "d": "Compute de Databricks para ejecutar queries SQL (por ejemplo, desde el editor SQL o un dashboard). Usa Photon siempre."
   }
 ]
