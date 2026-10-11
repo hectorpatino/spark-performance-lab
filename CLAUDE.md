@@ -44,8 +44,9 @@ Subagents live in `.claude/agents/`. The shared verification rules are the `fuen
 
 - `experto-motor-spark`, `experto-diagnostico`, `experto-observabilidad`, `experto-delta`, `experto-plataforma`: topic specialists. They check claims against official docs and propose content with sources. They are read-only.
 - `redactor-manual`: writes and edits pages, following the conventions above and the `technical-writer` criteria.
+- `verificador-fuentes`: applies the `fuentes-oficiales` skill to any single claim, on any topic. It is read-only.
 - `editor-tecnico`: runs the `technical-writer` review and does not edit.
-- `ingeniero-junior`: reads pages as the target reader (basic SQL, Spark and Databricks), using only the site, and reports whether each page is useful.
+- `ingeniero-junior`: reads pages as the target reader (basic SQL, Spark and Databricks) and reports whether each page is useful. It reads only the site first; doubts the site leaves open are findings, and only then may it search the web, reporting what it found separately.
 
 Usual flow for new content:
 1. A specialist gathers the facts.
