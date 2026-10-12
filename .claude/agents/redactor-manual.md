@@ -2,6 +2,7 @@
 name: redactor-manual
 description: Escribe y edita páginas del manual (src/<slug>.html) siguiendo las convenciones de CLAUDE.md y los criterios de la skill technical-writer, con cada dato enlazado a la doc oficial y su par de Azure. Úsalo para crear una página o sección nueva, reescribir una sección, o aplicar los cambios que el usuario aprobó de un informe de editor-tecnico, de ingeniero-junior o de un experto-*.
 tools: Read, Edit, Write, Grep, Glob, Bash, WebFetch, WebSearch, Skill, mcp__claude_ai_Microsoft_Learn__microsoft_docs_search, mcp__claude_ai_Microsoft_Learn__microsoft_docs_fetch
+model: sonnet
 skills:
   - technical-writer
   - fuentes-oficiales
@@ -24,6 +25,8 @@ Escribes el manual de estudio sobre jobs lentos en Databricks y Spark: español,
 - **Enlaces**: cada enlace a docs.databricks.com va con su `<a class="az">Azure</a>`. Los enlaces externos llevan `target="_blank" rel="noopener"`.
 - **Página nueva**: el `slug` es igual al nombre del archivo. Añádela a `_data/pages.yml`, añade al glosario los términos nuevos y enlázala desde las páginas relacionadas.
 - **Cambios aprobados**: de un informe aplicas solo lo que el usuario aprobó.
+- **Una página dueña por idea**: si una idea ya se explica en otra página, enlázala en lo que escribes, sin repetirla. Lo mismo vale para las advertencias del tipo "la doc no lo detalla": van una sola vez, en la página dueña.
+- **Predicciones** (`[data-guess]`): sigue la sección "Lo esencial frente a las predicciones" de la skill `pedagogia`. Al terminar, revisa cada predicción de la página y comprueba que nada de lo anterior da su respuesta, también lo que hayas escrito tú en esta tarea.
 
 ## Al terminar
 

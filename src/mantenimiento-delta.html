@@ -243,7 +243,7 @@ extra_css: ["/assets/css/mantenimiento-delta.css"]
       <li><b>Previsualizar:</b> <code>VACUUM t DRY RUN</code> lista lo que borraría sin borrar.</li>
     </ul>
 
-    <h3><span class="k">Por dentro · 5</span>Estadísticas y data skipping</h3>
+    <h3 id="estadisticas"><span class="k">Por dentro · 5</span>Estadísticas y data skipping</h3>
     <p>Al escribir, Databricks guarda por archivo el mínimo, el máximo, el número de nulos y el
       total de filas de cada columna con estadísticas. Al consultar, descarta los archivos cuyo
       rango no puede contener el filtro. Es el mecanismo que aprovecha liquid clustering; el

@@ -234,6 +234,30 @@ extra_css: ["/assets/css/azure.css"]
       Databricks que nombre la serie L para disk cache. Revisa en el desplegable de tu workspace qué
       tipos aparecen como acelerados para caché.</div>
 
+    <h3 id="modo-acceso"><span class="k">Por dentro · 5</span>Modo de acceso: quién comparte el
+      compute y si usa Spark Connect</h3>
+    <ul>
+      <li><b>Todo compute tiene un modo de acceso.</b> Con <i>Standard</i>, varios usuarios lo
+        comparten, con los datos aislados entre ellos. Con <i>Dedicated</i>, se asigna a un
+        usuario o a un grupo. Si dejas el modo en <i>Auto</i> (el valor por defecto), Databricks
+        elige Standard, salvo con un runtime de ML, una instancia GPU o un Databricks Runtime
+        anterior a 14.3: entonces elige Dedicated (<a
+        href="https://docs.databricks.com/aws/en/compute/configure#access-modes" target="_blank"
+        rel="noopener">Access modes</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/compute/configure#access-modes"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>). Un compute clásico con modo Standard es lo que el manual llama
+        <i>compute estándar</i>.</li>
+      <li><b>El compute estándar usa Spark Connect.</b> Lo usan los notebooks de Python desde
+        Databricks Runtime 14.3 y los de Scala desde 13.3 (<a
+        href="https://docs.databricks.com/aws/en/spark/connect-vs-classic" target="_blank"
+        rel="noopener">Compare Spark Connect to Spark Classic</a> <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/spark/connect-vs-classic"
+        target="_blank" rel="noopener"
+        title="La misma página en la documentación de Azure Databricks">Azure</a>). Qué cambia con Spark Connect: <a
+        href="arquitectura.html#spark-connect">Arquitectura · Spark Connect</a>.</li>
+    </ul>
+
     <h3><span class="k">Monitoreo en Azure</span>Métricas fuera de Databricks</h3>
     <ul>
       <li><b>Pestaña Metrics del compute:</b> métricas de hardware cada minuto en all-purpose y job
@@ -339,6 +363,8 @@ extra_css: ["/assets/css/azure.css"]
       target="_blank" rel="noopener">Spark configuration</a>, <a
       href="https://learn.microsoft.com/azure/databricks/compute/clusters-manage" target="_blank"
       rel="noopener">Manage classic compute</a>, <a
+      href="https://learn.microsoft.com/azure/databricks/spark/connect-vs-classic"
+      target="_blank" rel="noopener">Compare Spark Connect to Spark Classic</a>, <a
       href="https://learn.microsoft.com/azure/well-architected/service-guides/azure-databricks"
       target="_blank" rel="noopener">Well-Architected: Azure Databricks</a> y <a
       href="https://learn.microsoft.com/azure/virtual-machines/sizes/overview" target="_blank"

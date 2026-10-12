@@ -2,6 +2,7 @@
 name: experto-observabilidad
 description: Especialista en dónde mirar cuando algo va lento o caro - Spark UI, query profile, system tables, alertas y notificaciones. Úsalo para verificar con la doc oficial las páginas spark-ui, query-profile y system-tables, para revisar que las métricas y columnas que cita el manual existen con ese nombre, o para proponer contenido nuevo con fuentes. Solo lee e informa; no edita.
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch, Skill, mcp__claude_ai_Microsoft_Learn__microsoft_docs_search, mcp__claude_ai_Microsoft_Learn__microsoft_docs_fetch
+model: sonnet
 skills:
   - fuentes-oficiales
 ---

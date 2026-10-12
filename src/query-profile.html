@@ -124,7 +124,15 @@ extra_css: ["/assets/css/query-profile.css"]
       <li><b>Colores de Photon.</b> La doc de Photon dice que en el query profile los operadores
         Photon se ven en <b>morado</b> y los estándar en <b>gris</b>, y que la vista de detalles de
         ejecución muestra el porcentaje del tiempo de las tasks que corrió en Photon. En el Spark UI
-        de un cluster clásico es otra paleta: Photon en naranja, Spark en azul.</li>
+        de un cluster clásico es otra paleta: Photon en naranja, Spark en azul. La doc de Photon
+        llama a esa vista <i>Execution Details</i>, un nombre que la doc del query profile no usa
+        (sus pestañas son Details, Top operators y Query text). Si una operación no pudo correr en
+        Photon, el insight <code>COVERAGE_PHOTON</code> lo dice: <q>Photon can't accelerate this
+        operation, so the query uses the standard runtime engine</q> (<a
+        href="https://docs.databricks.com/aws/en/sql/user/queries/performance-insights"
+        target="_blank" rel="noopener">Performance insights</a> · <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/sql/user/queries/performance-insights"
+        target="_blank" rel="noopener">Azure</a>).</li>
       <li>Algunas operaciones no Photon se ejecutan en grupo y <b>comparten métricas</b>: todas
         muestran el mismo valor que el operador padre. No culpes a cada una por separado.</li>
     </ul>

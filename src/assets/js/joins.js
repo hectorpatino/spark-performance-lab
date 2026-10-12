@@ -49,7 +49,7 @@
       if (hint === 'none') return Object.assign(noHint(), { warn });
       if (!equi) {
         if (hint === 'BROADCAST') return { s: 'BNLJ', build: side, warn, hinted: true };
-        warn.push(`<code>${hint}</code> necesita una condición de igualdad. Spark ignora el hint (aviso en el log del driver).`);
+        warn.push(`<code>${hint}</code> necesita una condición de igualdad. Spark ignora el hint.`);
         return Object.assign(noHint(), { warn });
       }
       if (hint === 'BROADCAST') {
@@ -107,20 +107,20 @@
       const lines = [];
       let why;
       if (st.hinted) why = 'lo pide el hint.';
-      else if (st.s === 'BHJ') why = `${NAME[st.build]} estima ${fmt(st.build === 'L' ? L : R)}, por debajo de 10 MB.`;
-      else if (st.s === 'SMJ') why = (jt === 'FULL' ? 'un FULL OUTER JOIN no admite broadcast.' : 'ningún lado que se pueda copiar cabe en 10 MB.');
-      else if (st.s === 'CART') why = 'no hay igualdad y ningún lado cabe en 10 MB.';
-      else if (st.forced) why = 'no hay igualdad ni lado pequeño: Spark copia igual un lado grande.';
-      else why = 'no hay igualdad y un lado cabe en 10 MB.';
+      else if (st.s === 'BHJ') why = `${NAME[st.build]} estima ${fmt(st.build === 'L' ? L : R)}, por debajo de 10 MiB.`;
+      else if (st.s === 'SMJ') why = (jt === 'FULL' ? 'un FULL OUTER JOIN no admite broadcast.' : 'ningún lado que se pueda copiar cabe en 10 MiB.');
+      else if (st.s === 'CART') why = 'no hay igualdad y ningún lado cabe en 10 MiB.';
+      else if (st.forced) why = 'no hay igualdad ni lado pequeño: Spark copia igual un lado grande (regla del código de Spark, no de la doc).';
+      else why = 'no hay igualdad y un lado cabe en 10 MiB.';
       lines.push(`<div><span class="pill ${st.s === 'BHJ' ? 'ok' : (st.s === 'SMJ' || st.s === 'SHJ') ? 'ok' : 'bad'}">plan</span>Estático: ${nm(st)}, porque ${why}</div>`);
-      if (converted) lines.push(`<div><span class="pill ok">AQE</span>En runtime ${NAME[fin.build]} llega con ${fmt(bsz(fin.build))} ≤ 30 MB: pasa a ${nm(fin)}. Los dos shuffles ya se escribieron; AQE se ahorra el sort y lee el lado grande en local.</div>`);
+      if (converted) lines.push(`<div><span class="pill ok">AQE</span>En runtime ${NAME[fin.build]} llega con ${fmt(bsz(fin.build))} ≤ 30 MiB: pasa a ${nm(fin)}. Los dos shuffles ya se escribieron; AQE se ahorra el sort y lee el lado grande en local.</div>`);
       else if (aqe && equi && st.s === 'SMJ') {
-        const reason = hint === 'MERGE' ? 'AQE respeta el hint MERGE.' : jt === 'FULL' ? 'FULL OUTER no admite broadcast.' : `el lado que se podría copiar llega con más de 30 MB (${fmt(jt === 'LEFT' ? rR : jt === 'RIGHT' ? rL : Math.min(rL, rR))}).`;
+        const reason = hint === 'MERGE' ? 'AQE respeta el hint MERGE.' : jt === 'FULL' ? 'FULL OUTER no admite broadcast.' : `el lado que se podría copiar llega con más de 30 MiB (${fmt(jt === 'LEFT' ? rR : jt === 'RIGHT' ? rL : Math.min(rL, rR))}).`;
         lines.push(`<div><span class="pill bad">AQE</span>No cambia nada: ${reason}</div>`);
       } else if (!aqe && st.s === 'SMJ' && equi) lines.push(`<div><span class="pill bad">AQE</span>Desactivado: el sort-merge join se ejecuta completo.</div>`);
       else if (aqe && !equi) lines.push(`<div class="c">AQE no cambia joins sin igualdad: la conversión documentada es sort-merge → broadcast hash.</div>`);
       st.warn.forEach(w => lines.push(`<div><span class="pill bad">hint</span>${w}</div>`));
-      if (fin.s === 'BHJ' && bsz(fin.build) > 1024 * MB) lines.push(`<div><span class="pill bad">memoria</span>Copiar ${fmt(bsz(fin.build))} a cada executor (y recogerlo en el driver) es arriesgado. Revisa <a href="memoria-oom.html">Memoria y OOM</a>.</div>`);
+      if (fin.s === 'BHJ' && bsz(fin.build) > 1024 * MB) lines.push(`<div><span class="pill bad">memoria</span>Copiar ${fmt(bsz(fin.build))} a cada executor es arriesgado. Sin Photon, además pasa por el driver (guía de 2023). Revisa <a href="memoria-oom.html">Memoria y OOM</a>.</div>`);
       if (comps > 1e10) lines.push(`<div><span class="pill bad">coste</span>${rec(comps)} comparaciones. Si la condición es un rango, mira la range join optimization más abajo.</div>`);
       document.getElementById('js-verdict').innerHTML = lines.join('');
 
@@ -217,7 +217,7 @@
       };
       const txt = `AdaptiveSparkPlan isFinalPlan=true\n+- == Final Plan ==\n   ${tree(fin)}${converted ? '\n   :- AQEShuffleRead local\n   :  +- ShuffleQueryStage 0\n   +- BroadcastQueryStage 2\n      +- BroadcastExchange\n         +- AQEShuffleRead local\n            +- ShuffleQueryStage 1' : ''}\n+- == Initial Plan ==\n   ${tree(st)}`;
       return UI.frame('SQL / DataFrame', `<h5>Details for Query 3</h5><div class="jn-dag"><div class="jn-cols">${col('L')}${col('R')}</div><div class="jn-join">${joinNode}</div></div><div class="ui-link">Details</div><pre><code>${txt}</code></pre>`,
-        'Recreación ilustrativa del DAG y del plan físico. Si el nodo del <i>Final Plan</i> es distinto del <i>Initial Plan</i>, AQE cambió la estrategia. El nombre del lector local (<code>AQEShuffleRead</code>, antes <code>CustomShuffleReader</code>) y el texto exacto varían con la versión.');
+        'Recreación ilustrativa del DAG y del plan físico de Spark, sin Photon (con Photon, mira la caja <a href="#photon">Con Photon</a>). Si el nodo del <i>Final Plan</i> es distinto del <i>Initial Plan</i>, AQE cambió la estrategia. El nombre del lector local (<code>AQEShuffleRead</code>, antes <code>CustomShuffleReader</code>) y el texto exacto varían con la versión.');
     }
 
     getJT = chips('js-jt', draw); getEq = chips('js-eq', draw); getHint = chips('js-hint', draw); getSide = chips('js-side', draw);

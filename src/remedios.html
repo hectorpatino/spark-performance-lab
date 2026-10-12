@@ -44,11 +44,19 @@ description: "Qué probar contra el spill y el skew, en orden: medir, dejar que 
       Cómo distinguirlos en el Spark UI, en el query profile y en <code>system.query.history</code>:
       <a href="diagnostico.html">Diagnóstico</a>.</p>
 
-    <h3><span class="k">2 · Deja que Databricks lo haga</span>Auto-optimized shuffle y AQE</h3>
+    <h3 id="auto"><span class="k">2 · Deja que Databricks lo haga</span>Auto-optimized shuffle y AQE</h3>
     <p>Para un stage con shuffle alto, la guía del Spark UI recomienda
       <code>spark.sql.shuffle.partitions=auto</code>: Spark elige el número de particiones según el
-      plan y el tamaño de entrada. El default en compute clásico es 200; en serverless el default ya
-      es <code>auto</code>.</p>
+      plan y el tamaño de entrada. Qué valor tiene por defecto en cada compute está en <a
+      href="plan-ejecucion.html#particiones">De dónde sale cada partición</a>.</p>
+    <p>Cuándo es «alto»: la guía de Databricks estima que cada core lee y escribe unos 3 MB por
+      segundo. Divide la columna de I/O más grande del stage entre los cores de los workers y entre
+      la duración en segundos; si sale cerca de 3 MB, el stage está limitado por I/O (<a
+      href="https://docs.databricks.com/aws/en/optimizations/spark-ui-guide/long-spark-stage-io"
+      target="_blank" rel="noopener">Databricks · Long Spark stage with high I/O</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/optimizations/spark-ui-guide/long-spark-stage-io"
+      target="_blank" rel="noopener"
+      title="La misma página en la documentación de Azure Databricks">Azure</a>).</p>
 <pre><code>spark.conf.set("spark.sql.shuffle.partitions", "auto")</code></pre>
     <p>AQE, activado por defecto, une particiones pequeñas después del shuffle y parte las
       particiones con skew en joins sort-merge y shuffle hash. Comprueba en el plan final que actuó
@@ -63,7 +71,8 @@ description: "Qué probar contra el spill y el skew, en orden: medir, dejar que 
     <h4>Si necesitas fijar el número a mano</h4>
     <p>La guía de 2023 propone que cada task procese unos <b>128–200 MB</b>: particiones = datos del
       shuffle ÷ 128 MB, redondeado a un múltiplo de los cores para que ninguna wave deje cores
-      ociosos. Es una regla práctica de esa guía, no de la documentación oficial. Relación entre
+      ociosos. Si aún no conoces el tamaño del shuffle, la misma guía sugiere empezar por 2–3 veces
+      los cores totales. Son reglas prácticas de esa guía, no de la documentación oficial. Relación entre
       tasks, cores y waves en <a href="stages.html">Tasks, cores y waves</a>.</p>
     <div class="console">
       <div class="ttl">Calculadora de shuffle partitions · regla práctica de la guía de 2023</div>

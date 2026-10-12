@@ -1,5 +1,8 @@
 /* Arquitectura: driver a la izquierda, workers a la derecha */
-.ar-map{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1.4fr);gap:.6rem;align-items:center;margin-top:.4rem}
+.ar-map{position:relative;display:grid;gap:.6rem;margin-top:.4rem}
+/* Marco del compute: driver y workers dentro; el almacenamiento queda fuera */
+.ar-compute{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1.4fr);gap:.6rem;align-items:center;border:1px dashed var(--line);border-radius:10px;padding:1.3rem .6rem .6rem}
+.ar-tag{position:absolute;top:.3rem;left:.7rem;margin:0;font:600 .68rem var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .ar-node{border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:.55rem .7rem;transition:opacity .2s,border-color .2s}
 .ar-node h4{margin:0 0 .35rem;font:600 .88rem var(--f-body);display:flex;justify-content:space-between;gap:.4rem;flex-wrap:wrap}
 .ar-node h4 span{font:400 .72rem var(--f-mono);color:var(--muted)}
@@ -22,17 +25,36 @@
 .ar-workers{display:grid;gap:.4rem}
 .ar-cores{display:flex;gap:.3rem}
 .ar-cores i{width:1.1rem;height:1.1rem;border-radius:3px;border:1px solid var(--line);background:var(--code)}
-.ar-exec.on .ar-cores i{background:var(--hot);border-color:var(--hot);animation:ar-run 1.2s ease-in-out infinite alternate}
-.ar-exec.on .ar-cores i:nth-child(2){animation-delay:.3s}
-.ar-exec.on .ar-cores i:nth-child(3){animation-delay:.6s}
-.ar-exec.on .ar-cores i:nth-child(4){animation-delay:.9s}
+.ar-cores i{transition:background .2s,border-color .2s}
+.ar-cores i.run{background:var(--hot);border-color:var(--hot);animation:ar-run 1.2s ease-in-out infinite alternate}
+.ar-cores i.run:nth-child(2){animation-delay:.3s}
+.ar-cores i.run:nth-child(3){animation-delay:.6s}
+.ar-cores i.run:nth-child(4){animation-delay:.9s}
 @keyframes ar-run{to{opacity:.45}}
+.ar-driver li small{font-size:.7rem;color:var(--hot)}
+.ar-store{opacity:.55}
+.ar-store h4{margin:0}
+.ar-store.on{opacity:1;border-color:var(--cool)}
+/* Puntos que viajan: tasks (driver a cores), datos (almacenamiento) y resultado (al driver) */
+.ar-dot{position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:50%;pointer-events:none;z-index:2}
+.ar-dot.task{background:var(--accent);border-radius:2px}
+.ar-dot.data{background:var(--cool)}
+.ar-dot.res{background:var(--ok)}
+.ar-dot.res.bad{background:var(--bad)}
+.ar-play{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-top:.6rem}
+.ar-phase{margin:0;font:500 .8rem var(--f-mono);color:var(--muted);min-height:2.6em;display:flex;align-items:center}
+.ar-ctl{flex:0 0 auto;display:flex;gap:.3rem}
+.ar-ctl[hidden]{display:none}
+.ar-ctl button{font:500 .8rem var(--f-body);padding:.32rem .7rem;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
+.ar-ctl button:hover:not(:disabled){border-color:var(--muted)}
+.ar-ctl button:disabled{opacity:.35;cursor:default}
+#ar-prev,#ar-next{font-size:1rem;line-height:1;padding:.32rem .6rem}
 #ar-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
 #ar-stats b{font-size:1rem}
 @media (max-width:640px){
-  .ar-map{grid-template-columns:1fr}
+  .ar-compute{grid-template-columns:1fr}
   .ar-links{grid-template-columns:1fr 1fr}
   #ar-down::after{content:" ↓"}
   #ar-up::before{content:"↑ "}
 }
-@media (prefers-reduced-motion: reduce){.ar-exec.on .ar-cores i{animation:none}}
+@media (prefers-reduced-motion: reduce){.ar-cores i.run{animation:none}}

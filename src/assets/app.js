@@ -24,6 +24,31 @@
   };
   function viewToggle(groupId,onChange){const g=document.getElementById(groupId); if(!g) return; g.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{g.querySelectorAll('[data-view]').forEach(x=>x.setAttribute('aria-pressed',x===b)); onChange(b.dataset.view);}));}
   window.SPL={el,q,niceMax:(v)=>niceMax(v),tickMax:(v)=>tickMax(v),UI,viewToggle};
+  // Predice y comprueba (ver .guess.q en style.css): el lector elige una opción, ve solo el
+  // comentario de esa opción (.guess-fb[data-for]) y, si quiere, la explicación completa
+  document.querySelectorAll('[data-guess]').forEach(box=>{ try {
+    const ans=box.dataset.answer, body=box.querySelector('.guess-body');
+    const opts=[...box.querySelectorAll('.guess-opts [data-opt]')], fbs=[...box.querySelectorAll('.guess-fb')];
+    body.hidden=true; body.inert=true; fbs.forEach(f=>{ f.hidden=true; f.setAttribute('aria-live','polite'); });
+    const more=document.createElement('button'); more.type='button'; more.className='guess-more';
+    more.textContent='Ver la explicación completa'; more.hidden=true; body.before(more);
+    // «a) texto» pasa a una tecla con la letra y el texto aparte; la letra también se pulsa en el teclado
+    opts.forEach(b=>{ const t=b.firstChild, m=t&&t.nodeType===3&&t.data.match(/^\s*([a-z])\)\s*/);
+      if(!m) return; t.data=t.data.slice(m[0].length);
+      const txt=document.createElement('span'); while(b.firstChild) txt.appendChild(b.firstChild);
+      const key=document.createElement('span'); key.className='guess-key'; key.setAttribute('aria-hidden','true'); key.textContent=m[1];
+      b.append(key,txt); b.setAttribute('aria-label',m[1]+') '+txt.textContent.trim()); b.setAttribute('aria-keyshortcuts',m[1]); });
+    box.addEventListener('keydown',e=>{ if(e.altKey||e.ctrlKey||e.metaKey||!e.target.closest('.guess-opts')) return;
+      const b=opts.find(x=>x.dataset.opt===e.key.toLowerCase()); if(b){ e.preventDefault(); b.focus(); b.click(); } });
+    opts.forEach(b=>{ b.setAttribute('aria-pressed','false'); b.addEventListener('click',()=>{
+      opts.forEach(x=>{ const me=x===b; x.setAttribute('aria-pressed',me); x.classList.toggle('ok',me&&x.dataset.opt===ans); x.classList.toggle('no',me&&x.dataset.opt!==ans); });
+      // el comentario va justo debajo de la opción elegida (contigüidad), y el raíl toma el color del resultado
+      fbs.forEach(f=>{ const me=f.dataset.for===b.dataset.opt; f.hidden=!me; if(me) b.after(f); });
+      box.classList.add('answered'); box.classList.toggle('is-ok',b.dataset.opt===ans); box.classList.toggle('is-no',b.dataset.opt!==ans);
+      if(body.hidden) more.hidden=false;
+    }); });
+    more.addEventListener('click',()=>{ body.hidden=false; body.inert=false; more.hidden=true; });
+  } catch (e) { console.error('Predice y comprueba', e); } });
   function niceMax(v){const p=Math.pow(10,Math.floor(Math.log10(v)));for(const m of [1,2,2.5,5,10]){if(m*p>=v)return m*p;}return 10*p;}
   function axes(svg,W,H,L,B,T,max,fmt){
     for(let i=0;i<=4;i++){const v=max*i/4;const y=H-B-(H-B-T)*i/4;
@@ -178,10 +203,10 @@ AdaptiveSparkPlan isFinalPlan=true
   /* ---------- 0a. shuffle paso a paso ---------- */
   if (document.getElementById('sh-chart')) { try {
   const MAPS=[[0,2,1,0,3,2,0,1],[1,1,3,0,2,2,3,1],[2,0,0,3,1,2,3,3]];
-  const MAPEX=[1,2,3], REDEX=[1,2,3,1];
+  const MAPEX=[1,1,2], REDEX=[1,2,1,2];
   let step=1, sel=-1;
   const SH_TXT={
-    1:'<b>Datos leídos.</b> Cada map task tiene filas de todas las claves, en el orden en que llegaron del archivo. El color indica a qué partición destino irá cada fila (hash de la clave módulo 4). Todavía no se ha movido nada.',
+    1:'<b>Datos leídos.</b> Cada map task tiene filas de todas las claves, en el orden en que llegaron del archivo. El color indica a qué partición destino irá cada fila (un hash de la clave decide a cuál de las 4 va). Todavía no se ha movido nada.',
     2:'<b>Shuffle write.</b> Cada map task ordena sus filas por partición destino y escribe <b>un archivo</b> en el disco local de su executor, dividido en un bloque por partición. Esto se mide como <i>Shuffle Write</i> en el stage que termina aquí.',
     3:'<b>Shuffle read.</b> Cada reduce task recoge su bloque de <b>todos</b> los archivos. Línea continua: el archivo está en su mismo executor (lectura local). Discontinua: viaja por red (lectura remota). Toca R1…R4 para ver una sola.',
     4:'<b>Resultado.</b> Cada reduce task tiene ya todas las filas de sus claves y puede agregar, unir u ordenar. Fíjate en que aquí las 4 reciben 6 filas: no hay skew. Si una clave pesara mucho, una caja se llenaría y las demás no.'
@@ -250,7 +275,7 @@ AdaptiveSparkPlan isFinalPlan=true
   /* ---------- 0b. write vs read ---------- */
   if (document.getElementById('sw-partial')) { try {
   const swP=document.getElementById('sw-partial'),swM=document.getElementById('sw-m'),swK=document.getElementById('sw-k'),swR=document.getElementById('sw-r'),swE=document.getElementById('sw-e');
-  const fmtB=b=>b>=1e12?(b/1e12).toFixed(1)+' TB':b>=1e9?(b/1e9).toFixed(1)+' GB':b>=1e6?(b/1e6).toFixed(1)+' MB':b>=1e3?(b/1e3).toFixed(0)+' KB':Math.round(b)+' B';
+  const fmtB=b=>UI.bytes(b); // MiB/GiB, como el Spark UI
   const fmtN=n=>n>=1e9?(n/1e9).toFixed(1)+' mil M':n>=1e6?(n/1e6).toFixed(1)+' M':n>=1e3?(n/1e3).toFixed(n>=1e4?0:1)+' k':Math.round(n)+'';
   function drawSw(){
     const M=+swM.value, K=Math.round(Math.pow(10,+swK.value)), R=+swR.value, E=+swE.value, partial=swP.checked;
@@ -284,9 +309,9 @@ AdaptiveSparkPlan isFinalPlan=true
       <tr><td>Bloques con datos (map × reduce)</td><td class="num">${fmtN(blocks)}</td></tr></tbody>`;
     const v=[];
     v.push(partial?`<div><span class="pill ok">PARCIAL</span>Cada map task envía como mucho una fila por clave: ${fmtN(Math.min(ROWS,K))} de 1 M. El shuffle es ${(full/bytes).toFixed(full/bytes<10?1:0)}× más pequeño que sin agregación parcial.</div>`
-                   :`<div><span class="pill bad">SIN PARCIAL</span>Las ${fmtN(totalRows)} filas viajan tal cual. Es lo que pasa con una ventana o un join.</div>`);
-    if(perTask>200e6) v.push(`<div><span class="pill bad">SPILL PROBABLE</span>Cada reduce task lee ~${fmtB(perTask)}, por encima de los 128–200 MB por tarea de la guía. Sube las particiones o usa <code>auto</code>.</div>`);
-    if(empty>0) v.push(`<div><span class="pill bad">VACÍAS</span>${empty.toLocaleString('es')} reduce tasks no reciben nada (hay menos claves que particiones). AQE las une tras el shuffle.</div>`);
+                   :`<div><span class="pill bad">SIN PARCIAL</span>Las ${fmtN(totalRows)} filas viajan tal cual. Es lo que pasa cuando no hay agregación parcial, por ejemplo en un join.</div>`);
+    if(perTask>200*1024*1024) v.push(`<div><span class="pill bad">RIESGO DE SPILL</span>Cada reduce task lee ~${fmtB(perTask)}: más riesgo de spill, según la memoria que tenga cada task (ver <a href="memoria-oom.html">Memoria y OOM</a>). La guía de 2023 sugiere 128–200 MB por task. Sube las particiones o usa <code>auto</code>.</div>`);
+    if(empty>0) v.push(`<div><span class="pill bad">VACÍAS</span>${empty.toLocaleString('es')} reduce tasks no reciben nada (hay menos claves que particiones). Con AQE activo (por defecto en queries batch), AQE puede unirlas tras el shuffle.</div>`);
     if(E===1) v.push(`<div><span class="pill ok">LOCAL</span>Con un solo executor no hay lectura remota.</div>`);
     document.getElementById('sw-verdict').innerHTML=v.join('');
     const per=bytes/M, outK=Math.min(K,totalRows);
@@ -308,42 +333,42 @@ AdaptiveSparkPlan isFinalPlan=true
    .filter("pais = 'CO'")
    .select("id", "monto")
    .write.saveAsTable("ventas_co"))`,
-      jobs:[{label:'Job 1 · la acción write',stages:[{n:'Stage 1',ops:['Scan ventas','Filter','Project','Write'],tasks:'80 tasks (una por archivo de ~128 MB)'}]}],
-      info:'<b>Un solo stage.</b> Filter y select son transformaciones narrow: cada task trabaja con su partición sin necesitar filas de otras. No hay Exchange, así que no hay frontera de stage. 80 tasks con 32 cores son 3 waves (32 + 32 + 16).'},
+      jobs:[{label:'Job 0 · la acción write',stages:[{n:'Stage 0',ops:['Scan ventas','Filter','Project','Write'],tasks:'80 tasks (la tabla se lee en 80 trozos de hasta 128 MiB)'}]}],
+      info:'<b>Un solo stage.</b> Filter y select son transformaciones narrow: cada task trabaja con su partición sin necesitar filas de otras. No hay Exchange, así que no hay frontera de stage. Cómo se reparten esas 80 tasks entre los cores: <a href="stages.html#varios-stages">Tasks, cores y waves</a>.'},
     agg:{code:`(spark.read.table("ventas")
    .groupBy("cliente_id").count()
    .write.saveAsTable("conteo"))`,
-      jobs:[{label:'Job 1 · la acción write',stages:[
-        {n:'Stage 1',ops:['Scan ventas','HashAggregate (parcial)','Exchange · write'],tasks:'80 tasks · map'},
+      jobs:[{label:'Job 0 · la acción write',stages:[
+        {n:'Stage 0',ops:['Scan ventas','HashAggregate (parcial)','Exchange · write'],tasks:'80 tasks'},
         {sep:'shuffle'},
-        {n:'Stage 2',ops:['Exchange · read','HashAggregate (final)','Write'],tasks:'200 tasks · reduce (o menos con AQE)'}]}],
-      info:'<b>Dos stages.</b> El groupBy necesita juntar las filas de cada cliente, y eso obliga a un shuffle. El Stage 1 agrega lo que puede dentro de cada partición y escribe el shuffle. El Stage 2 no empieza hasta que terminan las 80 tasks del Stage 1.'},
+        {n:'Stage 1',ops:['Exchange · read','HashAggregate (final)','Write'],tasks:'200 tasks (o menos con AQE)'}]}],
+      info:'<b>Dos stages.</b> El groupBy necesita juntar las filas de cada cliente, y eso obliga a un shuffle. El Stage 0 agrega lo que puede dentro de cada partición y escribe el shuffle. El Stage 1 no empieza hasta que terminan las 80 tasks del Stage 0.'},
     smj:{code:`ventas = spark.read.table("ventas")
 clientes = spark.read.table("clientes")
 ventas.join(clientes, "cliente_id").write.saveAsTable("ventas_clientes")`,
-      jobs:[{label:'Job 1 · la acción write',stages:[
-        {n:'Stage 1',ops:['Scan ventas','Exchange · write'],tasks:'80 tasks'},
-        {n:'Stage 2',ops:['Scan clientes','Exchange · write'],tasks:'40 tasks'},
+      jobs:[{label:'Job 0 · la acción write',stages:[
+        {n:'Stage 0',ops:['Scan ventas','Exchange · write'],tasks:'80 tasks'},
+        {n:'Stage 1',ops:['Scan clientes','Exchange · write'],tasks:'40 tasks'},
         {sep:'shuffle ×2'},
-        {n:'Stage 3',ops:['Exchange · read (ventas y clientes)','Sort','SortMergeJoin','Write'],tasks:'200 tasks'}]}],
-      info:'<b>Tres stages.</b> Los dos lados del join se reparten por <code>cliente_id</code>, cada uno en su propio stage. Los Stages 1 y 2 son independientes y pueden correr a la vez. El Stage 3 espera a los dos.'},
+        {n:'Stage 2',ops:['Exchange · read (ventas y clientes)','Sort','SortMergeJoin','Write'],tasks:'200 tasks (o menos con AQE)'}]}],
+      info:'<b>Tres stages.</b> Los dos lados del join se reparten por <code>cliente_id</code>, cada uno en su propio stage. Los Stages 0 y 1 son independientes y pueden correr a la vez. El Stage 2 espera a los dos.'},
     bhj:{code:`from pyspark.sql.functions import broadcast
 ventas.join(broadcast(clientes_vip), "cliente_id") \\
  .write.saveAsTable("ventas_vip")`,
-      jobs:[
-        {label:'Job aparte · construir el broadcast',stages:[{n:'Stage 1',ops:['Scan clientes_vip','BroadcastExchange'],tasks:'pocas tasks → se junta y se copia a cada executor'}]},
-        {label:'Job principal · la acción write',stages:[{n:'Stage 2',ops:['Scan ventas','BroadcastHashJoin','Write'],tasks:'80 tasks · ventas no se mueve'}]}],
-      info:'<b>La tabla grande no hace shuffle.</b> La pequeña se recoge y se copia entera a cada executor (normalmente lo verás como un job aparte en el Spark UI). Luego cada task de ventas hace el join con su copia local. Por eso el broadcast es la forma más barata de evitar un shuffle.'},
+      jobs:[{label:'Job(s) · la acción write',stages:[
+        {n:'Stage 0',ops:['Scan clientes_vip','BroadcastExchange'],tasks:'pocas tasks → se junta y se copia a cada executor (este stage puede salir en otro job)'},
+        {n:'Stage 1',ops:['Scan ventas','BroadcastHashJoin','Write'],tasks:'80 tasks · ventas no se mueve'}]}],
+      info:'<b>La tabla grande no hace shuffle.</b> <code>clientes_vip</code>, una tabla pequeña, se recoge y se copia entera a cada executor. Luego cada task de ventas hace el join con su copia local, así que el stage de ventas espera a que el broadcast esté listo (con un límite de tiempo: ver <a href="joins.html#umbrales">Estrategias de join</a>). Si el broadcast sale como un job aparte o dentro del mismo job no lo dice la doc: abre la query en la pestaña SQL / DataFrame, que lista todos sus jobs y stages. Cuándo puede elegirlo Spark: <a href="joins.html#como-decide">Estrategias de join</a>.'},
     aggsort:{code:`(spark.read.table("ventas")
    .groupBy("cliente_id").count()
    .orderBy("count", ascending=False)
    .write.saveAsTable("ranking"))`,
       jobs:[{label:'Job(s) · la acción write',stages:[
-        {n:'Stage 1',ops:['Scan ventas','HashAggregate (parcial)','Exchange · hash'],tasks:'80 tasks'},
+        {n:'Stage 0',ops:['Scan ventas','HashAggregate (parcial)','Exchange · hash'],tasks:'80 tasks'},
         {sep:'shuffle'},
-        {n:'Stage 2',ops:['HashAggregate (final)','Exchange · range'],tasks:'200 tasks'},
+        {n:'Stage 1',ops:['HashAggregate (final)','Exchange · range'],tasks:'200 tasks (o menos con AQE)'},
         {sep:'shuffle'},
-        {n:'Stage 3',ops:['Sort','Write'],tasks:'200 tasks'}]}],
+        {n:'Stage 2',ops:['Sort','Write'],tasks:'200 tasks (o menos con AQE)'}]}],
       info:'<b>Tres stages, dos shuffles.</b> El groupBy reparte por hash de la clave. El orderBy global vuelve a repartir, esta vez por <b>rangos</b> de <code>count</code>, para que cada task ordene su tramo. Cada Exchange añade una frontera de stage.'}
   };
   function scopes(ops,cg){
@@ -364,16 +389,16 @@ ventas.join(broadcast(clientes_vip), "cliente_id") \\
       body+=`<div class="dv-job">${j.label}</div>`;
       j.stages.forEach(st=>{
         if(st.sep){ body+=`<div class="dv-edge" aria-hidden="true">→</div>`; return; }
-        body+=`<div class="dv-stage"><div class="lbl">${st.n}<small>${st.tasks.split(' ')[0]} tasks</small></div>${scopes(st.ops,cg).map(x=>`<div class="dv-scope">${x.l}${x.s?`<small>${x.s}</small>`:''}<span class="dot"></span></div>`).join('')}</div>`;
+        body+=`<div class="dv-stage"><div class="lbl">${st.n}<small>${st.tasks.split(' ')[0]} tasks</small></div>${scopes(st.ops,cg).map(x=>`<div class="dv-scope">${x.l}${x.s?`<small>${x.s}</small>`:''}</div>`).join('')}</div>`;
       });
     });
     const out=document.getElementById('dag-out'); out.classList.remove('dag');
-    out.innerHTML=UI.frame('Jobs',`<h5>Details for Job 3</h5><div class="ui-link">DAG Visualization</div><div class="dv">${body}</div>`,
-      'Recreación de la DAG Visualization: cada caja rosada es un stage, cada caja azul un bloque de operaciones (dentro de WholeStageCodegen van fusionadas) y cada punto un RDD. En la UI real los stages saltados salen en gris.');
+    out.innerHTML=UI.frame('Jobs',`<h5>Details for Job 0</h5><div class="ui-link">DAG Visualization</div><div class="dv">${body}</div>`,
+      'Recreación de la DAG Visualization: cada caja rosada es un stage, cada caja azul un bloque de operaciones (dentro de WholeStageCodegen van fusionadas). Es el motor de Spark sin Photon: con Photon, los operadores cambian (ver <a href="arquitectura.html#photon">Photon</a>). Los números de job y stage son de ejemplo. En la UI real los stages saltados salen en gris.');
     document.getElementById('dag-info').innerHTML=q.info;
   }
-  document.querySelectorAll('[data-q]').forEach(b=>b.addEventListener('click',()=>{
-    document.querySelectorAll('[data-q]').forEach(x=>x.setAttribute('aria-pressed',x===b)); drawDag(b.dataset.q);}));
+  document.querySelectorAll('#dag-q [data-q]').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('#dag-q [data-q]').forEach(x=>x.setAttribute('aria-pressed',x===b)); drawDag(b.dataset.q);}));
   drawDag('narrow');
 
   } catch (e) { console.error('0a-1. del código a los stages', e); } }
@@ -426,7 +451,7 @@ ventas.join(broadcast(clientes_vip), "cliente_id") \\
       <tr><td>Ideal (trabajo ÷ cores, sin arranque)</td><td class="num">${ideal.toFixed(1)} s</td></tr>
       <tr><td>Uso de los cores</td><td class="num">${Math.round(util*100)}%</td></tr></tbody>`;
     const v=[];
-    if(n===1) v.push('<div><span class="pill bad">1 TASK</span>Un solo core trabaja. La doc de Databricks lo marca como señal de problema.</div>');
+    if(n===1) v.push('<div><span class="pill bad">1 TASK</span>Un solo core trabaja. Si el stage es largo, la doc de Databricks lo marca como señal de problema.</div>');
     else if(n<c) v.push(`<div><span class="pill bad">CORES OCIOSOS</span>Solo ${n} de ${c} cores trabajan durante todo el stage. Añadir workers no ayuda; más tasks, sí (<code>repartition()</code> o más particiones).</div>`);
     if(n>=c&&n%c===0&&wvSkew==='none') v.push(`<div><span class="pill ok">MÚLTIPLO</span>${n} es múltiplo de ${c}: todas las waves van llenas.</div>`);
     if(n>c&&last/c<=0.5) v.push(`<div><span class="pill bad">ÚLTIMA WAVE CASI VACÍA</span>En la wave ${waves} solo trabajan ${last} cores y ${c-last} esperan.</div>`);
@@ -872,7 +897,7 @@ DESCRIBE EXTENDED prod.bronze.clicks;            <span class="c">-- Type debe de
     if(scoreEl) scoreEl.innerHTML=`<span class="pill ${ok===n?'ok':'bad'}">${ok} / ${n}</span>aciertos de ${n} respondidos · ${CASES.length-n} pendientes`;}
   function render(){
     list.innerHTML=CASES.map((k,i)=>`
-    <article class="case" id="cs-${i}" data-sec="${k.sec}">
+    <article class="case" id="${k.id}" data-sec="${k.sec}">
       <div class="cn">Caso ${i+1} de ${CASES.length}<span class="cs-sec">${SECS[k.sec]}</span></div>
       <h4>${k.t}</h4>
       <p>${k.ctx}</p>
@@ -921,11 +946,11 @@ DESCRIBE EXTENDED prod.bronze.clicks;            <span class="c">-- Type debe de
   /* ---------- 0a-3. línea de tiempo del job ---------- */
   if (document.getElementById('jt-chart')) { try {
   const JOBS={
-    narrow:[{id:1,n:80,d:4,deps:[]}],
-    agg:[{id:1,n:80,d:4,deps:[]},{id:2,n:200,d:1.5,deps:[1]}],
-    smj:[{id:1,n:80,d:4,deps:[]},{id:2,n:40,d:4,deps:[]},{id:3,n:200,d:2,deps:[1,2]}],
-    bhj:[{id:1,n:8,d:2,deps:[],note:'broadcast'},{id:2,n:80,d:4.5,deps:[1]}],
-    aggsort:[{id:1,n:80,d:4,deps:[]},{id:2,n:200,d:1.5,deps:[1]},{id:3,n:200,d:1.2,deps:[2]}]
+    narrow:[{id:0,n:80,d:4,deps:[]}],
+    agg:[{id:0,n:80,d:4,deps:[]},{id:1,n:200,d:1.5,deps:[0]}],
+    smj:[{id:0,n:80,d:4,deps:[]},{id:1,n:40,d:4,deps:[]},{id:2,n:200,d:2,deps:[0,1]}],
+    bhj:[{id:0,n:8,d:2,deps:[],note:'broadcast'},{id:1,n:80,d:4.5,deps:[0]}],
+    aggsort:[{id:0,n:80,d:4,deps:[]},{id:1,n:200,d:1.5,deps:[0]},{id:2,n:200,d:1.2,deps:[1]}]
   };
   let jtKey='narrow', jtView='concept'; const jtC=document.getElementById('jt-c');
   function simJob(stages,C){
@@ -950,14 +975,15 @@ DESCRIBE EXTENDED prod.bronze.clicks;            <span class="c">-- Type debe de
     svg.appendChild(el('text',{x:L-4,y:T+6,'text-anchor':'end',class:'tick'},'1'));
     svg.appendChild(el('text',{x:L-4,y:H-B-1,'text-anchor':'end',class:'tick'},C));
     const cls=['p0','p3','p1','p2'];
-    r.tasks.forEach(k=>{const x=xs(k.s),w=Math.max(xs(k.e)-x-0.5,0.5); svg.appendChild(el('rect',{x,y:T+k.c*rh+Math.min(.4,rh*.15),width:w,height:Math.max(rh-Math.min(.8,rh*.3),.6),class:cls[(k.st.id-1)%4]}));});
+    r.tasks.forEach(k=>{const x=xs(k.s),w=Math.max(xs(k.e)-x-0.5,0.5); svg.appendChild(el('rect',{x,y:T+k.c*rh+Math.min(.4,rh*.15),width:w,height:Math.max(rh-Math.min(.8,rh*.3),.6),class:cls[k.st.id%4]}));});
     r.st.forEach(s=>{ if(s.start>0){const x=xs(s.start); svg.appendChild(el('line',{x1:x,x2:x,y1:T-4,y2:H-B,class:'ln thr'})); svg.appendChild(el('text',{x:x+2,y:T-6,class:'lbl thr'},'Stage '+s.id));} });
-    document.getElementById('jt-legend').innerHTML=r.st.map(s=>`<span style="--sw:var(--${cls[(s.id-1)%4]})">Stage ${s.id} · ${s.n} tasks${s.note?' (broadcast)':''}</span>`).join('');
+    document.getElementById('jt-legend').innerHTML=r.st.map(s=>`<span style="--sw:var(--${cls[s.id%4]})">Stage ${s.id} · ${s.n} tasks${s.note?' (broadcast)':''}</span>`).join('');
     const v=[`<div><b>Duración total ≈ ${r.end.toFixed(1)} s</b> con ${C} cores.</div>`];
     r.st.forEach(s=>{
       if(s.deps.length){ v.push(`<div>Stage ${s.id} empieza en ${s.start.toFixed(1)} s, justo cuando ${s.deps.length>1?'terminan los Stages '+s.deps.join(' y '):'termina el Stage '+s.deps[0]}: necesita su ${s.deps.length>1?'salida':'salida'} completa.</div>`); }
     });
-    const par=r.st.filter(s=>!s.deps.length); if(par.length>1) v.push(`<div>Los Stages ${par.map(s=>s.id).join(' y ')} no dependen entre sí: el Stage ${par[1].id} arranca en cuanto quedan cores libres (en ${par[1].start.toFixed(1)} s), sin esperar a que el ${par[0].id} termine. Con el scheduler por defecto (FIFO), las tasks se lanzan en el orden en que quedaron listas.</div>`);
+    const par=r.st.filter(s=>!s.deps.length); if(par.length>1) v.push(`<div>Los Stages ${par.map(s=>s.id).join(' y ')} no dependen entre sí: el Stage ${par[1].id} arranca en cuanto quedan cores libres (en ${par[1].start.toFixed(1)} s), sin esperar a que el ${par[0].id} termine.</div>`);
+    const bc=r.st.find(s=>s.note); if(bc) v.push(`<div>No hay shuffle, pero el Stage ${bc.id+1} espera al broadcast: cada task necesita la copia entera de la tabla pequeña. Si el broadcast sale como job aparte no lo dice la doc.</div>`);
     document.getElementById('jt-verdict').innerHTML=v.join('');
     if(jtView==='ui') drawJtUI(r,C);
   }
@@ -978,13 +1004,14 @@ DESCRIBE EXTENDED prod.bronze.clicks;            <span class="c">-- Type debe de
       const lbl=`Stage ${s.id}: ${s.n} tasks${s.note?' (broadcast)':''}`; const inside=w>lbl.length*5.2+8;
       svg.appendChild(el('text',{x:inside?x+5:x+w+4,y:y+12.5,style:'fill:#222;font-size:9.5px'},lbl)); });
     const box=document.getElementById('jt-ui');
-    box.innerHTML=UI.frame('Jobs',`<h5>Details for Job 3</h5><div class="ui-link">Event Timeline</div><div style="font-size:12px;margin:.2rem 0">☐ Enable zooming</div>${UI.legend([['Executor added','#A0DFFF','#3EC0FF'],['Executor removed','#FFA1B0','#FF4D6D'],['Stage completed','#A0DFFF','#3EC0FF'],['Stage failed','#FFA1B0','#FF4D6D'],['Stage active','#A2FCC0','#36F572']])}<div id="jt-ui-svg"></div>`,
-      'Recreación del Event Timeline de la página del job: un carril con los executors añadidos o retirados y otro con una barra por stage, de su inicio a su fin. La UI no muestra cores; para ver tasks hay que entrar en el stage.');
+    box.innerHTML=UI.frame('Jobs',`<h5>Details for Job 0</h5><div class="ui-link">Event Timeline</div><div style="font-size:12px;margin:.2rem 0">☐ Enable zooming</div>${UI.legend([['Executor added','#A0DFFF','#3EC0FF'],['Executor removed','#FFA1B0','#FF4D6D'],['Stage completed','#A0DFFF','#3EC0FF'],['Stage failed','#FFA1B0','#FF4D6D'],['Stage active','#A2FCC0','#36F572']])}<div id="jt-ui-svg"></div>`,
+      'Recreación del Event Timeline de la página del job: un carril con los executors añadidos o retirados y otro con una barra por stage, de su inicio a su fin. Esta vista no muestra cores (están en la pestaña Executors); para ver las tasks hay que entrar en el stage. El driver aparece como un executor más, pero en un compute con workers no corre tasks. Motor de Spark sin Photon.');
     box.querySelector('#jt-ui-svg').appendChild(svg);
   }
   viewToggle('jt-view',v=>{ jtView=v; document.getElementById('jt-concept').hidden=(v==='ui'); document.getElementById('jt-ui').hidden=(v!=='ui'); drawJt(); });
   jtC.addEventListener('input',drawJt);
-  document.querySelectorAll('[data-q]').forEach(b=>b.addEventListener('click',()=>{jtKey=b.dataset.q; drawJt();}));
+  document.querySelectorAll('#jt-q [data-q]').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('#jt-q [data-q]').forEach(x=>x.setAttribute('aria-pressed',x===b)); jtKey=b.dataset.q; drawJt();}));
   drawJt();
   } catch (e) { console.error('0a-3. línea de tiempo del job', e); } }
 

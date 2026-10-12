@@ -1,0 +1,177 @@
+    <h3><span class="k">Repaso</span>Aplica Fundamentos a casos nuevos</h3>
+    <p>Cinco casos, uno por cada página de Fundamentos. No repiten las predicciones de esas
+      páginas: piden aplicar lo que enseñan a otra situación.</p>
+    <div class="guess q" data-guess data-answer="c">
+      <div class="guess-cover">
+        <p><b>Predice (1 · Arquitectura):</b> una celda ejecuta
+          <code>df.groupBy('pais').count().toPandas()</code> sobre una tabla de 1 TB. El resultado
+          tiene 50 filas. ¿Ayudan más workers?</p>
+        <div class="guess-opts" role="group" aria-label="Opciones">
+          <button type="button" data-opt="a">a) No: <code>toPandas()</code> lleva todo al driver,
+            y más workers no lo arreglan.</button>
+          <button type="button" data-opt="b">b) No: lo que acaba en el driver se calcula en el
+            driver.</button>
+          <button type="button" data-opt="c">c) Sí: leer y agregar 1 TB corre en los executors, y
+            al driver solo llegan 50 filas.</button>
+          <button type="button" data-opt="d">d) Solo si además le das más memoria al
+            driver.</button>
+        </div>
+      </div>
+      <div class="guess-fb" data-for="a"><p><b>No.</b> Aplicaste la regla de
+        <code>toPandas()</code> sin mirar qué llega al driver; falla porque
+        <code>toPandas()</code> trae el resultado, y aquí el resultado son 50 filas.</p></div>
+      <div class="guess-fb" data-for="b"><p><b>No.</b> Suponías que el driver calcula lo que
+        recibe; falla porque el <code>groupBy</code> y el <code>count</code> corren en los
+        executors, y solo el resultado viaja al driver.</p></div>
+      <div class="guess-fb" data-for="c"><p><b>Sí.</b> Lo pesado es leer y agregar 1 TB, y eso lo
+        hacen los executors. Al driver solo llegan las 50 filas del resultado.</p></div>
+      <div class="guess-fb" data-for="d"><p><b>No.</b> Suponías que el driver es el cuello de
+        botella; falla porque 50 filas caben de sobra en su memoria. Lo que tarda es leer
+        1 TB.</p></div>
+      <div class="guess-body">
+        <p><b>Compruébalo:</b> en <a href="arquitectura.html#quien-hace-que">Arquitectura de
+          Spark</a>, mira qué parte del trabajo hace el driver y cuál los executors.</p>
+        <p><code>toPandas()</code> es una acción: lanza el job que lee la tabla y agrega por
+          <code>pais</code>. Ese trabajo se reparte en tasks que corren en los executors, así que
+          más workers lo aceleran mientras haya más tasks que cores (ver <a
+          href="stages.html#waves">waves</a>). El problema de <code>toPandas()</code> aparece
+          cuando el resultado es grande, porque entero tiene que caber en el driver.</p>
+      </div>
+    </div>
+    <div class="guess q" data-guess data-answer="d">
+      <div class="guess-cover">
+        <p><b>Predice (2 · Plan de ejecución):</b> <code>ventas</code> se lee en 80 particiones.
+          Ejecutas
+          <code>ventas.join(broadcast(clientes), "cliente_id").groupBy("segmento").count().collect()</code>
+          con <code>spark.sql.shuffle.partitions</code> = 200 y AQE apagado. Sin contar la lectura
+          de <code>clientes</code> para el broadcast, ¿cuántos stages hay y cuántas tasks tiene
+          cada uno?</p>
+        <div class="guess-opts" role="group" aria-label="Opciones">
+          <button type="button" data-opt="a">a) 1 stage de 80 tasks.</button>
+          <button type="button" data-opt="b">b) 3 stages: 80, 200 y 200 tasks.</button>
+          <button type="button" data-opt="c">c) 2 stages: 80 y 80 tasks.</button>
+          <button type="button" data-opt="d">d) 2 stages: 80 y 200 tasks.</button>
+        </div>
+      </div>
+      <div class="guess-fb" data-for="a"><p><b>No.</b> Suponías que el <code>groupBy</code> no
+        mueve datos; falla porque tiene que juntar las filas de cada <code>segmento</code>, y eso
+        es un shuffle que corta el stage.</p></div>
+      <div class="guess-fb" data-for="b"><p><b>No.</b> Suponías que todo join corta un stage;
+        falla porque un join broadcast no hace shuffle de <code>ventas</code>.</p></div>
+      <div class="guess-fb" data-for="c"><p><b>No.</b> Suponías que tras el shuffle se conservan
+        las particiones de lectura; falla porque el stage que lee un shuffle tiene tantas tasks
+        como <code>shuffle.partitions</code>.</p></div>
+      <div class="guess-fb" data-for="d"><p><b>Sí.</b> El broadcast no corta el stage de
+        <code>ventas</code>: 80 tasks, una por partición. El <code>groupBy</code> sí hace shuffle,
+        y el stage que lo lee tiene 200 tasks.</p></div>
+      <div class="guess-body">
+        <p><b>Compruébalo:</b> en <a href="plan-ejecucion.html#explain">Leer el plan con
+          explain()</a>, cuenta los <code>Exchange</code> de shuffle; el
+          <code>BroadcastExchange</code> no cuenta. El número de tasks tras el shuffle está en <a
+          href="plan-ejecucion.html#particiones">particiones</a>.</p>
+        <p>La lectura de <code>ventas</code>, el join y la agregación parcial van en un stage de 80
+          tasks. El <code>groupBy</code> obliga a un shuffle, y el stage que lo lee tiene una task
+          por partición de shuffle: 200. Con AQE activado, lo normal en Databricks, ese 200 puede
+          bajar (ver <a href="aqe.html">AQE</a>).</p>
+      </div>
+    </div>
+    <div class="guess q" data-guess data-answer="a">
+      <div class="guess-cover">
+        <p><b>Predice (3 · Tasks, cores y waves):</b> un stage tiene 48 tasks iguales de 10 s.
+          Corre en 4 workers de 8 cores (32 cores). Pasas a 6 workers (48 cores). ¿Cuánto tarda
+          ahora el stage?</p>
+        <div class="guess-opts" role="group" aria-label="Opciones">
+          <button type="button" data-opt="a">a) 10 s.</button>
+          <button type="button" data-opt="b">b) 20 s, igual que antes.</button>
+          <button type="button" data-opt="c">c) Unos 13 s: un 50 % más de cores, un tercio menos
+            de tiempo.</button>
+        </div>
+      </div>
+      <div class="guess-fb" data-for="a"><p><b>Sí.</b> Antes salían ⌈48 ÷ 32⌉ = 2 waves de 10 s.
+        Con 48 cores, las 48 tasks caben en una sola wave: 10 s.</p></div>
+      <div class="guess-fb" data-for="b"><p><b>No.</b> Suponías que más workers nunca ayudan;
+        falla porque aquí quitan una wave entera: de 2 waves a 1.</p></div>
+      <div class="guess-fb" data-for="c"><p><b>No.</b> Suponías que el tiempo baja en proporción a
+        los cores; falla porque el stage avanza por waves, y una task de 10 s no se parte entre
+        cores.</p></div>
+      <div class="guess-body">
+        <p><b>Compruébalo:</b> en el Simulador 4 de <a href="stages.html#anadir-workers">Tasks,
+          cores y waves</a>, pon 48 tasks y mueve los workers de 4 a 6.</p>
+        <p>Con 32 cores: ⌈48 ÷ 32⌉ = 2 waves, 2 × 10 s = 20 s. Con 48 cores: 1 wave, 10 s. Con 5
+          workers (40 cores) seguirías en 2 waves y 20 s. Más workers ayudan cuando quitan una
+          wave entera.</p>
+      </div>
+    </div>
+    <div class="guess q" data-guess data-answer="b">
+      <div class="guess-cover">
+        <p><b>Predice (4 · Shuffle):</b> un shuffle tiene 100 map tasks y 50 particiones de
+          shuffle. ¿De cuántos archivos lee cada reduce task?</p>
+        <div class="guess-opts" role="group" aria-label="Opciones">
+          <button type="button" data-opt="a">a) De 1: el archivo de su partición.</button>
+          <button type="button" data-opt="b">b) De 100: uno por map task.</button>
+          <button type="button" data-opt="c">c) De 50: uno por partición de shuffle.</button>
+          <button type="button" data-opt="d">d) De 2: los 100 archivos se reparten entre las 50
+            reduce tasks.</button>
+        </div>
+      </div>
+      <div class="guess-fb" data-for="a"><p><b>No.</b> Suponías que cada partición destino tiene
+        su propio archivo; falla porque cada map task escribe un solo archivo con un bloque por
+        partición destino.</p></div>
+      <div class="guess-fb" data-for="b"><p><b>Sí.</b> Cada map task escribe un archivo con un
+        bloque por partición destino. Cada reduce task lee su bloque de cada uno de los 100
+        archivos.</p></div>
+      <div class="guess-fb" data-for="c"><p><b>No.</b> Suponías que el número de reduce tasks
+        decide cuánto lee cada una; falla porque 50 es cuántas reduce tasks hay, no de cuántos
+        archivos lee cada una.</p></div>
+      <div class="guess-fb" data-for="d"><p><b>No.</b> Suponías que cada archivo va entero a una
+        reduce task; falla porque cada archivo lleva un bloque para cada una de las 50
+        particiones.</p></div>
+      <div class="guess-body">
+        <p><b>Compruébalo:</b> en <a href="shuffle.html#map-reduce">Shuffle</a>, en el simulador
+          paso a paso, pulsa <b>3 · Shuffle read</b> y elige una reduce task. Lee tantos bloques
+          como map tasks hay.</p>
+        <p>Las filas de una partición de shuffle pueden venir de cualquier map task. Por eso cada
+          reduce task lee su bloque de los 100 archivos. Así lo describe la doc de Spark. Photon usa
+          su propio shuffle columnar, y la doc no detalla cómo son sus archivos.</p>
+      </div>
+    </div>
+    <div class="guess q" data-guess data-answer="c">
+      <div class="guess-cover">
+        <p><b>Predice (5 · Estrategias de join):</b> <code>ventas INNER JOIN paises</code> por
+          igualdad. Las estadísticas estiman 5 MB para <code>paises</code> y unos 490 GB para
+          <code>ventas</code>. No hay hints. Con el umbral estático de 10 MB de Apache Spark, ¿hay
+          broadcast en el plan inicial?</p>
+        <div class="guess-opts" role="group" aria-label="Opciones">
+          <button type="button" data-opt="a">a) No: el plan inicial sale con
+            <code>SortMergeJoin</code>, y solo AQE puede pasar a broadcast.</button>
+          <button type="button" data-opt="b">b) No: sin el hint <code>BROADCAST</code>, Spark no
+            copia ninguna tabla.</button>
+          <button type="button" data-opt="c">c) Sí: <code>BroadcastHashJoin</code> de
+            <code>paises</code>.</button>
+          <button type="button" data-opt="d">d) Sí, pero solo con AQE activado.</button>
+        </div>
+      </div>
+      <div class="guess-fb" data-for="a"><p><b>No.</b> Suponías que el broadcast solo lo decide
+        AQE; falla porque el plan inicial ya usa el umbral estático con las
+        estadísticas.</p></div>
+      <div class="guess-fb" data-for="b"><p><b>No.</b> Suponías que el broadcast hay que pedirlo;
+        falla porque Spark lo elige solo cuando un lado que se puede copiar cabe en el
+        umbral.</p></div>
+      <div class="guess-fb" data-for="c"><p><b>Sí.</b> <code>paises</code> estima 5 MB, por debajo
+        del umbral estático de 10 MB. En un <code>INNER</code> se puede copiar cualquier lado, así
+        que el plan inicial ya sale con broadcast.</p></div>
+      <div class="guess-fb" data-for="d"><p><b>No.</b> Confundiste los dos umbrales; falla porque
+        los 10 MB son el umbral estático, que se usa antes de ejecutar. El de AQE (30 MB en
+        Databricks) actúa en runtime.</p></div>
+      <div class="guess-body">
+        <p><b>Compruébalo:</b> en el <a href="#js-sim">selector de estrategia</a>, el mismo caso
+          es <code>ventas JOIN clientes</code>. Pulsa <b>INNER</b>, baja <code>clientes</code> a
+          5.0 MiB, apaga AQE y lee la línea del plan estático.</p>
+        <p>El plan inicial se decide con las <a
+          href="mantenimiento-delta.html#estadisticas">estadísticas</a>. Si un lado que el tipo de
+          join deja copiar estima menos que <code>spark.sql.autoBroadcastJoinThreshold</code>, sale
+          <code>BroadcastHashJoin</code> sin hint y sin AQE. Si las estadísticas faltan o están
+          viejas, la estimación puede fallar, y entonces solo AQE puede corregirla en runtime.</p>
+      </div>
+    </div>
+

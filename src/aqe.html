@@ -96,15 +96,21 @@ tamaño &gt; skewedPartitionThresholdInBytes   <span class="c">-- default 256MB<
 
     <h3><span class="k">Límite 2</span>Dónde AQE no actúa</h3>
     <ul>
-      <li>Solo aplica a queries <b>no streaming</b> que tienen al menos un exchange (join,
-        agregación o ventana) o una subquery.</li>
+      <li>Aplica a queries <b>batch</b> que tienen al menos un exchange (join, agregación o
+        ventana) o una subquery. Desde Databricks Runtime 18.0 también actúa, activado por
+        defecto, en queries de <b>streaming sin estado</b>: <q>Databricks supports Adaptive Query
+        Execution (AQE) and Auto Optimized Shuffle (AOS) for stateless streaming queries</q> (<a
+        href="https://docs.databricks.com/aws/en/structured-streaming/stateless-streaming#adaptive-query-execution-and-auto-optimized-shuffle"
+        target="_blank" rel="noopener">Stateless streaming</a> · <a class="az"
+        href="https://learn.microsoft.com/azure/databricks/structured-streaming/stateless-streaming"
+        target="_blank" rel="noopener">Azure</a>). En streaming con estado no actúa.</li>
       <li>El manejo de skew es para <b>joins</b>. Una ventana <code>PARTITION BY
         clave_caliente</code> o una agregación sin agregación parcial no se parten. Lo verás en el
         <a href="lab.html">lab</a>.</li>
       <li>El reordenamiento dinámico de joins no forma parte de AQE.</li>
     </ul>
 
-    <h3><span class="k">Las otras tres funciones</span>Broadcast en runtime, coalesce y relaciones
+    <h3 id="otras-funciones"><span class="k">Las otras tres funciones</span>Broadcast en runtime, coalesce y relaciones
       vacías</h3>
     <ul>
       <li><b>Sort-merge a broadcast en runtime.</b> Si tras el shuffle un lado queda por debajo de
@@ -140,34 +146,25 @@ tamaño &gt; skewedPartitionThresholdInBytes   <span class="c">-- default 256MB<
 
     <h3 id="una-accion-dos-jobs"><span class="k">Señal en el Spark UI</span>Una acción, dos
       jobs</h3>
-    <p>Un <code>count()</code> después de un <code>filter</code> es una sola acción, pero el Spark
-      UI suele mostrar dos jobs:</p>
-<pre><code>ventas = spark.read.table("ventas").filter("PHYSICAL_BOXES > 0")
-ventas.count()
-
-<span class="c"># Lo que muestra el Spark UI</span>
-Job 14   Stage 23   22/22 tasks
-Job 15   Stage 24    0/22 tasks   skipped
-         Stage 25     1/1 task</code></pre>
-    <p>El count es una agregación con un shuffle en medio: <code>partial_count</code> en cada
-      partición de lectura, un <code>Exchange SinglePartition</code> y el <code>count</code> final
-      en una sola task. Ese shuffle es una query stage, y sus estadísticas reales solo existen cuando
-      termina. Por eso la ejecución se parte:</p>
-    <ol>
-      <li><b>Job 14.</b> Ejecuta el lado map del shuffle: lee, filtra, cuenta por partición y
-        escribe la salida del shuffle (22 tasks).</li>
-      <li>AQE vuelve a optimizar el resto del plan con lo que midió.</li>
-      <li><b>Job 15.</b> Ejecuta el stage final (1 task). Su stage padre aparece como
-        <i>skipped</i> porque los archivos de shuffle del Job 14 se conservan y se reutilizan. No se
-        vuelve a leer la tabla.</li>
-    </ol>
-    <p>El trabajo real son 23 tasks, igual que sin AQE. Al leer el UI, cuenta solo los stages que
-      no están skipped.</p>
-    <p class="c">La doc de Databricks dice que AQE vuelve a optimizar al final de cada query stage,
-      pero no explica cómo se reparten en jobs. El reparto de arriba es lo que se observa en el Spark
-      UI. Para comprobarlo en un cluster clásico, pon
+    <p>Como AQE ejecuta la query por query stages, una sola acción puede salir en el Spark UI
+      como varios jobs, y el stage que ya corrió sale <i>skipped</i> en el siguiente.</p>
+    <p id="query-stages">AQE vuelve a optimizar la query al final de cada shuffle, cuando ya tiene
+      sus estadísticas reales. La doc lo dice así: <q>the most up-to-date accurate statistics at
+      the end of a shuffle and broadcast exchange (referred to as a query stage in AQE)</q> (<a
+      href="https://docs.databricks.com/aws/en/optimizations/aqe" target="_blank"
+      rel="noopener">Databricks · AQE</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/optimizations/aqe" target="_blank"
+      rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>).
+      Por eso la ejecución se parte en tramos, uno por query stage.</p>
+    <p class="c">Es lo que se observa en el Spark UI; la doc no lo detalla. No describe el stage
+      final de 1 task (de un <code>count()</code> o de una agregación sin <code>groupBy</code>), ni
+      el stage que lee la tabla copiada en un broadcast, ni cómo reparte AQE los query stages en
+      jobs. Para comprobarlo en un cluster clásico, pon
       <code>spark.databricks.optimizer.adaptive.enabled</code> en false y repite el
-      <code>count()</code>: deberías ver un solo job con dos stages.</p>
+      <code>count()</code> de <a href="plan-ejecucion.html#count-dos-jobs">Plan de ejecución</a>:
+      deberías ver un solo job con dos stages.</p>
+    <p>Cómo contar el trabajo real, con un ejemplo de <code>count()</code>: <a
+      href="plan-ejecucion.html#varios-jobs">Plan de ejecución · Job vs acción</a>.</p>
 
     <h3><span class="k">Configs que conviene reconocer</span>Defaults según la doc</h3>
     <div class="tblwrap"><table>
@@ -187,7 +184,7 @@ Job 15   Stage 24    0/22 tasks   skipped
           runtime)</td><td>Databricks</td><td class="num">30MB</td></tr>
         <tr><td><code>spark.sql.shuffle.partitions</code> (<code>auto</code> activa auto-optimized
           shuffle)</td><td>Spark; <code>auto</code> es de Databricks</td><td
-          class="num">200</td></tr>
+          class="num">200 (Spark y clásico hasta DBR 18) · <code>auto</code> (serverless) · auto-optimized shuffle si no lo fijas (DBR 19+)</td></tr>
       </tbody>
     </table></div>
     <p class="c">AQE es de Apache Spark y está activo por defecto desde Spark 3.2.0. Databricks lo
@@ -261,10 +258,18 @@ SELECT /*+ SKEW('orders', ('o_custId', 'o_storeRegionId'), ((0, 1001), (1, 1002)
       href="https://learn.microsoft.com/azure/databricks/archive/legacy/skew-join" target="_blank"
       rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a>
       (página archivada) · <a
+      href="https://docs.databricks.com/aws/en/structured-streaming/stateless-streaming"
+      target="_blank" rel="noopener">Stateless streaming</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/structured-streaming/stateless-streaming"
+      target="_blank" rel="noopener" title="La misma página en la documentación de Azure Databricks">Azure</a> · <a
       href="https://spark.apache.org/docs/latest/sql-performance-tuning.html#adaptive-query-execution"
       target="_blank" rel="noopener">Apache Spark · Adaptive Query Execution</a> · <a
       href="https://spark.apache.org/docs/latest/web-ui.html#jobs-tab"
       target="_blank" rel="noopener">Apache Spark · Web UI</a> (stages <i>skipped</i>) · <a
       href="https://spark.apache.org/docs/latest/rdd-programming-guide.html#performance-impact"
       target="_blank" rel="noopener">Apache Spark · Shuffle, performance impact</a> (archivos de
-      shuffle que se conservan; guía de RDD, el mecanismo es el mismo para DataFrames)</p>
+      shuffle que se conservan; guía de RDD, el mecanismo es el mismo para DataFrames) · <a
+      href="https://docs.databricks.com/aws/en/compute/troubleshooting/debugging-spark-ui"
+      target="_blank" rel="noopener">Debugging with the Spark UI</a> <a class="az"
+      href="https://learn.microsoft.com/azure/databricks/compute/troubleshooting/debugging-spark-ui"
+      target="_blank" rel="noopener">Azure</a> (qué es un stage <i>skipped</i>)</p>
